@@ -1,0 +1,604 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="lbrchjargemod"?>
+<zk>
+<zscript src="../wf_global/wfglobaldefs.zs" />
+<zscript src="../wf_global/wfsqlfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Labor Charges";
+MYVERSION = "v0.1";
+MYPANEL = "lbrcharepan";
+/*
+Title		: Labor Charges manager
+Written by	: Victor Wong
+Dated		: 19/04/2014
+Revisions:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+/*
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+*/
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+gridhand = new GridHandler();
+
+COMM = 0; COMMPAY = 1;
+MEDI = 2; MEDIPAY = 3;
+IMMG = 4; IMMGPAY = 5;
+MISC = 6; MISCPAY = 7;
+
+CMS_GRID_ID = "cmcharges_grid"; CMS_PAY_ID = "cmpayment_grid";
+MED_GRID_ID = "medcharges_grid"; MED_PAY_ID = "medpayment_grid";
+IMM_GRID_ID = "immcharges_grid"; IMM_PAY_ID = "immpayment_grid";
+MISC_GRID_ID = "misccharges_grid"; MISC_PAY_ID = "miscpayment_grid";
+
+Object[][] colwidths = 
+{
+	{ "60px", "70px", "100px" }, { "60px", "70px", "100px",""},
+	{ "60px", "70px", "100px" }, { "60px", "70px", "100px",""},
+	{ "60px", "70px", "100px" }, { "60px", "70px", "100px",""}, 
+	{ "60px", "70px", "100px", "" }, { "60px", "70px", "100px", ""}
+};
+
+Object[][] collabels =
+{
+	{ "", "Date", "ChargeAmt" },
+	{ ""," PayDate","PayAmt","Receipt/Notes" },
+
+	{ "", "Date", "ChargeAmt" },
+	{ ""," PayDate","PayAmt","Receipt/Notes" },
+
+	{ "", "Date", "ChargeAmt" },
+	{ ""," PayDate","PayAmt","Receipt/Notes" },
+
+	{ "", "Date", "ChargeAmt", "ChargeNotes" },
+	{ ""," PayDate","PayAmt","Receipt/Notes" }
+};
+
+Object[] grid_ids = { CMS_GRID_ID, CMS_PAY_ID, MED_GRID_ID, MED_PAY_ID,
+	IMM_GRID_ID, IMM_PAY_ID, MISC_GRID_ID, MISC_PAY_ID };
+
+Object[] rowsid = { "cmitems_rows", "pyitems_rows", "meditems_rows", "medpay_rows",
+	"immitems_rows", "immpay_rows", "miscitems_rows", "miscpay_rows" };
+
+Object[] row_counts = { 1, 1, 1, 1, 1, 1, 1, 1 };
+
+void makeCommChargesGrid(int itype)
+{
+	if(holders[itype].getFellowIfAny(grid_ids[itype]) == null) // make new grid if none
+	{
+		igrd = new Grid();
+		igrd.setId(grid_ids[itype]);
+		icols = new org.zkoss.zul.Columns();
+		for(i=0;i<colwidths[itype].length;i++)
+		{
+			ico0 = new org.zkoss.zul.Column();
+			ico0.setWidth(colwidths[itype][i]);
+			ico0.setLabel(collabels[itype][i]);
+			ico0.setAlign("center");
+			ico0.setStyle("background:#97b83a");
+			ico0.setParent(icols);
+		}
+		icols.setParent(igrd);
+		irows = new org.zkoss.zul.Rows();
+		irows.setId(rowsid[itype]);
+		irows.setParent(igrd);
+		igrd.setParent(holders[itype]);
+	}
+}
+
+org.zkoss.zul.Row addCommCharges_b(int itype)
+{
+	irow = null;
+	switch(itype)
+	{
+		case COMM:
+		case MEDI:
+		case IMMG:
+		case MISC:
+			makeCommChargesGrid(itype);
+			trows = holders[itype].getFellowIfAny(rowsid[itype]);
+			irow = gridhand.gridMakeRow("","","",trows);
+			gpMakeCheckbox(irow,"", row_counts[itype].toString() + ".", "");
+			dtb1 = gpMakeDatebox(irow, "", "yyyy-MM-dd", ""); // charge date
+			kiboo.setTodayDatebox(dtb1);
+			gpMakeDecimalbox(irow, "", "", "", "#.00", "95%"); // charge amt
+			if(itype == MISC) // additional notes column for MISC charges
+			{
+				t = gpMakeTextbox(irow, "", "", "","");
+				t.setMultiline(true);
+				t.setHeight("30px");
+			}
+			break;
+
+		case COMMPAY:
+		case MEDIPAY:
+		case IMMGPAY:
+		case MISCPAY:
+			makeCommChargesGrid(itype);
+			trows = holders[itype].getFellowIfAny(rowsid[itype]);
+			irow = gridhand.gridMakeRow("","","",trows);
+			gpMakeCheckbox(irow,"", row_counts[itype].toString() + ".", "");
+			dtb2 = gpMakeDatebox(irow, "", "yyyy-MM-dd", ""); // pay date
+			kiboo.setTodayDatebox(dtb2);
+			gpMakeDecimalbox(irow, "", "", "", "#.00", "95%"); // pay amt
+			t = gpMakeTextbox(irow, "", "", "",""); // receipt/notes
+			t.setMultiline(true);
+			t.setHeight("30px");
+			break;
+	}
+	row_counts[itype]++;
+	return irow;
+}
+
+void remGridItems(int itype)
+{
+	trows = holders[itype].getFellowIfAny(rowsid[itype]);
+	if(trows == null) return;
+
+	kc = trows.getChildren().toArray();
+	for(i=0;i<kc.length;i++)
+	{
+		r = kc[i].getChildren().toArray();
+		if(r[0].isChecked()) kc[i].setParent(null);
+	}
+	redrawCheckNo(itype);
+}
+
+// redraw 'em row no. in checkbox
+void redrawCheckNo(int itype)
+{
+	trows = holders[itype].getFellowIfAny(rowsid[itype]);
+	if(trows == null) return;
+	kc = trows.getChildren().toArray();
+	rw = 1;
+	for(i=0;i<kc.length;i++)
+	{
+		r = kc[i].getChildren().toArray();
+		r[0].setLabel(rw.toString() + ".");
+		rw++;
+	}
+
+	row_counts[itype] =  rw;
+}
+
+void saveCommissionThings(int itype)
+{
+	String[][] tbf =
+	{
+		{ "cm_amount", "cm_chargedate", "cm_payment", "cm_paydate", "cm_notes"},
+		{ "" },
+		{ "med_amount", "med_chargedate", "med_payment", "med_paydate", "med_notes"},
+		{ "" },
+		{ "im_amount", "im_chargedate", "im_payment", "im_paydate", "im_notes" },
+		{ "" },
+		{ "misc_amount", "misc_chargedate", "misc_payment", "misc_paydate", "misc_notes", "misc_charge_notes" }
+	};
+
+	chdt = chamt = chnts = pydt = pyamt = pynts = sqlstm = "";
+	chgrows = holders[itype].getFellowIfAny(rowsid[itype]);
+	payrows = holders[itype+1].getFellowIfAny(rowsid[itype+1]);
+
+	if(chgrows != null)
+	{
+		kc = chgrows.getChildren().toArray();
+		for(i=0;i<kc.length;i++)
+		{
+			r = kc[i].getChildren().toArray();
+
+			chdt += kiboo.getDateFromDatebox(r[1]) + "~";
+			chamt += r[2].getValue() + "~";
+
+			if(itype == MISC) // only MISC charges got notes
+			{
+				chnts += kiboo.replaceSingleQuotes(r[3].getValue().trim().replaceAll("~"," ")) + "~";
+			}
+		}
+		try { chdt = chdt.substring(0,chdt.length()-1); } catch (Exception e) {}
+		try { chamt = chamt.substring(0,chamt.length()-1); } catch (Exception e) {}
+		try { chnts = chnts.substring(0,chnts.length()-1); } catch (Exception e) {}
+	}
+	if(payrows != null)
+	{
+		kc = payrows.getChildren().toArray();
+		for(i=0;i<kc.length;i++)
+		{
+			r = kc[i].getChildren().toArray();
+
+			pydt += kiboo.getDateFromDatebox(r[1]) + "~";
+			pyamt += r[2].getValue() + "~";
+			pynts += kiboo.replaceSingleQuotes(r[3].getValue().trim().replaceAll("~"," ")) + "~";
+		}
+		try { pydt = pydt.substring(0,pydt.length()-1); } catch (Exception e) {}
+		try { pyamt = pyamt.substring(0,pyamt.length()-1); } catch (Exception e) {}
+		try { pynts = pynts.substring(0,pynts.length()-1); } catch (Exception e) {}
+	}
+
+	exr = (itype == MISC) ? "," + tbf[itype][5] + "='" + chnts + "' " : "";
+
+	sqlstm = "update laborcharges set " + 
+	tbf[itype][0] + "='" + chamt + "', " +
+	tbf[itype][1] + "='" + chdt + "'," +
+	tbf[itype][2] + "='" + pyamt + "', " + tbf[itype][3] + "='" + pydt + "', " +
+	tbf[itype][4] + "='" + pynts + "'" + exr + " where origid=1";
+
+	gpWFM_execute(sqlstm);
+	calcAll();
+}
+
+void loadLaborCharges(String iwhat)
+{
+	if(iwhat.equals("")) return;
+	iwhat = kiboo.replaceSingleQuotes(iwhat);
+	sqlstm = "select * from laborcharges where labor_no='" + iwhat + "'";
+	r = gpWFM_FirstRow(sqlstm);
+	if(r == null) return;
+
+	removeAllLaborGrids();
+
+	String[][] fl =
+	{
+		{ "cm_amount", "cm_chargedate" },
+		{ "cm_payment", "cm_paydate", "cm_notes" },
+		{ "med_amount", "med_chargedate" },
+		{ "med_payment", "med_paydate" , "med_notes" },
+		{ "im_amount" , "im_chargedate" },
+		{ "im_payment" , "im_paydate", "im_notes" },
+		{ "misc_amount", "misc_chargedate", "misc_charge_notes" },
+		{ "misc_payment", "misc_paydate", "misc_notes" }
+	};
+	Object[] dhd = { null, null, null, null };
+
+	for(i=0; i<fl.length; i++)
+	{
+		if(r.get(fl[i][0]) != null)
+		{
+			for(j=0; j<fl[i].length; j++)
+			{
+				dhd[j] = r.get(fl[i][j]).split("~");
+			}
+
+			makeCommChargesGrid(i);
+			for(x=0; x<dhd[0].length; x++)
+			{
+				irow = addCommCharges_b(i).getChildren().toArray();
+				try {
+				kk = new java.math.BigDecimal(dhd[0][x]);
+				irow[2].setValue(kk);
+				} catch (Exception e) {}
+
+				try {
+				Date td = dtf2.parse(dhd[1][x]);
+				irow[1].setValue(td);
+				} catch (Exception e) {}
+
+				try {
+					irow[3].setValue(dhd[2][x]);
+				} catch (Exception e) {}
+			}
+		}
+	}
+	calcAll();
+}
+
+void removeAllLaborGrids()
+{
+	for(i=0; i<holders.length;i++)
+	{
+		cg = holders[i].getFellowIfAny(grid_ids[i]);
+		if(cg != null)
+		{
+			cg.setParent(null);
+			row_counts[i] = 1;
+		}
+	}
+}
+
+void calcThings(int itype, Object ilabel)
+{
+	trows = holders[itype].getFellowIfAny(rowsid[itype]);
+	if(trows == null) return;
+	sumup = 0.0;
+	kc = trows.getChildren().toArray();
+	for(i=0;i<kc.length;i++)
+	{
+		r = kc[i].getChildren().toArray();
+		v = 0.0;
+		try { v = r[2].getValue().floatValue(); } catch (Exception e) {}
+		sumup += v;
+	}
+	ilabel.setValue(nf2.format(sumup));
+}
+
+void calcAll()
+{
+	Object[] stt = { cm_total,cmpay_total,med_total,medpay_total,imm_total,immpay_total,misc_total,miscpay_total };
+	Object[] bal = { cmpay_balance, medpay_balance, immpay_balance, miscpay_balance };
+	for(i=0; i<stt.length; i++)
+	{
+		calcThings(i,stt[i]);
+	}
+
+	for (i=0; i<bal.length; i++)
+	{
+		cx = Float.parseFloat(stt[i*2].getValue()) - Float.parseFloat(stt[i*2+1].getValue());
+		//kk = new java.math.BigDecimal(dhd[0][x]);
+		bal[i].setValue(nf2.format(cx));
+	}
+}
+
+void autoInsert36(Object ibt)
+{
+	k = ibt.getId();
+	k = k.substring(1,k.length());
+	p = ctabbox.getSelectedPanel().getIndex();
+	ty = p * 2 + Integer.parseInt(k);
+
+	for(i=0;i<36;i++)
+	{
+		addCommCharges_b(ty);
+	}
+	redrawCheckNo(ty);
+}
+
+void massAddCharge(Object ibt)
+{
+	
+}
+
+]]>
+</zscript>
+
+<style>
+.subhead0 { font-size:12px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead1 { font-size:16px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead2 { font-size:20px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px; }
+</style>
+
+<popup id="utils_pop">
+<div sclass="shadowbox" style="background:#436CE8">
+<vbox>
+	<button id="a0" label="Auto36 charges" onClick="autoInsert36(self)" />
+	<button id="a1" label="Auto36 payments" onClick="autoInsert36(self)" />
+</vbox>
+</div>
+</popup>
+
+<popup id="chargespop">
+<div sclass="shadowbox" style="background:#436CE8">
+<vbox>
+	<button id="e0" label="New charges" onClick="addCommCharges_b(ctabbox.getSelectedPanel().getIndex())" />
+	<button id="e1" label="Remove charges" onClick="remGridItems(ctabbox.getSelectedPanel().getIndex())" />
+</vbox>
+</div>
+</popup>
+
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren >
+
+<grid width="500px">
+	<rows>
+		<row>
+			<label value="Labor No." />
+			<textbox id="i_labor_no" value="12345678" />
+			<button id="lodlbr_b" label="Load" onClick="loadLaborCharges(i_labor_no.getValue().trim())" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+
+<tabbox id="ctabbox"> <!-- form area -->
+	<tabs>
+		<tab id="tab0" label="Commission charges" />
+		<tab id="tab1" label="Medical" />
+		<tab id="tab2" label="Immigration" />
+		<tab id="tab3" label="Misc" />
+	</tabs>
+	<tabpanels>
+
+	<tabpanel> <!-- commission-charges -->
+		<div id="commcharges_div" sclass="shadowbox" style="background:#5C5C2E">
+		<hbox>
+			<button label="SAVE" onClick="saveCommissionThings(COMM)" />
+			<button label="Auto 36" onClick="utils_pop.open(self)" />
+		</hbox>
+		<separator height="3px" />
+
+		<hbox>
+			<div id="cmcharges_holder" width="400px">
+				<hbox>
+					<button label="New charges" onClick="addCommCharges_b(COMM)" />
+					<button label="Remove charges" onClick="remGridItems(COMM)"  />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div id="cmpayment_holder" width="550px">
+				<hbox>
+					<button label="New payment" onClick="addCommCharges_b(COMMPAY)" />
+					<button label="Remove payment" onClick="remGridItems(COMMPAY)" />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div sclass="shadowbox" style="background:#465D89" width="100%">
+				<button label="Re-calc" onClick="calcAll()" />
+				<separator height="3px" />
+				<vbox>
+					<label sclass="subhead0" value="Charges total" />
+					<label id="cm_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Payments total" />
+					<label id="cmpay_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Balance" />
+					<label id="cmpay_balance" sclass="subhead1" value="0.00" />
+				</vbox>
+			</div>
+
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF commission-charges -->
+	<tabpanel> <!-- medical -->
+		<div id="medcharges_div" sclass="shadowbox" style="background:#5C5C2E">
+		<hbox>
+			<button label="SAVE" onClick="saveCommissionThings(MEDI)" />
+			<button label="Auto 36" onClick="utils_pop.open(self)" />
+		</hbox>
+		<separator height="3px" />
+
+		<hbox>
+			<div id="medcharges_holder" width="400px">
+				<hbox>
+					<button label="New charges" onClick="addCommCharges_b(MEDI)" />
+					<button label="Remove charges" onClick="remGridItems(MEDI)"  />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div id="medpayment_holder" width="550px">
+				<hbox>
+					<button label="New payment" onClick="addCommCharges_b(MEDIPAY)" />
+					<button label="Remove payment" onClick="remGridItems(MEDIPAY)" />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div sclass="shadowbox" style="background:#465D89" width="100%">
+				<button label="Re-calc" onClick="calcAll()" />
+				<separator height="3px" />
+				<vbox>
+					<label sclass="subhead0" value="Charges total" />
+					<label id="med_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Payments total" />
+					<label id="medpay_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Balance" />
+					<label id="medpay_balance" sclass="subhead1" value="0.00" />
+				</vbox>
+			</div>
+
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF medical -->
+	<tabpanel> <!-- Immigration -->
+		<div id="immcharges_div" sclass="shadowbox" style="background:#5C5C2E">
+		<hbox>
+			<button label="SAVE" onClick="saveCommissionThings(IMMG)" />
+			<button label="Auto 36" onClick="utils_pop.open(self)" />
+		</hbox>
+		<separator height="3px" />
+
+		<hbox>
+			<div id="immcharges_holder" width="400px">
+				<hbox>
+					<button label="New charges" onClick="addCommCharges_b(IMMG)" />
+					<button label="Remove charges" onClick="remGridItems(IMMG)"  />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div id="immpayment_holder" width="550px">
+				<hbox>
+					<button label="New payment" onClick="addCommCharges_b(IMMGPAY)" />
+					<button label="Remove payment" onClick="remGridItems(IMMGPAY)" />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div sclass="shadowbox" style="background:#465D89" width="100%">
+				<button label="Re-calc" onClick="calcAll()" />
+				<separator height="3px" />
+				<vbox>
+					<label sclass="subhead0" value="Charges total" />
+					<label id="imm_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Payments total" />
+					<label id="immpay_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Balance" />
+					<label id="immpay_balance" sclass="subhead1" value="0.00" />
+				</vbox>
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF Immigration -->
+	<tabpanel> <!-- Misc -->
+		<div id="misccharges_div" sclass="shadowbox" style="background:#5C5C2E">
+		<hbox>
+			<button label="SAVE" onClick="saveCommissionThings(MISC)" />
+			<button label="Auto 36" onClick="utils_pop.open(self)" />
+		</hbox>
+		<separator height="3px" />
+
+		<hbox>
+			<div id="misccharges_holder" width="500px">
+				<hbox>
+					<button label="New charges" onClick="addCommCharges_b(MISC)" />
+					<button label="Remove charges" onClick="remGridItems(MISC)"  />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div id="miscpayment_holder" width="550px">
+				<hbox>
+					<button label="New payment" onClick="addCommCharges_b(MISCPAY)" />
+					<button label="Remove payment" onClick="remGridItems(MISCPAY)" />
+				</hbox>
+				<separator height="3px" />
+			</div>
+
+			<div sclass="shadowbox" style="background:#465D89" width="100%">
+				<button label="Re-calc" onClick="calcAll()" />
+				<separator height="3px" />
+				<vbox>
+					<label sclass="subhead0" value="Charges total" />
+					<label id="misc_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Payments total" />
+					<label id="miscpay_total" sclass="subhead1" value="0.00" />
+				</vbox>
+				<vbox>
+					<label sclass="subhead0" value="Balance" />
+					<label id="miscpay_balance" sclass="subhead1" value="0.00" />
+				</vbox>
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF Misc -->
+	</tabpanels>
+</tabbox>
+
+<zscript>
+<![CDATA[
+
+Object[] holders = { cmcharges_holder, cmpayment_holder, medcharges_holder, medpayment_holder,
+	immcharges_holder, immpayment_holder, misccharges_holder, miscpayment_holder };
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

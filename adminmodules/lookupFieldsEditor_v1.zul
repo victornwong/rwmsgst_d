@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="lookupfieldseditor_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MOD_TITLE = "Lookups + Extra-fields label editor";
+MYVERSION = "v0.1";
+/*
+Title		: Lookups table fields editor and lookups management
+Written by	: Victor Wong
+
+Change those value1,value2.. fields input label in staticlookupman.zul - make them more descriptive for other users later.
+Plug codes from staticlookupman.zul to here.
+
+Revisions:
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+glob_selected_def = "";
+
+Component getPageFellow(String ipageid, String icompid)
+{
+	return self.getDesktop().getPage(ipageid).getFellowIfAny(icompid);
+}
+
+void tryme()
+{
+	//kk = self.getDesktop().getPage("staticlookup_mod");
+	//getFellowIfAny("matrixclass_lb")
+	//alert(kk.getLastRoot().getFellowIfAny("matrixclass_lb").getSelectedItem().getLabel());
+	//lu_man_inc = getPageFellow("staticlookup_mod","staticlookup_win");
+	//mclb = getPageFellow("staticlookup_mod","staticlookup_win").getFellowIfAny("matrixclass_lb").getSelectedItem();
+
+	mclb = getPageFellow("staticlookup_mod","staticlookup_win").getFellowIfAny("matrixclass_lb").getSelectedItem().getLabel();
+	alert(mclb);
+}
+
+// get selected item from a listbox in an included-zul
+// TODO: make it into a general purpose func
+String getExternal_SelectedLookup()
+{
+	mclb = getPageFellow("staticlookup_mod","staticlookup_win").getFellowIfAny("matrixclass_lb").getSelectedItem().getLabel();
+	return mclb;
+}
+
+void clearAllFields()
+{
+	f_def_description.setValue("");
+	f_value1.setValue("");
+	f_value2.setValue("");
+	f_value3.setValue("");
+	f_value4.setValue("");
+
+	f_value5.setValue("");
+	f_value6.setValue("");
+	f_value7.setValue("");
+	f_value8.setValue("");
+
+	glob_selected_def = "";
+}
+
+void showFieldsMetadata(String iorigid)
+{
+	drec = luhand.getFieldsDef_Rec(iorigid);
+
+	if(drec == null) return;
+
+	f_def_description.setValue(drec.get("def_description"));
+	f_value1.setValue(drec.get("val1_label"));
+	f_value2.setValue(drec.get("val2_label"));
+	f_value3.setValue(drec.get("val3_label"));
+	f_value4.setValue(drec.get("val4_label"));
+
+	f_value5.setValue(drec.get("val5_label"));
+	f_value6.setValue(drec.get("val6_label"));
+	f_value7.setValue(drec.get("val7_label"));
+	f_value8.setValue(drec.get("val8_label"));
+}
+
+class fdefOnSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		glob_selected_def = lbhand.getListcellItemLabel(selitem,0);
+		showFieldsMetadata(glob_selected_def);
+	}
+}
+
+void showFieldsDefList()
+{
+Object[] fdef_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Def description",true),
+};
+
+	sqlstm = "select origid,def_description from lookups_fieldslabel";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	trecs = sql.rows(sqlstm);
+	sql.close();
+
+	clearAllFields();
+	Listbox newlb = lbhand.makeVWListbox(fdefcol_holder,fdef_lb_headers,"fieldsdef_lb",12);
+	if(trecs.size() == 0) return;
+
+	newlb.addEventListener("onSelect", new fdefOnSelect());
+
+	for(dpi : trecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("def_description"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void newFieldsDef()
+{
+	sqlstm = "insert into lookups_fieldslabel (def_description,val1_label,val2_label,val3_label,val4_label,val5_label,val6_label,val7_label,val8_label) " +
+	"values ('NEW DEF','','','','','','','','')";
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+	showFieldsDefList(); // refresh
+}
+
+void saveDefs()
+{
+	if(glob_selected_def.equals("")) return;
+
+	defd = kiboo.replaceSingleQuotes(f_def_description.getValue());
+	tval1 = kiboo.replaceSingleQuotes(f_value1.getValue());
+	tval2 = kiboo.replaceSingleQuotes(f_value2.getValue());
+	tval3 = kiboo.replaceSingleQuotes(f_value3.getValue());
+	tval4 = kiboo.replaceSingleQuotes(f_value4.getValue());
+
+	tval5 = kiboo.replaceSingleQuotes(f_value5.getValue());
+	tval6 = kiboo.replaceSingleQuotes(f_value6.getValue());
+	tval7 = kiboo.replaceSingleQuotes(f_value7.getValue());
+	tval8 = kiboo.replaceSingleQuotes(f_value8.getValue());
+
+	sqlstm = "update lookups_fieldslabel set def_description='" + defd + "'," + 
+	"val1_label='" + tval1 + "', val2_label='" + tval2 + "', val3_label='" + tval3 + "', val4_label='" + tval4 +
+	"', val5_label='" + tval5 + "', val6_label='" + tval6 + "', val7_label='" + tval7 + "', val8_label='" + tval8 + "' where origid=" + glob_selected_def;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+	showFieldsDefList(); // refresh
+}
+
+void deleteFieldsDef()
+{
+	if(glob_selected_def.equals("")) return;
+	if(Messagebox.show("Delete this fields-def..", "Are you sure?", Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	sqlstm = "delete from lookups_fieldslabel where origid=" + glob_selected_def;
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+	showFieldsDefList(); // refresh
+}
+
+void assignDefToLookup()
+{
+	if(glob_selected_def.equals("")) return;
+	sel_lu = getExternal_SelectedLookup(); // get selected listitem.col(0)
+	if(sel_lu == null) return;
+
+	sqlstm = "update lookups set fieldslabel_def='" + glob_selected_def + "' where idlookups=" + sel_lu;
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	guihand.showMessageBox("Assigned fields-def to lookup..");
+
+	//alert(sel_lu + " :: " + glob_selected_def);
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="lookupfieldseditor_panel" title="${MOD_TITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<div>
+<panel title="Lookups" border="normal" collapsible="true" open="false">
+<panelchildren>
+	<div id="lclookupman_holder" />
+	<zscript>
+	<![CDATA[
+		guihand.localActivateWindow(lclookupman_holder, "alsglobal/staticlookupman.zul", "cd8", "lu=112+132&st=1", useraccessobj);
+	]]>
+	</zscript>
+</panelchildren>
+</panel>
+</div>
+
+<hbox>
+	<groupbox mold="3d" width="400px">
+		<div style="background:#a52a2a;padding:2px">
+			<label value="Fields def collections" style="color:#ffffff" />
+		</div>
+
+	<separator height="3px" />
+	<hbox>
+		<button label="New" style="font-size:9px" onClick="newFieldsDef()" />
+		<button label="Assign to.." style="font-size:9px" onClick="assignDefToLookup()" />
+		<button label="Delete" style="font-size:9px" onClick="deleteFieldsDef()" />
+	</hbox>
+	<separator height="3px" />
+	<div id="fdefcol_holder" />
+	</groupbox>
+	
+	<groupbox mold="3d">
+	<grid>
+		<rows>
+			<row spans=",5">
+				<label value="Defs description" style="font-size:9px" />
+				<textbox id="f_def_description" style="font-size:9px" width="100%" />
+			</row>
+			<row>
+				<label value="VALUE1 label" style="font-size:9px" />
+				<textbox id="f_value1" style="font-size:9px" />
+				<label value="VALUE2 label" style="font-size:9px" />
+				<textbox id="f_value2" style="font-size:9px" />
+				<label value="VALUE3 label" style="font-size:9px" />
+				<textbox id="f_value3" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="VALUE4 label" style="font-size:9px" />
+				<textbox id="f_value4" style="font-size:9px" />
+				<label value="VALUE5 label" style="font-size:9px" />
+				<textbox id="f_value5" style="font-size:9px" />
+				<label value="VALUE6 label" style="font-size:9px" />
+				<textbox id="f_value6" style="font-size:9px" />
+			</row>
+			<row spans=",,,3">
+				<label value="VALUE7 label" style="font-size:9px" />
+				<textbox id="f_value7" style="font-size:9px" />
+				<label value="VALUE8 label" style="font-size:9px" />
+				<textbox id="f_value8" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="3px" />
+	<hbox>
+		<button label="Save.." style="font-size:9px" onClick="saveDefs()" />
+		<button label="Clear all" style="font-size:9px" onClick="clearAllFields()" />
+	</hbox>
+	</groupbox>
+</hbox>
+
+<label>
+(112=General lookups, 132=Subcons tests)
+</label>
+
+<!--
+<label id="debugo" />
+<button label="testo" onClick="tryme()" />
+-->
+
+<zscript>
+<![CDATA[
+showFieldsDefList();
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

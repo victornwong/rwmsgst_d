@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    Document   : newXMLDocument.xml
+    Created on : February 4, 2009, 4:16 PM
+    Author     : user
+    Description:
+        Purpose of the document follows.
+-->
+
+<data>
+    <event start="Oct 1 2006 00:00:00 GMT"
+        end="Oct 1 2006 00:00:00 GMT"
+        title="Man taken wrong medicine">
+        Chan Chong Kong taken wrong medicine
+    </event>
+    <event start="Oct 1 2006 11:00:00 GMT"
+        end="Oct 5 2006 09:00:00 GMT"
+        isDuration="true" title="Man slipped into coma" >
+		He's in coma now.. Click here to see his photo and medicine administrated
+    </event>
+    <event start="Oct 5 2006 06:12:33 GMT"
+		end="Oct 10 2006 00:00:00 GMT"
+		isDuration="true"
+        title="Man woke up">
+        Luckily he's given antidote in time. He's awake now.
+    </event>
+
+    <event start="Oct 6 2006 06:12:33 GMT"
+        title="Nurse got kicked">
+Nurse Hayati Nuramala got kicked in the butt.
+    </event>
+	
+    <event start="Oct 3 2006 06:12:33 GMT"
+        end="Oct 6 2006" isDuration="true"
+        title="Manager found out">
+Datuk Keramat found out about this incident
+    </event>
+
+    <event start="Oct 3 2006 06:12:33 GMT"
+        end="Oct 10 2006" isDuration="true"
+        title="ALSM00024">
+ASTAKA Sdn Bhd
+    </event>
+
+	    <event start="Oct 4 2006 06:12:33 GMT"
+        end="Oct 11 2006" isDuration="true"
+        title="ALSM00026">
+Danfoss Marketing - 10 samples - Metals/Organic/ICP
+    </event>
+
+	
+
+</data>
+

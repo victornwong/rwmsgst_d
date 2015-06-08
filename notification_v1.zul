@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="notification_win_mod"?>
+<zk>
+<zscript src="alsglobal/alsglobaldefs.zs" />
+<zscript src="alsglobal/formMaker_v1.zs" />
+<style src="/alsglobal/victorstylesheet.css" />
+<zscript>
+<![CDATA[
+MYTITLE = "NOTIFICATIONS / MESSAGES";
+MYVERSION = "v0.1";
+/*
+Written by	: Victor Wong
+Dated		:
+NOTES:
+*/
+import java.util.*;
+import java.io.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+global_selected_folderno = "";
+
+class folderDC_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = userfolders_lb.getSelectedItem();
+		global_selected_folderno = lbhand.getListcellItemLabel(selitem,0);
+		generalFunc(null,1);
+	}
+}
+
+Object[] folderlb_headers = {
+	new listboxHeaderWidthObj("FolderNo",true,"60px"),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("SC",true,"30px"),
+	new listboxHeaderWidthObj("Status",true,"40px"),
+};
+
+void showCustomerFolders()
+{
+	whatday_sql = "CONVERT(char(10),dateadd(dd,-1,getdate()),126) ";
+
+	Calendar rightNow = Calendar.getInstance();
+	if(rightNow.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY)
+		whatday_sql = "CONVERT(char(10),dateadd(dd,-2,getdate()),126) ";
+
+	// grab yesterday's folders by those ar-codes assign
+	// if monday, grab folders 2 days ago, saturday
+	sqlstm = "select jf.folderno_str, jf.datecreated, cust.customer_name,jf.folderstatus, csci.customer_name as cashcustomer, " +
+	"(select count(origid) from jobsamples where jobfolders_id = jf.origid) as samplecount " +
+	"from jobfolders jf left join customer cust on jf.ar_code = cust.ar_code " +
+	"left join cashsales_customerinfo csci on csci.folderno_str = jf.folderno_str " +
+	"where jf.datecreated = " + whatday_sql +
+	"and jf.deleted=0 and jf.folderno_str is not null and jf.folderno_str<>'' order by jf.origid";
+
+	myrecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(myrecs.size() == 0) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(custfolders_holder, folderlb_headers, "userfolders_lb", 13);
+
+	for(dpi : myrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(kiboo.checkNullString(dpi.get("folderno_str")));
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+
+		custn = kiboo.checkNullString(dpi.get("customer_name"));
+		if(custn.equals("CASH ACCOUNT") || custn.equals("SYABAS CONTRACTOR"))
+			custn = "CshAcct:" + kiboo.checkNullString(dpi.get("cashcustomer"));
+
+		kabom.add(custn);
+		kabom.add(dpi.get("samplecount").toString());
+		kabom.add(dpi.get("folderstatus"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		
+		itmstyle = "font-size:9px;";
+		
+		if(dpi.get("folderstatus").equals("DRAFT"))
+			itmstyle = "font-size:9px;background:#cc0000;color:#ffffff;font-weight:bold;text-decoration:blink;";
+		
+		lbhand.insertListItems(newlb,strarray,"false",itmstyle);
+	}
+
+	dc_obj = new folderDC_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+void showWorkarea()
+{
+	wvisb = (usercustomer_workarea.isVisible()) ? false : true;
+	usercustomer_workarea.setVisible(wvisb);
+}
+
+void generalFunc(Object icomp, int itype)
+{
+	switch(itype)
+	{
+		case 1: // show folder-drill window
+		theparam = "folderno=" + global_selected_folderno;
+		workfn = "samplereg/folderjobs_driller.zul";
+		guihand.globalActivateWindow(mainPlayground,"miscwindows",workfn, kiboo.makeRandomId("vj"), theparam, useraccessobj);
+		break;	
+	
+	}
+}
+
+// Messages related funcs --
+// glob vars for messages funcs
+TOREPLYTO_FORM = "13";
+SHOWMSG_FORM = "14";
+
+vicFormMaker toreplyto_Form = null;
+
+glob_selected_msgid = "";
+Component msgposobj = null;
+glob_replyto_msgid = "0";
+glob_replyto_user = "";
+glob_replyto_subj = "";
+glob_msg_from = "";
+prev_msglist_type = 0;
+
+Object last_showmsg_tab = null;
+
+Object getMessageBoard_Rec(String iwhat)
+{
+	sqlstm = "select * from elb_messageboard where origid=" + iwhat;
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
+// Update combobox with usernames - easier than popup-select
+void updateUserCombobox(Combobox iwhat)
+{
+	sqlstm = "select username from portaluser where deleted=0 and locked=0 order by username";
+	urs = sqlhand.gpSqlGetRows(sqlstm);
+	if(urs == null) return;
+	for(dpi : urs)
+	{
+		iwhat.appendItem(dpi.get("username"));
+	}
+}
+
+String avatarPicture(String iuser)
+{
+	retval = "alsimg/avatars/" + iuser + ".jpg";
+	chkfn = session.getWebApp().getRealPath(retval);
+	File f = new File(chkfn);
+	if(f.exists()) return retval;
+
+	retval = "alsimg/avatars/" + iuser + ".png";
+	chkfn = session.getWebApp().getRealPath(retval);
+	File f = new File(chkfn);
+	if(f.exists()) return retval;
+
+	return null;
+}
+
+void showUserMessage(String imsgid)
+{
+	msre = getMessageBoard_Rec(imsgid);
+	if(msre == null) { guihand.showMessageBox("ERR: Cannot access message-board database.."); return; }
+
+	// populate 'em formmaker stuff
+	s_datecreated.setValue(msre.get("datecreated"));
+	s_from_user.setValue(msre.get("from_user"));
+	s_to_user.setValue(msre.get("to_user"));
+	s_subject.setValue(msre.get("subject"));
+	msgb = sqlhand.clobToString(msre.get("message_body"));
+	s_message_body.setValue(msgb);
+
+	shwmsg_lbl.setValue("Message-ID: " + msre.get("origid").toString());
+
+	avatar_from_pix.setSrc(avatarPicture(msre.get("from_user")));
+	avatar_to_pix.setSrc(avatarPicture(msre.get("to_user")));
+}
+
+void loadShowFormMaker(String iwhat, Div iwhere, String iformid)
+{
+	fmobj = sqlhand.getFormKeeper_rec(iwhat);
+	if(fmobj == null) { gui.showMessageBox("ERR: Cannot load XML-form definitions"); return; }
+	formxml = sqlhand.clobToString(fmobj.get("xmlformstring"));
+	glob_formmaker = new vicFormMaker(iwhere,iformid,formxml);
+	glob_formmaker.generateForm();
+}
+
+void messageFunc(Object icomp, int itype)
+{
+	todaydate = kiboo.todayISODateString();
+
+	switch(itype)
+	{
+		case 1: // new msg
+		case 4: // reply to msg
+		loadShowFormMaker(TOREPLYTO_FORM,newmsg_holder,"toreplyto_form");
+		updateUserCombobox(to_user);
+		glob_replyto_user = ""; // reset
+
+		// if to do reply
+		if(itype == 4)
+		{
+			to_user.setValue(glob_msg_from);
+			glob_replyto_user = glob_msg_from;
+		}
+
+		glob_replyto_subj = "";
+		newmsg_popup.open(newmsg_btn);
+		break;
+
+		case 2: // really send new msg
+		tostr = kiboo.replaceSingleQuotes(to_user.getValue());
+		subjstr = kiboo.replaceSingleQuotes(subject.getValue());
+		msgtext = kiboo.replaceSingleQuotes(message_body.getValue());
+
+		sqlstm = "insert into elb_messageboard (from_user,to_user,datecreated,subject,message_body," + 
+		"readflag,starred,replied,replyto_id,parent_folder) values ('" +
+		useraccessobj.username + "','" + tostr + "','" + todaydate + "','" + subjstr + "','" + msgtext + "'," +
+		"0,0,0," + glob_replyto_msgid + ",'SENT')";
+
+		sqlhand.gpSqlExecuter(sqlstm);
+
+		newmsg_popup.close();
+		guihand.showMessageBox("Message sent..");
+
+		break;	
+
+		case 3:
+		if(glob_selected_msgid.equals("")) return;
+		loadShowFormMaker(SHOWMSG_FORM,shwmsg_holder,"yourmessage_form");
+
+		showUserMessage(glob_selected_msgid);
+
+		sqlstm = "update elb_messageboard set readflag=1 where origid=" + glob_selected_msgid;
+		sqlhand.gpSqlExecuter(sqlstm);
+
+		lbhand.setListcellItemLabel(msgposobj,4,"-Y-");
+		//msgposobj.setStyle("font-size:9px;text-decoration:none");
+
+		showmsg_popup.open(msgposobj);
+		break;
+
+		case 5: // delete a msg
+		if(glob_selected_msgid.equals("")) return;
+
+		if (Messagebox.show("Delete this message", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO)
+			return;
+
+		sqlstm = "delete from elb_messageboard where origid=" + glob_selected_msgid;
+		sqlhand.gpSqlExecuter(sqlstm);
+		listMessages(messages_holder,"messages_lb",useraccessobj.username,prev_msglist_type); // refresh
+		break;
+	}
+}
+
+class msgDClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		msgposobj = event.getTarget();
+		glob_selected_msgid = lbhand.getListcellItemLabel(msgposobj,0);
+		messageFunc(null,3);
+	}
+}
+
+class msglb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		msgposobj = event.getReference();
+		glob_selected_msgid = lbhand.getListcellItemLabel(msgposobj,0);
+		glob_msg_from = lbhand.getListcellItemLabel(msgposobj,2);
+	}
+}
+
+Object[] msgb_lb_headers = {
+	new listboxHeaderWidthObj("MiD",true,"40px"),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("From",true,"70px"),
+	new listboxHeaderWidthObj("Subject",true,""),
+	new listboxHeaderWidthObj("RD",true,"30px"),
+	new listboxHeaderWidthObj("REP",true,"30px"),
+};
+
+// iholder: where to put the list, msgto: msg To who, itype: 1=today,2=yesterday,3=old,4=any unread,5=latest top 200
+void listMessages(Div iholder, String iboxid, String msgto, int itype)
+{
+	// reset global vars
+	glob_selected_msgid = "";
+	prev_msglist_type = itype;
+
+	sqlstm = "select top 200 origid,datecreated,from_user,subject,readflag,replied from elb_messageboard ";
+	switch(itype)
+	{
+		case 1:
+		sqlstm += "where datecreated = convert(varchar(10),getdate(),120)";
+		break;
+
+		case 2:
+		sqlstm += "where datecreated = convert(varchar(10),dateadd(dd,-1,getdate()),120)";
+		break;
+
+		case 3:
+		sqlstm += "where datecreated < convert(varchar(10),dateadd(dd,-1,getdate()),120)";
+		break;
+
+		case 4:
+		sqlstm += "where readflag=0";
+		break;
+
+		case 5: // latest 50 msg
+		sqlstm += "where readflag is not null";
+		break;
+	}
+
+	sqlstm += " and to_user='" + useraccessobj.username + "' order by origid desc";
+
+	newlb = lbhand.makeVWListbox_Width(iholder,msgb_lb_headers,iboxid,5);
+
+	mrs = sqlhand.gpSqlGetRows(sqlstm);
+	if(mrs == null || mrs.size() == 0) return;
+	newlb.setRows(13);
+
+	newlb.addEventListener("onSelect", new msglb_Listener());
+
+	for(dpi : mrs)
+	{
+		try
+		{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(kiboo.checkNullString(dpi.get("from_user")));
+		kabom.add(kiboo.checkNullString(dpi.get("subject")));
+
+		rdflag = (dpi.get("readflag") == 0) ? "---" : "-Y-";
+		kabom.add(rdflag);
+
+		rpflag = (dpi.get("replied") == 0) ? "---" : "-Y-";
+		kabom.add(rpflag);
+		
+		kstyle = (dpi.get("readflag") == 0) ? "font-weight:bold" : "";
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false",kstyle);
+		}
+		catch (NullPointerException e) {}
+	}
+
+	dc_obj = new msgDClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// ENDOF Messages related funcs --
+
+
+]]>
+</zscript>
+
+<popup id="newmsg_popup">
+	<div style="background:#fcaf3e;padding:2px">
+	<label id="newreply_lbl" />
+	</div>
+	<separator height="3px" />
+	<div id="newmsg_holder" />
+	<separator height="3px" />
+	<button label="Send" style="font-size:9px" onClick="messageFunc(self,2)" />
+	<button label="Close" style="font-size:9px" onClick="newmsg_popup.close()" />
+</popup>
+
+<popup id="showmsg_popup">
+	<div style="background:#fcaf3e;padding:2px">
+	<label id="shwmsg_lbl" />
+	</div>
+	<separator height="3px" />
+	<hbox>
+
+		<vbox>
+			<image id="avatar_from_pix" />
+			<image id="avatar_to_pix" />
+		</vbox>
+
+		<div id="shwmsg_holder" />
+	</hbox>
+	<separator height="3px" />
+	<!-- <button label="Reply" style="font-size:9px" onClick="generalFuncs(4)" /> -->
+	<button label="Close" style="font-size:9px" onClick="showmsg_popup.close()" />
+</popup>
+
+<window id="notif_win" width="650px" height="500px" title="${MYTITLE} ${MYVERSION}" 
+position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<!--  onClick="usercustomer_workarea.setVisible((usercustomer_workarea.isVisible()) ? false : true)" -->
+<hbox>
+	<div class="container" >
+		<div class="head" style="background:#75507b;">
+		    <div class="vert" style="background:#75507b;">TRACK FOLDERS</div>
+		</div>
+	</div>
+
+	<div id="usercustomer_workarea" visible="false" width="400px" style="background:#729fcf" >
+		Assign which customer you want track..
+	</div>
+
+	<vbox>
+		<button label="Load yesterday folders" style="font-size:9px" onClick="showCustomerFolders();" />
+		<div id="custfolders_holder" />
+	</vbox>
+</hbox>
+<separator height="10px" />
+
+<!-- onClick="msg_workarea.setVisible((msg_workarea.isVisible()) ? false : true)" -->
+
+<hbox>
+	<div class="container">
+		<div class="head" style="background:#ce5c00;">
+		    <div class="vert" style="background:#ce5c00;">MESSAGES</div>
+		</div>
+	</div>
+
+	<div id="msg_workarea" visible="false" width="400px" style="background:#555753" >
+		Messages thing
+	</div>
+
+	<vbox>
+		<div id="messages_holder" />
+		<hbox>
+			<button label="Latest messages" style="font-size:9px" onClick='listMessages(messages_holder,"messages_lb",useraccessobj.username,5);' />
+			<button id="replymsg_btn" label="Reply" style="font-size:9px" onClick="messageFunc(self,4)" />
+			<button id="newmsg_btn" label="Write" style="font-size:9px" onClick="messageFunc(self,1)" />
+			<button id="delmsg_btn" label="Delete" style="font-size:9px" onClick="messageFunc(self,5)" />
+		</hbox>
+	</vbox>
+</hbox>
+
+<label id="sometext" />
+
+</div>
+
+<zscript>
+<![CDATA[
+
+listMessages(messages_holder,"messages_lb",useraccessobj.username,4);
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

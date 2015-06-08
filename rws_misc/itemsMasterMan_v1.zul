@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="itemmastmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Items Master Management";
+MYVERSION = "v0.1";
+MYPANEL = "itmnmnsaniao";
+/*
+Written by	: Victor Wong
+Dated		: 12/12/2013
+
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+last_loadtype = 0;
+glob_sel_luitem = "";
+
+Object[] itmlkhds =
+{
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("SKU",true,"70px"),
+	new listboxHeaderWidthObj("Brand",true,"60px"),
+	new listboxHeaderWidthObj("Model",true,"200px"),
+	new listboxHeaderWidthObj("Desc",true,"200px"),
+	new listboxHeaderWidthObj("Chas",true,"50px"),
+	new listboxHeaderWidthObj("Proc",true,"70px"),
+	new listboxHeaderWidthObj("Spd",true,"60px"),
+	new listboxHeaderWidthObj("RAM",true,"60px"),
+	new listboxHeaderWidthObj("M.RAM",true,"60px"),
+	new listboxHeaderWidthObj("HDD",true,"60px"),
+	new listboxHeaderWidthObj("Actv",true,"40px"),
+};
+
+class itmlkclkr implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_luitem = lbhand.getListcellItemLabel(isel,0);
+	}
+}
+
+itemslookupclker = new itmlkclkr();
+
+void listItemsLookup(int itype)
+{
+	last_loadtype = itype;
+	mtyp = m_type_select.getSelectedItem().getLabel();
+	mstyp = m_subtype_select.getSelectedItem().getLabel();
+
+	if(mtyp.equals("NONE") && mstyp.equals("NONE")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(itemslookup_holder, itmlkhds, "itemslookup_lb", 10);
+
+	sqlstm = "select origid,item_sku,brand,model,description,chassis_type,procs_tech,procs_speed," + 
+	"ram_type,hdd_type,max_mem,active_f from rw_itemslookup ";
+
+	wherestr = "";
+
+	switch(itype)
+	{
+		case 1:
+			if(!mtyp.equals("NONE"))
+			{
+				wherestr += "where type='" + mtyp + "' ";
+				if(!mstyp.equals("NONE")) wherestr += "and sub_type='" + mstyp + "' ";
+			}
+			else
+			if(!mstyp.equals("NONE"))
+				wherestr += "where sub_type='" + mstyp + "' ";
+
+			break;
+	}
+
+	sqlstm += wherestr;
+
+	recs = sqlhand.gpSqlGetRows(sqlstm);
+	if(recs.size() == 0) return;
+	newlb.setRows(22);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", itemslookupclker );
+
+	for(d : recs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add( d.get("origid").toString() );
+		kabom.add( kiboo.checkNullString(d.get("item_sku")) );
+		kabom.add( kiboo.checkNullString(d.get("brand")) );
+		kabom.add( kiboo.checkNullString(d.get("model")) );
+		kabom.add( kiboo.checkNullString(d.get("description")) );
+		kabom.add( kiboo.checkNullString(d.get("chassis_type")) );
+		kabom.add( kiboo.checkNullString(d.get("procs_tech")) );
+
+		spd = "";
+		try { spd = nf2.format(Float.parseFloat(d.get("procs_speed"))); } catch (Exception e) {}
+		kabom.add(spd);
+
+		kabom.add( kiboo.checkNullString(d.get("ram_type")) );
+		kabom.add( kiboo.checkNullString(d.get("max_mem")) );
+		kabom.add( kiboo.checkNullString(d.get("hdd_type")) );
+		kabom.add( (d.get("active_f") == null) ? "N" : (d.get("active_f")) ? "Y" : "N" );
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+}
+
+]]>
+</zscript>
+
+<style>
+.subhead2 { font-size:24px; font-weight:bold; text-shadow: 1px 1px #000000; }
+.subhead1 {	font-size:18px;	font-weight:bold; text-shadow: 1px 1px #000000; }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px;">
+
+<hbox>
+	<label value="Type" style="color:#ffffff" />
+	<listbox id="m_type_select" mold="select" />
+
+	<label value="Sub-type" style="color:#ffffff" />
+	<listbox id="m_subtype_select" mold="select" />
+
+	<button label="Load" onClick="listItemsLookup(1)" />
+</hbox>
+
+<hbox>
+	<button id="newitmsku_b" label="New item SKU" />
+	<button id="toggactive_b" label="Toggle active" />
+	<button id="itmskulbhelp_b" label="?" />
+</hbox>
+
+<separator height="5px" />
+
+<div id="itemslookup_holder" />
+
+</div>
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(m_type_select, "ITEMM_TYPES", 2);
+luhand.populateListbox_ByLookup(m_subtype_select, "ITEMM_TYPES", 2);
+
+
+//listItemsLookup(1);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

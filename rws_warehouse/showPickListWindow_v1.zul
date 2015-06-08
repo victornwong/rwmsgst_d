@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="shwpplistw"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="./stockPickPack_funcs.zs" />
+<zscript src="./pickItems_func.zs" />
+<zscript src="./assignJobID_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Pick List Breakdown";
+MYVERSION = "v0.1";
+MY_ID = "showicklistwi";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+param_ppl = Executions.getCurrent().getParameter("ppl");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+
+String JN_linkcode()
+{
+	if(param_ppl == null) return "";
+	return PICKLIST_PREFIX + param_ppl;
+}
+
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div id="workarea" width="500px">
+
+<div style="background:#2e3436;padding:3px">
+<label id="picklist_head" style="font-size:18px;font-weight:bold;color:#ffffff" />
+</div>
+
+<div id="form_holder1" />
+<grid>
+	<rows>
+		<row>
+			<label value="Job Link: JOB" style="font-size:9px" />
+			<label id="job_id" style="font-weight:bold;font-size:15px" />
+			<button label="View job details" style="font-size:9px;font-weight:bold"
+				onClick="viewJobWindow(job_id.getValue(),null);" />
+		</row>
+	</rows>
+</grid>
+
+<hbox>
+	<button id="bl3" label="-" onClick="blindTings_withTitle(self,jobnotes_div,jntit)" style="font-weight:bold" />
+
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" id="jobnotes_div" visible="false" >
+		<label sclass="subhead1">JOB NOTES</label>
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,JN_linkcode())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" style="font-size:9px" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" style="font-size:9px" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" style="font-size:9px" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			
+		</div>
+	</div>
+	<label id="jntit" sclass="subhead2" value="JOB NOTES" visible="false" />
+</hbox>
+
+<grid>
+	<columns>
+		<column width="20px" />
+		<column label="Category / Pick-items" />
+	</columns>
+	<rows id="pl_rows" >
+	</rows>
+</grid>
+
+</div>
+
+<div id="documents_holder" visible="false" />
+
+<zscript>
+<![CDATA[
+
+glob_formmaker = dynamicForm(form_holder1, "picklist_metaform", "3");
+
+picklist_head.setValue(PICKLIST_PREFIX + param_ppl);
+showPickPackMeta(param_ppl);
+
+// disable all buttons --
+kis = pl_rows.getFellows();
+for(di : kis)
+{
+	cid = di.getId().substring(0,2);
+	if(cid.equals("CT")) di.setDisabled(true);
+	if(cid.equals("UD")) di.setDisabled(true);
+	if(cid.equals("RM")) di.setDisabled(true);
+	if(cid.equals("UP")) di.setDisabled(true);
+	if(cid.equals("UD")) di.setDisabled(true);
+}
+
+
+//blindTings(blnd2,builds_holder);
+//blindTings(blnd3,form_holder);
+
+
+]]>
+</zscript>
+
+</window>
+</zk>

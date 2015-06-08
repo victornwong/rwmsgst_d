@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="birtreportviewer2_win"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v2.0";
+/*
+Title		: BIRT report viewer
+Version		: 2.0
+Written by	: Victor Wong
+Dated		: 16/05/2011
+
+*NOTES*
+
+09/10/2011: access rptdesign filename from elb_menutree instead of hardcoded ones in alsglobal_birtreport.zs
+
+More generalized BIRT report viewer window to be used throughout the system - uses stuff in alsglobal_birtreport.zs
+- birtReportTemplates[] = for template filename
+
+parameters:
+bid = BIRT report id : index to birtReportTemplates[]
+rti = Report title : to be placed as window title
+*/
+import org.victor.*;
+
+sqlhand = new SqlFuncs();
+guihand = new GuiFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+birtreportid = Executions.getCurrent().getParameter("bid");
+reporttitle = Executions.getCurrent().getParameter("rti");
+
+void doBIRT(Div iparentdiv, String birtfn)
+{
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("600px");
+	thesrc = birtURL() + birtfn;
+	newiframe.setSrc(thesrc);
+	newiframe.setParent(iparentdiv);
+}
+
+]]>
+</zscript>
+
+<window id="birtreportv2" width="800px" height="670px" title="Report Viewer ${MYVERSION}"
+position="center" mode="overlapped" border="normal" closable="true" sizable="true">
+
+<button label="Close window" style="font-size:9px" onClick="guihand.globalCloseWindow(mainPlayground,myincludeid)" />
+<separator height="3px" />
+<label id="whatever" />
+<div id="birt_div" />
+<label id="debugdd" multiline="true" />
+<zscript>
+<![CDATA[
+
+if(birtreportid != null)
+{
+	sqlstm = "select module_fn from elb_menutree where origid=" + birtreportid;
+	kfc = sqlhand.gpSqlFirstRow(sqlstm);
+	if(kfc != null)
+		if(!kfc.get("module_fn").equals("")) // make sure something to show
+				 doBIRT(birt_div,kfc.get("module_fn"));
+}
+else
+	guihand.globalCloseWindow(mainPlayground,myincludeid);
+
+if(reporttitle != null) birtreportv2.setTitle("Report Viewer " + MYVERSION + " : " + reporttitle);
+
+]]>
+</zscript>
+</window>
+</zk>
+

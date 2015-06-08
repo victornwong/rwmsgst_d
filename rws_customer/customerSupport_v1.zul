@@ -1,0 +1,1018 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="custsupport1_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="customerSupport_funcs.zs" />
+<zscript src="LCassReplaceTracker.zs" />
+<zscript src="genSOF_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Customer Support / Helpdesk-tickets";
+MYVERSION = "v0.3.3";
+MYPANEL = "custsupp1";
+/*
+@Title Customer support / help-tickets
+@Author Victor Wong
+@Since 12/07/2013
+
+NOTES:
+
+12/08/2014: check asset-tag to see already log-in ticket. Search by CSV
+21/08/2014: update UI and show GCO-no in list
+29/08/2014: start coding the LC assets replacement controls
+18/09/2014: vanita req , add extra field to classify ticket RMA,REMARKETING,AUDIT,DEPLOYMENT
+27/10/2014: button to source asset details from FC6
+
+*/
+import java.util.*;
+import java.text.*;
+import java.math.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs(); gridhand = new GridHandler();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+glob_selected_ticket = glob_ticket_status = "";
+global_selected_customerid = global_selected_customername = "";
+last_listype = 0;
+
+NORMAL_BACKGROUND = "background:#2e3436;";
+CRITICAL_BACKGROUND = "background:#ef2929;";
+URGENT_BACKGROUND = "background:#fcaf3e;";
+
+/*
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+*/
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = custds =  custr.get("address1yh") + ",\n" + custr.get("address2yh") + ",\n" +
+	custr.get("address3yh") + ",\n" + custr.get("address4yh");
+	t_cust_location.setValue(locstr);
+
+	global_selected_customername = kiboo.checkNullString( custr.get("name") ); // save for later use
+}
+
+// TODO put in general.jaza
+void changeChildrenStyle(Object ichildren, String isty)
+{
+	for(ki : ichildren)
+	{
+		oldst = ki.getStyle();
+		ki.setStyle(oldst + ";" + isty);
+	}
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refreshtickets = false;
+	lnkc = TICKETSV_PREFIX + glob_selected_ticket;
+
+	if(itype.equals("newreq_b"))
+	{
+		sqlstm = "insert into rw_helptickets (cust_name,createdby,calldatetime,priority,tstatus,os_id) values " +
+		"('UNDEF','" + useraccessobj.username + "','" + todaydate + "','NORMAL','NEW','HQ')";
+		refreshtickets = true;
+	}
+
+	if(itype.equals("updatet_b"))
+	{
+		if(glob_selected_ticket.equals("")) return;
+		if(global_selected_customerid.equals("")) return;
+
+		Object[] ob = { t_cust_caller, t_cust_caller_phone, t_cust_caller_des, t_cust_caller_email, t_cust_location,
+		t_asset_tag, t_serial_no, t_product_name, t_assign_to, t_priority, t_problem, t_action,
+		t_resolved_by, t_resolve_type, t_resolution, t_os_id, t_os_user, t_ticketclass
+		};
+
+		dt = ngfun.getString_fromUI(ob);
+		cnm = kiboo.replaceSingleQuotes( global_selected_customername );
+		//t_resolved_on
+		//restyp = kiboo.replaceSingleQuotes(t_resolve_type.getValue().trim());
+		//osid = kiboo.replaceSingleQuotes(t_os_id.getValue().trim());
+		//t_os_pickup, t_os_resolve
+
+		sqlstm = "update rw_helptickets set fc6_custid='" + global_selected_customerid + "'," + 
+		"cust_name='" + cnm + "',cust_caller='" + dt[0] + "',cust_caller_phone='" + dt[1] + "'," + 
+		"cust_caller_des='" + dt[2] + "',cust_caller_email='" + dt[3] + "',cust_location='" + dt[4] + "'," + 
+		"asset_tag='" + dt[5] + "',serial_no='" + dt[6] + "',product_name='" + dt[7] + "',assign_to='" + dt[8] + "'," + 
+		"priority='" + dt[9] + "',problem='" + dt[10] + "',action='" + dt[11] + "',resolved_by='" + dt[12] + "'," + 
+		"resolve_type='" + dt[13] + "',resolution='" + dt[14] + "',os_id='" + dt[15] + "',os_user='" + dt[16] + "', " +
+		"ticketclass='" + dt[17] + "' " +
+		"where origid=" + glob_selected_ticket;
+
+		refreshtickets = true;
+	}
+
+	if(itype.equals("localrma_b")) // do local-RMA by customer
+	{
+		if(global_selected_customerid.equals("")) return;
+		uqid = kiboo.makeRandomId("lrma");
+		runmestr = "rws_customer/localRMA_v1.zul";
+		theparam = "ci=" + global_selected_customerid;
+		guihand.globalActivateWindow(mainPlayground,"miscwindows",runmestr, uqid, theparam, useraccessobj);
+	}
+
+	if(itype.equals("opentog_b")) // open case ticket
+	{
+		if(glob_selected_ticket.equals("")) return;
+		if(glob_ticket_status.equals(CASEOPEN_STR)) return; // tick already open
+
+		if(global_selected_customername.equals("UNDEF")) // ticket must assign to customer
+			msgtext = "No customer assigned.. cannot open case.";
+		else
+		{
+			sqlstm = "update rw_helptickets set tstatus='" + CASEOPEN_STR + "' where origid=" + glob_selected_ticket;
+			refreshtickets = true;
+
+			subc = "OPEN";
+			msgt = "Open case ticket";
+
+			// if prev tick stat=close/cancel and now open, log re-open ticket
+			if(glob_ticket_status.equals(CASECLOSE_STR) || glob_ticket_status.equals(CASECANCEL_STR))
+			{
+				subc = "REOPEN";
+				msgt = "Re-open case ticket";
+			}
+
+			add_RWAuditLog(lnkc,subc,msgt,useraccessobj.username);
+			showSystemAudit(ticksactivs_holder,lnkc,"");
+
+			disableButts(true);
+
+			// TODO email-noti outsource if this ticket meant for them
+		}
+	}
+
+	if(itype.equals("closetog_b")) // close ticket
+	{
+		if(!glob_ticket_status.equals("OPEN"))
+		{
+			guihand.showMessageBox("You can only close OPEN case-ticket..");
+			return;
+		}
+
+		crnots = kiboo.replaceSingleQuotes( c_customer_rate_notes.getValue().trim() );
+		if(crnots.equals(""))
+		{
+			guihand.showMessageBox("Customer's rating notes mandatory..");
+			return;
+		}
+
+		custrate_pop.close();
+
+		crate = c_customer_rate.getSelectedItem().getLabel();
+		crate2 = c_customer_rate2.getSelectedItem().getLabel();
+		crate3 = c_customer_rate2.getSelectedItem().getLabel();
+
+		sqlstm = "update rw_helptickets set tstatus='" + CASECLOSE_STR + "', " + 
+		"resolved_by='" + useraccessobj.username + "', resolved_on='" + todaydate + "', " +
+		"customer_rate='" + crate + "', customer_rate_notes='" + crnots + "', " +
+		"customer_rate2='" + crate2 + "', customer_rate3='" + crate3 + "' " +
+		"where origid=" + glob_selected_ticket;
+
+		refreshtickets = true;
+		t_resolved_by.setValue(useraccessobj.username);
+
+		// log close-ticket
+		subc = "CLOSE";
+		msgt = "Close case ticket. Customer is: " + crate + ", notes: " + crnots;
+		add_RWAuditLog(lnkc,subc,msgt,useraccessobj.username);
+		showSystemAudit(ticksactivs_holder,lnkc,"");
+		disableButts(true);
+	}
+
+	if(itype.equals("canceltick_b")) // cancel ticket -- only NEW ticket can be cancelled
+	{
+		/*
+		if(!glob_ticket_status.equals("NEW"))
+		{
+			guihand.showMessageBox("Only NEW ticket can be cancelled..");
+			return;
+		}
+		*/
+
+		canrs = kiboo.replaceSingleQuotes( canceltick_reason.getValue().trim() );
+		if(canrs.equals(""))
+		{
+			guihand.showMessageBox("Please put in a good reason to cancel this ticket..");
+			return;
+		}
+
+		sqlstm = "update rw_helptickets set tstatus='" + CASECANCEL_STR + "' where origid=" + glob_selected_ticket;
+		refreshtickets = true;
+
+		msgt = "CANCEL: " + canrs ;
+		add_RWAuditLog(lnkc,"CANCELTICK", msgt, useraccessobj.username); // log this cancellation
+
+		glob_selected_ticket = ""; // hide workarea and clear glob vars
+		glob_ticket_status = "";
+		workarea.setVisible(false);
+		workbutts.setVisible(false);
+		guihand.showMessageBox("Ticket is now cancelled..");
+	}
+
+	if(itype.equals("vequiprma_b")) // view asset/equip RMA details
+	{
+	}
+
+	if(itype.equals("emailnoti_b")) // send notifi email to customer on case-ticket
+	{
+		if(glob_selected_ticket.equals("")) return;
+		if(glob_ticket_status.equals("NEW"))
+		{
+			guihand.showMessageBox("Notification email can only be send-out for non NEW case ticket");
+			return;
+		}
+
+		n_tickheader.setValue("Sending notification email for ticket CSV#" + glob_selected_ticket);
+		n_towho.setValue(t_cust_caller_email.getValue().trim());
+
+		emailnoti_popup.open(iwhat);
+	}
+
+	if(itype.equals("realsendnoti_b")) // really send out noti-email butt
+	{
+		// TODO diff noti-email for open/close
+		towho = kiboo.replaceSingleQuotes(n_towho.getValue()).trim();
+		msgb = kiboo.replaceSingleQuotes(n_msgbody.getValue()).trim();
+		email_SOF(towho,msgb);
+		// log to audit-trail
+		subc = "NOTIEMAIL";
+		msgt = "Email ServiceOrderForm to : " + towho;
+		add_RWAuditLog(lnkc,subc,msgt,useraccessobj.username);
+		showSystemAudit(ticksactivs_holder,lnkc,"");
+		emailnoti_popup.close();
+	}
+
+	if(itype.equals("viewsof_b")) // view SOF
+	{
+		if(glob_selected_ticket.equals("")) return;
+		/*
+		if(glob_ticket_status.equals("NEW"))
+		{
+			guihand.showMessageBox("Notification email can only be send-out for non NEW case ticket");
+			return;
+		}
+		*/
+		genServiceOrderFormPdf(glob_selected_ticket); // gen SOF PDF in tmp
+		fncm = "SERVICEORDER_" + glob_selected_ticket + ".pdf";
+		//outfn = session.getWebApp().getRealPath(TEMPFILEFOLDER + fncm);
+		theparam = "pfn=" + fncm;
+		uniqid = kiboo.makeRandomId("lvf");
+		guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/viewfile_Local_v1.zul", uniqid, theparam, useraccessobj);
+	}
+
+	if(itype.equals("upreso_b")) // update resolution only
+	{
+		if(glob_selected_ticket.equals("")) return;
+		restxt = kiboo.replaceSingleQuotes(t_resolution.getValue().trim());
+		sqlstm = "update rw_helptickets set resolution='" + restxt + "' where origid=" + glob_selected_ticket;
+		msgtext = "Resolution notes updated..";
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refreshtickets) showTickets(last_listype);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	adminpopup.close();
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = "";
+
+	if(glob_selected_ticket.equals("")) return;
+
+	if(itype.equals("chgtkstat_b")) // chg ticket to NEW
+	{
+		sqlstm = "update rw_helptickets set tstatus='NEW', " + 
+		"resolved_by=null,resolved_on=null,rma_id=null where origid=" + glob_selected_ticket + ";" ;
+		// remove this ticket from RMA if exist
+		sqlstm += "delete from rw_localrma_items where helpticket_id=" + glob_selected_ticket;
+	}
+
+	if(itype.equals("chgtkdate_b")) // chg tiket date
+	{
+		chgd = dtf.format(adm_datechg.getValue());
+		sqlstm = "update rw_helptickets set calldatetime='" + chgd + "' where origid=" + glob_selected_ticket;
+	}
+
+	if(itype.equals("delticket_b")) // delete ticket
+	{
+		if (Messagebox.show("HARD delete ticket..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from rw_helptickets where origid=" + glob_selected_ticket;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		showTickets(last_listype);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+}
+
+// checks before open cancel-ticket reason popup
+void checkOpenCancel()
+{
+	if(glob_selected_ticket.equals("")) return;
+	if(!glob_ticket_status.equals("NEW")) return;
+	canceltick_pop.open(canceltick_b);
+}
+
+void trysendmail()
+{
+	genServiceOrderFormPdf(glob_selected_ticket);
+	return;
+
+	templatefn = session.getWebApp().getRealPath("rwimg/service_order_v1.pdf");
+	//pixfn = session.getWebApp().getRealPath("alsimg/alstechnichem_logo_smaller.jpg");
+	outfn = session.getWebApp().getRealPath(TEMPFILEFOLDER + "testsof_1.pdf");
+
+	PdfReader pdfReader = new PdfReader(templatefn);
+	PdfStamper pdfStamper = new PdfStamper(pdfReader,new FileOutputStream(outfn));
+	BaseFont bf_helv = BaseFont.createFont(BaseFont.HELVETICA, "Cp1252", false);
+	PdfContentByte cb = pdfStamper.getUnderContent(1);
+
+	pageheight = 820; // take pageheight-ypos
+	cb.beginText();
+
+	cb.setFontAndSize(bf_helv,Integer.parseInt(pdffontsz.getValue()));
+
+	pdx = pdfxpos.getValue();
+	pdy = pdfypos.getValue();
+	pdot = pdftoput.getValue();
+
+	try
+	{
+		cb.showTextAligned(PdfContentByte.ALIGN_LEFT, pdot, Integer.parseInt(pdx), pageheight - Integer.parseInt(pdy), 0);
+	}
+	catch (Exception e) {}
+	
+	cb.endText();
+	pdfStamper.close();
+
+/*	if(!simpleSendemail_MSEX("192.168.100.15","victor","rentwise",
+		"victor@rentwise.com","wongvictor1998@gmail.com","Testing sendmail","Test again.."))
+
+		alert("cannot send email..");
+		*/
+	/*	
+	String[] fnms = { 
+	session.getWebApp().getRealPath("tmp/AMALGAMATED_IND_SOA_Jul2013.xls"),
+	session.getWebApp().getRealPath("tmp/PUSPAKOM_SDN_BH_SOA_Jul2013.xls")
+	};
+		
+	MS_sendEmailWithAttachment("192.168.100.15","victor","rentwise",
+		"victor@rentwise.com","wongvictor1998@gmail.com","Testing sendmail","Test again..",
+		fnms);
+	*/
+}
+
+/*
+<label value="G.Total" />
+<label id="c_grandtotal" />
+*/
+
+// Funcs for charge-items handling
+void chargeItems(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = itmstr = untp = qtyf = "";
+
+	if(itype.equals("updchrg_b")) // update charge-items
+	{
+		if(glob_selected_ticket.equals("")) return;
+		if(!glob_ticket_status.equals("NEW"))
+		{
+			guihand.showMessageBox("You can ONLY enter charge-items for NEW case-ticket..");
+			return;
+		}
+
+		for(i=1;i<5;i++)
+		{
+			cnt = i.toString();
+			itmo = chargeitems_grid.getFellowIfAny("c_item_" + cnt);
+			itmstr += kiboo.replaceSingleQuotes(itmo.getValue().trim()) + "::";
+			upo = chargeitems_grid.getFellowIfAny("c_unitprice_" + cnt);
+			untp += kiboo.replaceSingleQuotes(upo.getValue().trim()) + "::";
+			qtyo = chargeitems_grid.getFellowIfAny("c_qty_" + cnt);
+			qtyf += kiboo.replaceSingleQuotes(qtyo.getValue().trim()) + "::";
+		}
+
+		sqlstm = "update rw_helptickets set charge_items='" + itmstr + "',charge_unitprice='" + untp + "',charge_qty='" + qtyf + "' " +
+		"where origid=" + glob_selected_ticket;
+		
+		msgtext = "Chargeable items saved..";
+	}
+
+	if(itype.equals("recalc_b")) // recalc charge-items total
+	{
+		grtotal = 0;
+		for(i=1;i<5;i++)
+		{
+			cnt = i.toString();
+			upo = chargeitems_grid.getFellowIfAny("c_unitprice_" + cnt);
+			try { upp = Float.parseFloat(upo.getValue().trim()); } catch (Exception e) { upp = 0; }
+			qtyo = chargeitems_grid.getFellowIfAny("c_qty_" + cnt);
+			try { qtff = Float.parseFloat(qtyo.getValue().trim()); } catch (Exception e) { qtff = 0; }
+			stot = upp * qtff;
+			stob = chargeitems_grid.getFellowIfAny("c_total_" + cnt);
+			stob.setValue(nf2.format(stot));
+			grtotal += stot;
+		}
+		c_grandtotal.setValue(nf2.format(grtotal));
+	}
+
+	if(itype.equals("notichargequote_b")) // send notif request-quote
+	{
+		if(glob_selected_ticket.equals("")) return;
+		sendServiceChargeable_noti(glob_selected_ticket);
+	}
+
+	if(itype.equals("confirmquote_b")) // confirm service-items quote
+	{
+		// save charge-items and chg status
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void checkdupAssetsInSV(String iwhat)
+{
+	iwhat = kiboo.replaceSingleQuotes(iwhat.trim());
+	if(iwhat.equals("")) return;
+	sqlstm = "select origid,calldatetime from rw_helptickets where asset_tag like '%" + iwhat + "%'";
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0)
+		chkdups_lbl.setValue("No duplicate asset-tags in CSV");
+	else
+	{
+		ks = iwhat + " found in:\n";
+		for(d : rcs)
+		{
+			ks += dtf2.format(d.get("calldatetime")) + " : CSV" + d.get("origid").toString() + "\n";
+		}
+		chkdups_lbl.setValue(ks);
+	}
+	checkdupAssSV_pop.open(asschk_tb);
+}
+
+BOXWIDTH = "800px";
+ACTIVATY_BOXWIDTH = "500px";
+
+]]>
+</zscript>
+
+<popup id="checkdupAssSV_pop">
+	<div sclass="shadowbox" style="background:#3d82c2;" width="350px">
+		<label id="chkdups_lbl" multiline="true" style="color:#ffffff;font-weight:bold" />
+	</div>
+</popup>
+
+<popup id="custrate_pop">
+	<div sclass="shadowbox" style="background:#5c3566;">
+		<vbox>
+			<label style="font-weight:bold;font-size:14px;color:#ff0000">Customer Satisfaction</label>
+			<separator height="3px" />
+			<grid>
+				<rows>
+					<row>
+						<label value="How satisfied are you with the overall quality of on-site support engineers?" />
+						<listbox id="c_customer_rate" mold="select" />
+					</row>
+					<row>
+						<label value="How satisfied are you with the time required to resolve your problem?" />
+						<listbox id="c_customer_rate2" mold="select" />
+					</row>
+					<row>
+						<label value="How satisfied are you with the communication and follow-up on problem resolution?" />
+						<listbox id="c_customer_rate3" mold="select" />
+					</row>
+					<row spans="2">
+						<label value="Rating notes" style="font-weight:bold" />
+					</row>
+					<row spans="2">
+						<textbox id="c_customer_rate_notes" multiline="true" width="99%" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<button label="Close case with rating" style="font-weight:bold" onClick="doFunc(closetog_b)" />
+		</vbox>
+	</div>
+</popup> <!-- ENDOF custrate_pop -->
+
+<popup id="canceltick_pop">
+	<div sclass="shadowbox" style="background:#cc0000;">
+		<vbox>
+			<label value="Cancel reason" style="color:#eeeeee" />
+			<textbox id="canceltick_reason" width="250px" height="50px" multiline="true" />
+			<button label="CANCEL" onClick="doFunc(canceltick_b)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="emailnoti_popup">
+	<grid width="450px">
+		<rows>
+			<row spans="2" style="background:#2e3436">
+				<label id="n_tickheader" style="color:#eeeeee" />
+			</row>
+			<row>
+				<label value="To" sclass="k9" />
+				<textbox id="n_towho" sclass="k9" width="99%" />
+			</row>
+			<row spans="2">
+				<label value="Extra remarks" sclass="k9" />
+			</row>
+			<row spans="2">
+				<textbox id="n_msgbody" sclass="k9" multiline="true" width="99%" height="60px" />
+			</row>
+			<row spans="2">
+				<hbox>
+					<button id="realsendnoti_b" label="Send notification" sclass="k9" onClick="doFunc(self)" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+</popup>
+
+<popup id="adminpopup">
+	<vbox sclass="shadowbox" style="background:#DC0E0E">
+		<button id="delticket_b" label="DELETE" sclass="k9" onClick="adminFunc(self)" />
+		<datebox id="adm_datechg" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value=new Date()" />
+		<button id="chgtkdate_b" label="Chg date" sclass="k9" onClick="adminFunc(self)" />
+		<div visible="false">
+			<label value="fontsz" />
+			<textbox id="pdffontsz" value="8" />
+			<label value="PDF X-Pos" />
+			<textbox id="pdfxpos" value="10" />
+			<label value="PDF Y-Pos" />
+			<textbox id="pdfypos" value="500" />
+			<label value="PutText" />
+			<textbox id="pdftoput" value="TESTING COMPANY 1234567890" />
+			<button label="admin testing " onClick="trysendmail()" />
+		</div>
+	</vbox>
+</popup>
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" sclass="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,TICKETSV_PREFIX,glob_selected_ticket)" />
+			<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" sclass="k9" />
+					<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+				</row>
+				<row>
+					<label value="Description" sclass="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,TICKETSV_PREFIX,glob_selected_ticket)" sclass="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()"  sclass="k9" />
+	</hbox>
+</popup>
+
+<popup id="pickcustomer_popup">
+	<div sclass="shadowbox" style="background:#f9b12d;">
+		<hbox>
+			<label sclass="k9">Customer name</label>
+			<textbox id="searchcust_tb" sclass="k9" />
+			<button label="Find" sclass="k9" onClick="findCustomers()" />
+		</hbox>
+		<separator height="2px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<separator width="5px" />
+			<div width="400px" id="custfound_wa" visible="false" >
+				<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+				<separator height="2px" />
+				<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+				<separator height="3px" />
+				<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+			</div>
+		</hbox>
+		<label id="selectcustid" visible="false" />
+	</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#556081">
+
+	<div sclass="shadowbox" style="background:#3465a4;"> <!-- load/search div -->
+		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<label value="End" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<textbox id="searhtxt_tb" sclass="k9" />
+			<button label="Search/load" sclass="k9" onClick="showTickets(1)" />
+			<textbox id="csvtxt_tb" sclass="k9" width="50px" />
+			<button label="by CSV" sclass="k9" onClick="showTickets(2)" />
+			<textbox id="asschk_tb" sclass="k9" />
+			<button label="Check dup asset-tag" sclass="k9" onClick="checkdupAssetsInSV(asschk_tb.getValue())" />
+		</hbox>
+
+	<!--
+	<button id="contasschk_b" label="Contract/Asset check"
+		onClick="lc_asset_tag.setValue(t_asset_tag.getValue());contractass_pop.open(self)" />
+	-->
+	</div> <!-- ENDOF load/search div -->
+	<separator height="5px" />
+
+	<div sclass="shadowbox" style="background:#769335">
+		<hbox>
+			<button id="newreq_b" label="New case ticket" sclass="k9" onClick="doFunc(self)" />
+			<button id="opentog_b" label="Open case" sclass="k9" onClick="doFunc(self)" />
+			<button id="closetog_b" label="Close case" sclass="k9" onClick="custrate_pop.open(self)" />
+			<button id="emailnoti_b" label="Send notification" sclass="k9" onClick="doFunc(self)" />
+			<button id="viewsof_b" label="View SOF" sclass="k9" onClick="doFunc(self)" />
+			<button id="canceltick_b" label="CANCEL ticket" sclass="k9" onClick="checkOpenCancel()" />
+			<button id="chgtkstat_b" label="Set NEW" sclass="k9" onClick="adminFunc(self)" visible="false" />
+			<button id="admin_b" label="Admin" visible="false" style="color:#cc0000" onClick="adminpopup.open(self)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="tickets_holder" />
+	</div> <!-- requests listbox area -->
+	<separator height="5px" />
+
+	<div sclass="shadowbox" style="background:#769335" id="workarea" visible="false" >
+		<hbox>
+			<grid width="650px">
+				<rows>
+					<row style="background:#2e3436" id="tickmeta_hd1" >
+						<label value="Ticket ID" style="font-size:14px;color:#eeeeee" />
+						<label id="t_origid" style="color:#eeeeee" />
+						<label value="Priority" sclass="k9b" />
+						<label id="hd_priority" style="color:#eeeeee" />
+						<label value="Status" sclass="k9b" />
+						<label id="hd_tstatus" style="color:#eeeeee" />
+					</row>
+					<row spans="1,5" style="background:#2e3436" id="tickmeta_hd2" >
+						<label value="Customer" sclass="k9b" />
+						<!-- <textbox id="customername" sclass="k9" width="99%" /> -->
+						<label id="customername" style="color:#eeeeee" />
+					</row>
+					<row spans="6" style="background:#2e3436" id="workbutts" visible="false">
+						<hbox>
+							<button id="selcustomer_b" label="Select customer" sclass="k9mo" onClick="pickcustomer_popup.open(newreq_b)" />
+							<button id="updatet_b" label="Update ticket" sclass="k9mo" onClick="doFunc(self)" />
+							<button label="OS RMA" sclass="k9" disabled="true" />
+							<button label="Notify OS" sclass="k9" disabled="true" />
+							<!-- <button id="localrma_b" label="Local RMA" sclass="k9" onClick="doFunc(self)" /> -->
+						</hbox>
+					</row>
+				</rows>
+			</grid>
+
+			<div>
+			</div> <!-- ENDOF workbutts -->
+		</hbox>
+		<separator height="5px" />
+
+		<tabbox>
+			<tabs>
+				<tab id="tab1" label="CASE TICKET DETAILS" />
+				<tab id="tab2" label="ACTIVITY" />
+				<tab id="tab3" label="CHARGES" />
+				<tab id="tab4" label="OUTSOURCE" />
+				<tab id="tab5" label="ATTACHMENTS" />
+			</tabs>
+			<tabpanels>
+
+				<tabpanel> <!-- SUPPORT TICKET METADATA -->
+					<grid width="${BOXWIDTH}">
+					<rows>
+						<row>
+							<label value="Caller" sclass="k9" />
+							<textbox id="t_cust_caller" sclass="k9" width="99%" />
+							<label value="Tel/HP" sclass="k9" />
+							<textbox id="t_cust_caller_phone" sclass="k9" width="99%" />
+						</row>
+						<row>
+							<label value="Designation" sclass="k9" />
+							<textbox id="t_cust_caller_des" sclass="k9" width="99%" />
+							<label value="Email" sclass="k9" />
+							<textbox id="t_cust_caller_email" sclass="k9" width="99%" />
+						</row>
+						<row spans="1,3">
+							<label value="Customer location" sclass="k9" />
+							<textbox id="t_cust_location" multiline="true" width="99%" height="80px" sclass="k9" />
+						</row>
+					</rows>
+					</grid>
+				</tabpanel> <!-- ENDOF SUPPORT TICKET METADATA -->
+
+				<tabpanel> <!-- ACTIVITY -->
+					<hbox>
+						<div>
+							<grid width="${ACTIVATY_BOXWIDTH}">
+								<rows>
+									<row spans="4" style="background:#fcaf3e" >
+										<vbox>
+											<div id="equip_rma_holder" />
+											<button id="vequiprma_b" visible="false" label="RMA details" sclass="k9" onClick="doFunc(self)" />
+										</vbox>
+									</row>
+									<row>
+										<label value="Asset Tag" sclass="k9" />
+										<textbox id="t_asset_tag" width="99%" sclass="k9" />
+										<label value="S/Num" sclass="k9" />
+										<textbox id="t_serial_no" width="99%" sclass="k9" />
+									</row>
+									<row spans="1,3">
+										<label value="Product name" sclass="k9" />
+										<textbox id="t_product_name" width="99%" sclass="k9" />
+									</row>
+									<row spans="4">
+										<hbox>
+											<button label="Get name/serial from FC6" sclass="k9" onClick="sourceAsset_Details_FC6()" />
+										</hbox>
+									</row>
+									<row spans="4" style="background:#2e3436">
+										<vbox>
+											<separator height="3px" />
+											<label style="color:#eeeeee" value="Activity Logs" />
+										</vbox>
+									</row>
+								</rows>
+							</grid>
+							<separator height="2px" />
+							<div id="ticksactivs_holder" width="${ACTIVATY_BOXWIDTH}" />
+							<separator height="2px" />
+							<grid width="${ACTIVATY_BOXWIDTH}">
+								<rows>
+									<row>
+										<label value="Assign to" sclass="k9" />
+										<textbox id="t_assign_to" width="99%" sclass="k9" />
+										<label value="Priority" sclass="k9" />
+										<listbox id="t_priority" mold="select" sclass="k9" />
+										<label value="Classfication" sclass="k9" />
+										<listbox id="t_ticketclass" mold="select" sclass="k9" />
+									</row>
+									<row spans="1,5">
+										<label value="Problem" sclass="k9" />
+										<textbox id="t_problem" multiline="true" width="99%" height="60px" sclass="k9" />
+									</row>
+									<row spans="1,5">
+										<label value="Action" sclass="k9" />
+										<textbox id="t_action" multiline="true" width="99%" height="60px" sclass="k9" />
+									</row>
+									<row>
+										<label value="Resolve by" sclass="k9" />
+										<textbox id="t_resolved_by" width="99%" sclass="k9" />
+										<label value="Resolve date" sclass="k9" />
+										<datebox id="t_resolved_on" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+										<label value="Resolve type" sclass="k9" />
+										<!-- <textbox id="t_resolve_type" width="99%" sclass="k9" /> -->
+										<listbox id="t_resolve_type" mold="select" sclass="k9" rows="1" />
+									</row>
+									<row spans="1,5">
+										<label value="Resolution" sclass="k9" />
+										<textbox id="t_resolution" multiline="true" width="99%" height="50px" sclass="k9" />
+									</row>
+									<row spans="6">
+										<button id="upreso_b" label="Update resolution" sclass="k9" onClick="doFunc(self)" />
+									</row>
+								</rows>
+							</grid>
+						</div>
+
+						<div sclass="shadowbox" style="background:#2B3B58">
+							<label sclass="subhead1" value="LC Assets Replacement Track" />
+							<div style="background:#D11A54;padding:3px">
+								<hbox>
+									<button id="rplcsave_b" label="Save for GCO" sclass="k9mo" onClick="lcreplaceDo(self.getId())" />
+									<button id="rpclrgco_b" label="Clear from cache" sclass="k9mo" onClick="lcreplaceDo(self.getId())" />
+								</hbox>
+							</div>
+							<separator height="3px" />
+							<div id="lcreps_holder" />
+							<separator height="5px" />
+							<grid>
+								<rows>
+									<row style="background:#2B3B58">
+										<label value="LC.Id" sclass="k9b" />
+										<textbox id="v_lc_id" sclass="k9" />
+										<label value="I.Asset" sclass="k9b" />
+										<textbox id="v_in_assettag" sclass="k9" />
+										<label value="Replace" sclass="k9b" />
+										<textbox id="v_out_assettag" sclass="k9" />
+									</row>
+									<row style="background:#2B3B58" spans="1,5">
+										<label value="A.Date" sclass="k9b" />
+										<datebox id="v_act_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+									</row>
+									<row style="background:#2B3B58" spans="1,5">
+										<label value="Action" sclass="k9b" />
+										<textbox id="v_action" sclass="k9" multiline="true" width="99%" height="70px" />
+									</row>
+								</rows>
+							</grid>
+							<hbox>
+								<button id="updlcrep_b" label="Save/Update" sclass="k9mo" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+								<button id="clrlcrep_b" label="Clear" sclass="k9mo" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+								<button id="remlcrep_b" label="REMOVE" style="font-size:9px;color:#ff0000" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+							</hbox>
+						</div>
+
+					</hbox>
+				</tabpanel> <!-- ENDOF ACTIVITY -->
+
+				<tabpanel> <!-- CHARGES -->
+					<separator height="3px" />
+					<hbox>
+						<label value="Chargeable?" sclass="k9b" />
+						<listbox id="t_chargeable" mold="select" sclass="k9" />
+						<separator width="10px" />
+						<button id="notichargequote_b" label="Request items price" sclass="k9" onClick="chargeItems(self)" />
+						<!-- <button id="confirmquote_b" label="Update and confirm quote" sclass="k9" onClick="chargeItems(self)" disabled="true" /> -->
+					</hbox>
+					<separator height="5px" />
+					<grid id="chargeitems_grid" width="${BOXWIDTH}">
+						<columns>
+							<column label="Item/Service Description" sclass="k9" />
+							<column label="Unit(RM)" width="70px" sclass="k9" />
+							<column label="Qty" width="50px" sclass="k9" />
+							<column label="Total" width="70px" sclass="k9" />
+						</columns>
+						<rows>
+							<row>
+								<textbox id="c_item_1" sclass="k9" width="99%" />
+								<textbox id="c_unitprice_1" sclass="k9" width="99%" />
+								<textbox id="c_qty_1" sclass="k9" width="99%" />
+								<label id="c_total_1" sclass="k9" />
+							</row>
+							<row>
+								<textbox id="c_item_2" sclass="k9" width="99%" />
+								<textbox id="c_unitprice_2" sclass="k9" width="99%" />
+								<textbox id="c_qty_2" sclass="k9" width="99%" />
+								<label id="c_total_2" sclass="k9" />
+							</row>
+							<row>
+								<textbox id="c_item_3" sclass="k9" width="99%" />
+								<textbox id="c_unitprice_3" sclass="k9" width="99%" />
+								<textbox id="c_qty_3" sclass="k9" width="99%" />
+								<label id="c_total_3" sclass="k9" />
+							</row>
+							<row>
+								<textbox id="c_item_4" sclass="k9" width="99%" />
+								<textbox id="c_unitprice_4" sclass="k9" width="99%" />
+								<textbox id="c_qty_4" sclass="k9" width="99%" />
+								<label id="c_total_4" sclass="k9" />
+							</row>
+							<row>
+								<label />
+								<label />
+								<label value="G.Total" />
+								<label id="c_grandtotal" />
+							</row>
+						</rows>
+					</grid>
+					<separator height="2px" />
+					<hbox>
+						<button id="updchrg_b" label="Update charge-items" sclass="k9" onClick="chargeItems(self)" />
+						<separator width="50px" />
+						<button id="recalc_b" label="Recalc" sclass="k9" onClick="chargeItems(self)" />
+					</hbox>
+				</tabpanel>
+
+				<tabpanel> <!-- OUTSOURCE -->
+					<grid width="${BOXWIDTH}">
+					<rows>
+						<row spans="4" style="background:#3465a4">
+							<label style="color:#eeeeee">OUTSOURCE</label>
+						</row>
+						<row>
+							<label value="OS ID" sclass="k9" />
+							<listbox id="t_os_id" mold="select" sclass="k9" />
+							<label value="OS User" sclass="k9" />
+							<label id="t_os_user" width="99%" sclass="k9" />
+						</row>
+						<row>
+							<label value="Pickup date" sclass="k9" />
+							<!-- <datebox id="t_os_pickup" format="yyyy-MM-dd" sclass="k9" onCreate="self.value = new Date()" /> -->
+							<label id="t_os_pickup" />
+							<label value="Resolve date" sclass="k9" />
+							<!-- <datebox id="t_os_resolve" format="yyyy-MM-dd" sclass="k9" onCreate="self.value = new Date()" /> -->
+							<label id="t_os_resolve" />
+						</row>
+						<row spans="1,3">
+							<label sclass="k9">OS resolution notes</label>
+							<label id="t_os_resolution" multiline="true" sclass="k9" />
+						</row>
+					</rows>
+					</grid>
+				</tabpanel> <!-- ENDOF OUTSOURCE -->
+
+				<tabpanel> <!-- ATTACHMENTS -->
+					<hbox>
+						<button id="uploaddoc_btn" label="Upload file" sclass="k9" onClick="showUploadPopup(TICKETSV_PREFIX,glob_selected_ticket)" />
+						<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+						<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+						<button id="deletedoc_btn" label="Delete" sclass="k9" onClick="deleteFile(documents_holder,TICKETSV_PREFIX,glob_selected_ticket)" />
+					</hbox>
+					<separator height="3px" />
+					<div id="documents_holder" width="${BOXWIDTH}" />
+				</tabpanel> <!-- ENDOF ATTACHMENTS -->
+
+			</tabpanels>
+		</tabbox>
+	</div> <!-- ENDOF workarea -->
+
+<label id="debugmsg" multiline="true" />
+
+<zscript>
+<![CDATA[
+
+if(useraccessobj.accesslevel == 9)
+{
+	//adminstuff.setVisible(true);
+	admin_b.setVisible(true);
+	csvtxt_tb.setValue("1066");
+	chgtkstat_b.setVisible(true);
+}
+
+if(useraccessobj.username.equals("vanita"))
+{
+	chgtkstat_b.setVisible(true);
+}
+
+luhand.populateListbox_ByLookup(t_priority, "PRIORITY_LISTS", 2);
+luhand.populateListbox_ByLookup(t_chargeable, "YESNO_DEF", 2);
+luhand.populateListbox_ByLookup(t_os_id, "OUTSOURCE_PARTNERS", 2);
+luhand.populateListbox_ByLookup(t_resolve_type, "CASE_RESOLVE_TYPES", 2);
+
+luhand.populateListbox_ByLookup(c_customer_rate, "CUSTOMER_RATE_US", 2);
+luhand.populateListbox_ByLookup(c_customer_rate2, "CUSTOMER_RATE_US", 2);
+luhand.populateListbox_ByLookup(c_customer_rate3, "CUSTOMER_RATE_US", 2);
+
+luhand.populateListbox_ByLookup(t_ticketclass, "TICKET_CLASSIFICATION", 2);
+
+//luhand.populateListbox_ByLookup(i_collected,"YESNO_DEF",2); // LC/asset-tag check popup
+// TODO confirmquote_b <-- hide/show depending on user's ability to confirm service-items quote
+//if(sechand.allowedUser(useraccessobj.username,"SERVICE_QUOTE_USERS")) confirmquote_b.setDisabled(false);
+
+//showTickets(1);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+
+

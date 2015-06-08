@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="matchdoroc_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Match ROC to DO";
+MYVERSION = "v0.2";
+MY_ID = "mathcodicoewindid";
+/*
+Written by	: Victor Wong
+Dated		: 16/01/2014
+NOTES:
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+void matchMe()
+{
+	tkk = kiboo.replaceSingleQuotes(rocnos.getValue().trim());
+	if(tkk.equals("")) return;
+	rocs = tkk.split("\n");
+	rcstr = "";
+	for(i=0;i<rocs.length;i++)
+	{
+		try {
+		pk = rocs[i].replaceAll("ROC:","").trim();
+		rcstr += "'" + pk + "',";
+		} catch (Exception e) {}
+	}
+
+	try {
+	rcstr = rcstr.substring(0,rcstr.length()-1);
+	} catch (Exception e) {}
+
+	sqlstm = "select d.voucherno,dod.referenceyh, dod.deliverystatusyh, dod.deliverydateyh, act.name from data d " +
+	"left join u001c dod on dod.extraid = d.extraheaderoff " +
+	"left join mr000 act on act.masterid = d.bookno " +
+	"where d.vouchertype=6144 and ltrim(rtrim(dod.referenceyh)) like 'roc%' " +
+	"and dod.referenceyh in (" + rcstr + ") " +
+	"group by d.voucherno, dod.referenceyh, dod.deliverystatusyh, dod.deliverydateyh, act.name " +
+	"order by d.voucherno desc;";
+
+	dss = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(dss.size() == 0) return;
+	fndstr = "";
+
+	for(d : dss)
+	{
+		fndstr += "DO:" + d.get("voucherno") + "\t" + 
+		((d.get("deliverydateyh").trim().equals("")) ? "00/00/0000" : d.get("deliverydateyh") ) +
+		"\t" + d.get("referenceyh") + "\t" + d.get("name") + "\t" + d.get("deliverystatusyh") + "\n";
+	}
+
+	founds.setValue(fndstr);
+}
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" width="850px" height="490px" title="${MYTITLE} ${MYVERSION}" 
+position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<hbox>
+	<div>
+		<label value="ROC numbers" style="font-size:9px" />
+		<textbox id="rocnos" multiline="true" width="110px" height="400px" style="font-size:9px" />
+		<separator height="3px" />
+		<button label="Check 'em" onClick="matchMe()" />
+	</div>
+	<separator width="3px" />
+	<div>
+		<label value="Matched" style="font-size:9px" />
+		<textbox id="founds" multiline="true" width="730px" height="400px" style="font-size:9px" />
+	</div>
+
+
+</hbox>
+
+</div>
+</window>
+</zk>
+

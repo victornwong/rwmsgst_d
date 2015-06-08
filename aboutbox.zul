@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="aboutboxwin"?>
+<zk>
+
+<zscript src="alsglobal/alsglobaldefs.zs" />
+<zscript src="alsglobal/alsglobal_guifuncs.zs" />
+
+<zscript>
+<![CDATA[
+/*
+NOTES:
+to open a file in the absolute path of the running webapps
+FileOutputStream outstream = new FileOutputStream(session.getWebApp().getRealPath("/meabspath.txt"));
+
+
+*/
+
+import java.io.*;
+import org.apache.poi.xssf.usermodel.*;
+import org.apache.poi.ss.usermodel.*;
+
+// import org.apache.poi.hssf.usermodel.HSSFCell;
+// import org.apache.poi.hssf.usermodel.HSSFRow;
+// import org.apache.poi.hssf.usermodel.HSSFSheet;
+// import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+// import org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator;
+
+import org.apache.poi.hssf.usermodel.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+wooly = Executions.getCurrent().getParameter("wooly");
+
+dingdongpass = "whopass";
+
+/*
+void showReport()
+{
+    import java.io.*;
+    import java.sql.*;
+    import org.zkoss.util.media.AMedia;
+    import net.sf.jasperreports.engine.JasperRunManager;
+    void doReport() {
+        InputStream is = null;
+        try {
+            //generate report pdf stream
+            is = Thread.currentThread().getContextClassLoader()
+                .getResourceAsStream("/reports/report4.jasper");
+
+            final Map params = new HashMap();
+
+            final byte[] buf =
+                JasperRunManager.runReportToPdf(is, params, getConnection());
+
+            //prepare the AMedia for iframe
+            final InputStream mediais = new ByteArrayInputStream(buf);
+            final AMedia amedia =
+                new AMedia("FirstReport.pdf", "pdf", "application/pdf", mediais);
+
+            //set iframe content
+            report.setContent(amedia);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+    }
+    private static Connection getConnection()
+    throws ClassNotFoundException, SQLException
+    {
+        //Change these settings according to your local configuration
+        String driver = "org.gjt.mm.mysql.Driver";
+        String connectString = "jdbc:mysql://localhost/test";
+        String user = "msprog";
+        String password = "kingkong";
+
+        Class.forName(driver);
+        Connection conn = DriverManager.getConnection(connectString, user, password);
+        return conn;
+    }
+
+
+*/
+
+// From the web: convert InputStream to string - useful for text file parsing
+String convertStreamToString(InputStream is) throws Exception
+{
+	BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+	StringBuilder sb = new StringBuilder();
+	String line = null;
+	while ((line = reader.readLine()) != null)
+	{
+		sb.append(line + "\n");
+	}
+	is.close();
+	return sb.toString();
+}
+
+// Open a file in absolute path of ZK webapps
+InputStream openZKFile(String pathfname)
+{
+	return new FileInputStream(session.getWebApp().getRealPath(pathfname));
+}
+
+void readAFile()
+{
+	// InputStream instream = new FileInputStream(session.getWebApp().getRealPath("/meabspath.txt"));
+	mmm = openZKFile("/meabspath.txt");
+	String theins = convertStreamToString(mmm);
+	
+	// alert("done..." + theins);
+	
+	dumpster_box.setValue(theins);
+	
+	// alert("txt: " + ddd);
+	
+}
+
+void tryExcel()
+{
+	// Workbook wb = new HSSFWorkbook();
+	// FileOutputStream fileOut = new FileOutputStream(session.getWebApp().getRealPath("/testexcel.xls"));
+	// wb.write(fileOut);
+	// fileOut.close();
+
+	// Workbook wb = new HSSFWorkbook();
+    // //Workbook wb = new XSSFWorkbook();
+    // CreationHelper createHelper = wb.getCreationHelper();
+    // Sheet sheet = wb.createSheet("new sheet");
+
+    // // Create a row and put some cells in it. Rows are 0 based.
+    // Row row = sheet.createRow((short)0);
+    // // Create a cell and put a value in it.
+    // Cell cell = row.createCell(0);
+    // cell.setCellValue(1);
+
+    // // Or do it on one line.
+    // row.createCell(1).setCellValue(1.2);
+    // row.createCell(2).setCellValue(
+    // createHelper.createRichTextString("This is a string"));
+    // row.createCell(3).setCellValue(true);
+
+    // // Write the output to a file
+    // FileOutputStream fileOut = new FileOutputStream(session.getWebApp().getRealPath("/testexcel.xls"));
+    // wb.write(fileOut);
+    // fileOut.close();
+
+
+	FileInputStream inp = new FileInputStream(session.getWebApp().getRealPath("/070410A.xls"));	
+	HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	
+	Sheet sheet1 = excelWB.getSheetAt(0);
+	
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	
+	//Workbook excelWB = WorkbookFactory.create(inp);
+
+	for (int sheetNumber = 0; sheetNumber < excelWB.getNumberOfSheets(); sheetNumber++)
+	{
+		HSSFSheet oneSheet = excelWB.getSheetAt(sheetNumber);
+
+	// Now get the number of rows in the sheet
+		int rows = oneSheet.getPhysicalNumberOfRows();
+
+	// Middle Loop: Loop through rows in the sheet
+
+		for (int rowNumber = 0; rowNumber < rows; rowNumber++)
+		{
+			HSSFRow oneRow = oneSheet.getRow(rowNumber);
+
+			// Skip empty (null) rows.
+			if (oneRow == null) {
+				continue;
+			}
+
+			// Get the number of cells in the row
+			int cells = oneRow.getPhysicalNumberOfCells();
+
+			// Inner Loop: Loop through each cell in the row
+
+			for (int cellNumber = 0; cellNumber < cells; cellNumber++)
+			{
+				HSSFCell oneCell = oneRow.getCell(cellNumber);
+				
+				CellValue cellValue = evaluator.evaluate(oneCell);
+
+         // // Get the value of the string in the cell.
+         // // Print out the String value of the Cell 
+         // // This section will result in an error. Why?
+		 
+		 switch(oneCell.getCellType()) {
+      case Cell.CELL_TYPE_STRING:
+        System.out.println(oneCell.getRichStringCellValue().getString());
+        break;
+      case Cell.CELL_TYPE_NUMERIC:
+        if(DateUtil.isCellDateFormatted(oneCell)) {
+          System.out.println(oneCell.getDateCellValue());
+        } else {
+          System.out.println(oneCell.getNumericCellValue());
+        }
+        break;
+      case Cell.CELL_TYPE_BOOLEAN:
+        System.out.println(oneCell.getBooleanCellValue());
+        break;
+      case Cell.CELL_TYPE_FORMULA:
+        //System.out.println(oneCell.getCellFormula());
+		System.out.println(oneCell.getCellFormula() + " = " + cellValue.getNumberValue().toString());
+        break;
+      default:
+        System.out.println();
+		}
+
+				// String cellValue = oneCell.getStringCellValue();
+				// System.out.println(cellValue + ", ");
+			}
+		}
+	}
+
+}
+
+public class callingme
+{
+	public String ddstring;
+	
+	void callMe()
+	{
+		alert("aboutbox: callMe() : " + ddstring);
+	}
+
+}
+
+callingme dii = new callingme();
+
+void secondstring()
+{
+	dii.ddstring = "2nd calling..";
+}
+
+void showcomboitem(Object iwhat)
+{
+	thestr = iwhat.getValue();
+	alert(thestr);
+}
+
+]]>
+</zscript>
+
+<popup id="kingkong2">
+<groupbox>
+i am king kong 2 from parent page
+</groupbox>
+</popup>
+
+<window id="aboutbox" width="400px" height="500px" title="About..." position="center" mode="overlapped" border="normal" closable="true"
+ onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<div>
+<vbox>
+<label id="woolyshow" />
+<label id="versionlbl" />
+
+<combobox id="wopcombo" style="font-size:9px" >
+	<comboitem label="Simple and Rich"/>
+	<comboitem label="Cool!"/>
+	<comboitem label="Ajax and RIA"/>
+</combobox>
+<button label="show me" onClick="showcomboitem(wopcombo)" />
+
+<zscript>
+versionlbl.value = "Version " + VERSION;
+woolyshow.setValue("value for wooley=" + wooly);
+</zscript>
+
+<textbox id="dumpster_box" multiline="true" width="380px" height="200px" />
+
+<!--
+<image id="image"/>
+	<button label="Upload">
+		<attribute name="onClick">{
+			Object media = Fileupload.get();
+			
+			if (media instanceof org.zkoss.image.Image)
+				image.setContent(media);
+			else if (media != null)
+			{
+				kdd = media.getFormat();
+				
+				Messagebox.show(kdd, "Error",
+				Messagebox.OK, Messagebox.ERROR);
+				
+			}
+		}
+			
+		</attribute>
+	</button>
+-->
+<!--
+<button label="Read file" onClick="readAFile()" />
+<button label="Try excel" onClick="tryExcel()" />
+
+<include id="testinclude_id" kk2="kingkong2" parentpage="aboutboxwin" />
+<button label="set 2nd time string" onClick="secondstring()" />
+-->
+
+</vbox>
+</div>
+
+<zscript>
+
+// testinclude_id.setDynamicProperty("dingme",dingdongpass);
+// dii.ddstring = "first time caller";
+// testinclude_id.setDynamicProperty("callmefunc" , dii);
+
+// testinclude_id.setSrc("testinclude.zul");
+
+</zscript>
+
+</window>
+
+</zk>
+

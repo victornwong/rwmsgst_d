@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="zerotoleranceclients_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.3";
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+Title: Zero-Tolerance Clients Setup
+Written by: Victor Wong
+Date started: 25/10/2010
+
+02/04/2012: ported to byte-compiled
+
+**NOTES**
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.util.media.AMedia;
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+
+selected_ztc_id = "";
+
+selected_custcat_id = "";
+selected_custcatcode = "";
+selected_custcatdesc = "";
+
+void showZTC_Details()
+{
+	if(selected_ztc_id.equals("")) return;
+
+	ztcrec = sqlhand.getZTC_Rec(selected_ztc_id);
+	if(ztcrec != null)
+	{
+		ztc_ar_code.setValue(ztcrec.get("ar_code"));
+		ztc_customer_name.setValue(ztcrec.get("customer_name"));
+		ztcdetails_lbl.setLabel("ZTC Details : " + ztcrec.get("customer_name"));
+		lbhand.matchListboxItems(ztc_salesman_username,ztcrec.get("salesman"));
+		lbhand.matchListboxItems(ztc_customer_category,ztcrec.get("customer_category"));
+		ztcdetails_grid.invalidate();
+	}
+
+	// change button to "Update"
+	newupdate_ztc_btn.setLabel("Update..");
+
+}
+
+// onSelect for showZTC_List()
+class ztcsLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_ztc_id = lbhand.getListcellItemLabel(selitem,0);
+		showZTC_Details();
+	}
+}
+// Show ZTC list by customer-category selected
+void showZTC_List()
+{
+	Object[] ztc_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("AR.Code",true,"ar_code",1),
+	new dblb_HeaderObj("Customer.Name",true,"customer_name",1),
+	new dblb_HeaderObj("Date.Crt",true,"datecreated",3),
+	new dblb_HeaderObj("Created.By",true,"username",1),
+	};
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,ar_code,customer_name,datecreated,username from zerotoleranceclients where customer_category='" + selected_custcatcode + "' order by customer_name";
+	Listbox newlb = lbhand.makeVWListbox_onDB(ztcs_holder,ztc_lb_headers,"ztcs_lb",15,sql,sqlstm);
+	sql.close();
+	newlb.addEventListener("onSelect", new ztcsLB_Listener());
+}
+
+// onSelect for showCustomerCategories()
+class custcatsLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_custcat_id = lbhand.getListcellItemLabel(selitem,0);
+		selected_custcatcode = lbhand.getListcellItemLabel(selitem,1);
+		selected_custcatdesc = lbhand.getListcellItemLabel(selitem,2);
+
+		showZTC_List();
+		clearZTCInputs_clicker(); // clear any prev inputs
+	}
+}
+// Show stuff from customercategory table
+void showCustomerCategories()
+{
+	Object[] custcats_lb_headers = {
+	new dblb_HeaderObj("catid",false,"id",2),
+	new dblb_HeaderObj("Cat.Code",true,"category",1),
+	new dblb_HeaderObj("Customer.Cat.Desc",true,"cat_desc",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+if(sql == null) return;
+	sqlstm = "select id,category,cat_desc from customercategory";
+	Listbox newlb = lbhand.makeVWListbox_onDB(customercategories_holder,custcats_lb_headers,"custcats_lb",15,sql,sqlstm);
+	sql.close();
+
+	newlb.addEventListener("onSelect", new custcatsLB_Listener());
+	/*
+	dc_obj = new custcatsDoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+	*/
+}
+
+// doubleClicker for searchCustomer_clicker()
+class customerslbDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = customers_lb.getSelectedItem();
+		arcode = lbhand.getListcellItemLabel(selitem,0);
+		custname = lbhand.getListcellItemLabel(selitem,1);
+		
+		// Fill customer's ar-code and name into inputboxes
+		ztc_ar_code.setValue(arcode);
+		ztc_customer_name.setValue(custname);
+		
+		ztcdetails_grid.invalidate();
+	}
+}
+
+void searchCustomer_clicker()
+{
+	Object[] customers_lb_headers = {
+	new dblb_HeaderObj("AR.Code",true,"ar_code",1),
+	new dblb_HeaderObj("Customer.Name",true,"customer_name",1),
+	new dblb_HeaderObj("Tel.Number",true,"telephone_no",1),
+	new dblb_HeaderObj("Cust.Contact",true,"contact_person1",1),
+	new dblb_HeaderObj("Salesman",true,"salesman_code",1),
+	};
+
+	searchstr = kiboo.replaceSingleQuotes(customersrch_tb.getValue());
+	if(searchstr.equals("")) return;
+
+	sqlstm = "select top 200 ar_code,customer_name,telephone_no,contact_person1,salesman_code from customer where " +
+	"ar_code like '%" + searchstr + "%' or customer_name like '%" + searchstr + "%' or " + 
+	"address1 like '%" + searchstr + "%' or address2 like '%" + searchstr + "%' or address3 like '%" + searchstr + "%' order by customer_name";
+
+	if(!selected_custcatcode.equals("")) // wanna do search by customer-category as well if selected
+		sqlstm = "select top 200 ar_code,customer_name,telephone_no,contact_person1,salesman_code from customer where " +
+		"(ar_code like '%" + searchstr + "%' or customer_name like '%" + searchstr + "%' or " + 
+		"address1 like '%" + searchstr + "%' or address2 like '%" + searchstr + "%' or address3 like '%" + searchstr + "%') and " +
+		"category='" + selected_custcatcode + "' order by customer_name";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	Listbox newlb = lbhand.makeVWListbox_onDB(customers_holder,customers_lb_headers,"customers_lb",16,sql,sqlstm);
+	sql.close();
+	dc_obj = new customerslbDoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// Let user deselect customer-category - 'cause it'll affect customer-searching sqlstm
+void deselectCustomerCat_clicker()
+{
+	if(customercategories_holder.getFellowIfAny("custcats_lb") != null)
+	{
+		custcats_lb.clearSelection();
+		// clear all global vars
+		selected_custcat_id = "";
+		selected_custcatcode = "";
+		selected_custcatdesc = "";
+	}
+}
+
+void clearZTCInputs_clicker()
+{
+	ztc_ar_code.setValue("");
+	ztc_customer_name.setValue("");
+	ztc_salesman_username.clearSelection();
+	ztc_customer_category.clearSelection();
+	
+	newupdate_ztc_btn.setLabel("New..");
+	ztcdetails_lbl.setLabel("ZTC Details");
+
+	// clear global vars
+	selected_ztc_id = "";
+}
+
+// Create new or update ZTC rec
+// selected_ztc_id
+void newupdateZTC_clicker()
+{
+	// if no customer-cate selected, return lor
+	if(selected_custcatcode.equals("")) return;
+
+	todaydate = kiboo.getDateFromDatebox(hiddendatebox);
+	sqlstm = "insert into zerotoleranceclients (ar_code,customer_name,customer_category,datecreated,username,salesman) values " +
+	"('','','" + selected_custcatcode + "','" + todaydate + "','" + useraccessobj.username + "','')";
+
+	// It's an update...
+	if(!selected_ztc_id.equals(""))
+	{
+		arcode = ztc_ar_code.getValue();
+		custname = ztc_customer_name.getValue();
+		salesman = ztc_salesman_username.getSelectedItem().getLabel();
+		custcat = ztc_customer_category.getSelectedItem().getLabel();
+
+		sqlstm = "update zerotoleranceclients set ar_code='" +  arcode + "', customer_name='" + custname + "', salesman='" + salesman + "', customer_category='" + custcat + "'," +
+		"datecreated='" + todaydate + "' where origid=" + selected_ztc_id;
+		
+	}
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	showZTC_List(); // refresh
+}
+
+// Retrieve and populate salesman dropdown - can be used in other modules
+void getSalesman_MakeDropdown(Listbox ilb)
+{
+	sqlstm = "select distinct salesman_code from customer";
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	smrecs = sql.rows(sqlstm);
+	sql.close();
+	if(smrecs.size() == 0) return;
+	String[] strarray = new String[1];
+	for(dpi : smrecs)
+	{
+		smcode = (dpi.get("salesman_code") == null) ? "" : dpi.get("salesman_code");
+		strarray[0] = smcode;
+		lbhand.insertListItems(ilb,strarray,"false","");
+	}
+
+	ilb.setSelectedIndex(0);
+}
+
+// Retrieve and populate customer-category dropdown - can be used in other modules
+void getCustomerCat_MakeDropdown(Listbox ilb)
+{
+	sqlstm = "select distinct category from customercategory";
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	smrecs = sql.rows(sqlstm);
+	sql.close();
+	if(smrecs.size() == 0) return;
+	String[] strarray = new String[1];
+	for(dpi : smrecs)
+	{
+		smcode = (dpi.get("category") == null) ? "" : dpi.get("category");
+		strarray[0] = smcode;
+		lbhand.insertListItems(ilb,strarray,"false","");
+	}
+
+	ilb.setSelectedIndex(0);
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="zerotoleranceclients_panel" title="Zero Tolerance Clients Setup ${MYVERSION}" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<hbox>
+<groupbox mold="3d" width="300px" style="padding:2px">
+	<caption label="Customer Categories" />
+	<label value="Select a customer-category to narrow down your search" style="font-size:9px" />
+	<separator height="5px" />
+	<div id="customercategories_holder" />
+	<separator height="3px" />
+	<button label="Deselect" style="font-size:9px" onClick="deselectCustomerCat_clicker()" />
+</groupbox>
+
+<groupbox mold="3d" style="padding:2px" >
+	<caption label="Customers" />
+	<hbox>
+		<label value="Customer.Name/AR_Code/Address" style="font-size:9px" />
+		<textbox id="customersrch_tb" style="font-size:9px" width="250px" />
+		<button id="searchcustomer_btn" label="Search" style="font-size:9px" onClick="searchCustomer_clicker()" />
+		<label value="(Max. 200 recs per click)" style="font-size:9px" />
+	</hbox>
+	<separator height="5px" />
+	<div id="customers_holder" />
+</groupbox>
+</hbox>
+<separator height="5px" />
+<hbox>
+<groupbox mold="3d" width="500px" style="padding:2px">
+	<caption label="ZTC List" />
+	<div id="ztcs_holder" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Clear fields" style="font-size:9px" onClick="clearZTCInputs_clicker()" />
+		<button id="newupdate_ztc_btn" label="New.." style="font-size:9px" onClick="newupdateZTC_clicker()" />
+		<button id="delete_ztc_btn" label="Delete" style="font-size:9px" disabled="true" />
+	</hbox>
+</groupbox>
+
+<groupbox mold="3d" style="padding:2px">
+	<caption id="ztcdetails_lbl" label="ZTC Details" />
+	<grid id="ztcdetails_grid">
+		<rows>
+			<row>
+				<label value="AR.Code" style="font-size:9px" />
+				<textbox id="ztc_ar_code" style="font-size:9px" disabled="true" />
+				<label value="Customer.Name" style="font-size:9px" />
+				<label id="ztc_customer_name" value="" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Salesman" style="font-size:9px" />
+				<listbox id="ztc_salesman_username" mold="select" style="font-size:9px" />
+				<label value="Customer.Cat" style="font-size:9px" />
+				<listbox id="ztc_customer_category" mold="select" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="3px" />
+
+</groupbox>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(hiddendatebox);
+
+showCustomerCategories();
+getSalesman_MakeDropdown(ztc_salesman_username);
+getCustomerCat_MakeDropdown(ztc_customer_category);
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

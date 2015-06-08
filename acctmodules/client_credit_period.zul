@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="clientcreditperiod_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.5";
+/*
+Title: Change credit period in customer database
+Written by: Victor Wong
+Start Date: 15/9/2010
+
+02/04/2012: ported to byte-comp
+
+**NOTES**
+*/
+
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+
+global_searchstring = "";
+global_searchtype = 1;
+selected_client_arcode = "";
+
+void populateCreditPeriod_dropdown(Listbox iwhat)
+{
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select distinct credit_period from customer order by credit_period";
+	crdprds = sql.rows(sqlstm);
+	sql.close();
+
+	if(crdprds.size() == 0) return;
+	String[] strarray = new String[1];
+
+	for(dpi : crdprds)
+	{
+		strarray[0] = dpi.get("credit_period");
+		lbhand.insertListItems(iwhat,strarray,"false","");
+	}
+
+	iwhat.setSelectedIndex(0);
+}
+
+void showCreditPeriodBreakdown()
+{
+	Object[] cpbreakdown_lb_headers = {
+	new listboxHeaderObj("Credit.Period",true),
+	new listboxHeaderObj("#.Clients",true),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox(credperiod_breakdown_holder, cpbreakdown_lb_headers, "cpbreakdown_lb", 5);
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select distinct credit_period, count(credit_period) as cpcount from customer group by credit_period order by credit_period";
+	cpbrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(cpbrecs.size() == 0) return;
+	newlb.setRows(12);
+	//newlb.addEventListener("onSelect", new casmegalistLB_Listener());
+
+	for(dpi : cpbrecs)
+	{
+		ArrayList kaboom = new ArrayList();
+		kaboom.add(dpi.get("credit_period"));
+		kaboom.add(dpi.get("cpcount").toString());
+		strarray = kiboo.convertArrayListToStringArray(kaboom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+// onSelect listener for searchClients()
+class searchclientLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_client_arcode = lbhand.getListcellItemLabel(selitem,1);
+		customername = lbhand.getListcellItemLabel(selitem,2);
+		creditlimit = lbhand.getListcellItemLabel(selitem,4);
+		creditperiod = lbhand.getListcellItemLabel(selitem,5);
+
+		// show the metadata
+		customer_name.setValue(customername);
+		credit_limit.setValue(creditlimit);
+		lbhand.matchListboxItems(credit_period,creditperiod);
+	}
+}
+
+void clearCreditStuff_inputs()
+{
+	selected_client_arcode = "";
+	customer_name.setValue("");
+	credit_limit.setValue("");
+	credit_period.setSelectedIndex(0);
+}
+
+void searchClients(int iwhat)
+{
+	Object[] clientlist_lb_headers = {
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("AR.Code",true),
+	new listboxHeaderObj("Customer.Name",true),
+	new listboxHeaderObj("Sales.Person",true),
+	new listboxHeaderObj("Credit.Limit",true),
+	new listboxHeaderObj("Credit.Period",true),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox(clientlist_holder, clientlist_lb_headers, "clients_lb", 5);
+	clearCreditStuff_inputs();
+
+	sqlstm = "select top 150 ar_code,customer_name,credit_period,credit_limit,salesman_code from customer ";
+	global_searchtype = iwhat;
+
+	switch(iwhat)
+	{
+		case 1: // search by text
+			global_searchstring = kiboo.replaceSingleQuotes(main_searchstr.getValue());
+			if(global_searchstring.equals("")) return;
+			sqlstm += "where ar_code like '%" + global_searchstring + "%' or " +
+				"customer_name like '%" + global_searchstring + "%' or " +
+				"address1 like '%" + global_searchstring + "%' or " +
+				"address2 like '%" + global_searchstring + "%' or " +
+				"address3 like '%" + global_searchstring + "%' or " +
+				"contact_person1 like '%" + global_searchstring + "%' " +
+				"order by ar_code";
+			break;
+
+		case 2: // search by credit-period
+			cprd = search_creditperiod.getSelectedItem().getLabel();
+			sqlstm += "where credit_period='" + cprd + "' order by ar_code";
+			break;
+	}
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	custrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(custrecs.size() == 0) return;
+
+	newlb.setRows(20);
+	newlb.addEventListener("onSelect", new searchclientLB_Listener());
+
+	NumberFormat nf = new DecimalFormat("#0.00");
+	rowcount = 1;
+
+	for(dpi : custrecs)
+	{
+		ArrayList kaboom = new ArrayList();
+
+		kaboom.add(rowcount.toString());
+		kaboom.add(dpi.get("ar_code"));
+		kaboom.add(dpi.get("customer_name"));
+		salesp = kiboo.checkNullString_RetWat(dpi.get("salesman_code"),"-----");
+		kaboom.add(salesp);
+		credlim = nf.format(dpi.get("credit_limit"));
+		kaboom.add(credlim);
+		kaboom.add(dpi.get("credit_period"));
+		strarray = kiboo.convertArrayListToStringArray(kaboom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+		rowcount++;
+	}
+}
+
+void updateCreditStuff_clicker()
+{
+	if(selected_client_arcode.equals("")) return;
+
+	thelimit = kiboo.replaceSingleQuotes(credit_limit.getValue());
+	crdlimit = Float.parseFloat(thelimit);
+	crdperiod = credit_period.getSelectedItem().getLabel();
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "update customer set credit_period='" + crdperiod + "', credit_limit=" + crdlimit.toString() + " where ar_code='" + selected_client_arcode + "'";
+	sql.execute(sqlstm);
+	sql.close();
+	searchClients(global_searchtype); // refresh
+}
+
+]]>
+</zscript>
+
+<window id="clientcreditperiod_win" width="750px" height="560px" title="Client Credit Period / Limit Setup ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div>
+<hbox>
+<vbox>
+<groupbox mold="3d" width="450px">
+	<caption label="Search Client" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Search text" style="font-size:9px" />
+				<textbox id="main_searchstr" width="150px" style="font-size:9px" />
+				<button label="Search" style="font-size:9px" onClick="searchClients(1)" />
+			</row>
+			<row>
+				<label value="Search by" style="font-size:9px" />
+				<listbox id="search_creditperiod" mold="select" style="font-size:9px" />
+				<button label="Load" style="font-size:9px" onClick="searchClients(2)" />	
+			</row>
+		</rows>
+	</grid>
+	<label value="(Will list max. 150 clients per search)" style="font-size:9px" />
+</groupbox>
+
+<groupbox mold="3d" width="450px" >
+	<caption label="Workspace" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Client name" style="font-size:9px" />
+				<div style="background:#775588;padding:2px">
+					<label value="" id="customer_name" style="color:#ffffff;font-size:9px" />
+				</div>
+			</row>
+			<row>
+				<label value="Credit limit" style="font-size:9px" />
+				<textbox id="credit_limit" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Credit period" style="font-size:9px" />
+				<hbox>
+					<listbox id="credit_period" mold="select" style="font-size:9px" />
+					<button label="Update" style="font-size:9px" onClick="updateCreditStuff_clicker()" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+
+</vbox>
+
+<groupbox mold="3d">
+	<caption label="Clients credit-period breakdown" />
+	<div id="credperiod_breakdown_holder" />
+</groupbox>
+
+</hbox>
+
+<groupbox mold="3d">
+	<div id="clientlist_holder" />
+</groupbox>
+
+</div>
+
+<zscript>
+populateCreditPeriod_dropdown(credit_period);
+populateCreditPeriod_dropdown(search_creditperiod);
+showCreditPeriodBreakdown();
+</zscript>
+
+</window>
+</zk>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="accessdenied_box"?>
+<!--
+
+Version				:
+Coding began date	:
+Developers			:
+
+-->
+
+<zk>
+
+<zscript src="alsglobal/alsglobaldefs.zs" />
+<zscript src="alsglobal/alsglobal_guifuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+]]>
+</zscript>
+
+<window id="accessdenied_box" width="250px" height="88px"
+	title="Access denied..."
+	position="center" mode="overlapped" border="normal" closable="true"
+    onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)"
+>
+<div>
+<label value="Insufficient access level.." style="font-size:18px" />
+<separator height="5px" />
+<button label="Close" onClick="globalCloseWindow(myincludeid)" />
+</div>
+
+</window>
+</zk>
+

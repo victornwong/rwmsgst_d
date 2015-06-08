@@ -1,0 +1,852 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="bugger_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Admin bugger";
+MYVERSION = "v0.1";
+/*
+Title		: bugger for admin - test out stuff
+Written by	: Victor Wong
+
+Revisions:
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+
+import java.awt.Color;
+import java.io.FileOutputStream;
+/*
+import com.lowagie.text.*;
+import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+//import com.lowagie.text.html.HtmlWriter;
+import com.lowagie.text.pdf.PdfContentByte;
+import com.lowagie.text.pdf.Barcode39;
+*/
+/*
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Image;
+import com.itextpdf.text.pdf.*;
+import com.itextpdf.text.*;
+*/
+
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.geom.*;
+import org.apache.pdfbox.pdmodel.*;
+import org.apache.pdfbox.pdmodel.font.*;
+import org.apache.pdfbox.pdmodel.edit.*;
+
+import com.google.gdata.client.calendar.*;
+import com.google.gdata.data.calendar.*;
+import com.google.gdata.data.calendar.*;
+import com.google.gdata.util.*;
+
+import java.net.*;
+import java.io.*;
+
+import org.victor.*;
+
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+void srnStamper()
+{
+/* for initial positioning work
+	pgh = Float.parseFloat(pgh_tb.getValue());
+	xpos = Float.parseFloat(xpos_tb.getValue());
+	ypos = pgh - Float.parseFloat(ypos_tb.getValue());
+	thetext = text_tb.getValue();
+*/
+
+	testfn = session.getWebApp().getRealPath("alsimg/SRA_TEMPLATE_v1.pdf");
+	pixfn = session.getWebApp().getRealPath("alsimg/alstechnichem_logo_smaller.jpg");
+	outfn = session.getWebApp().getRealPath("tmp/juggled.pdf");
+	/*
+	for(int i=1; i<= pdfReader.getNumberOfPages(); i++)
+	{
+		PdfContentByte content = pdfStamper.getUnderContent(i);
+		image.setAbsolutePosition(100f, 700f);
+		content.addImage(image);
+	}
+	*/
+	
+	sqlstm = "select jf.ar_code, jf.folderno_str, cust.customer_name, cust.telephone_no, cust.fax_no," +
+		"jf.datecreated,jf.attention,jf.temperature, jf.deliverymode, jf.customerpo, jf.customercoc," +
+		"jf.allgoodorder, jf.paperworknot, jf.paperworksamplesnot, jf.samplesdamaged, jf.extranotes, " +
+		"(select count(origid) from jobsamples js where js.jobfolders_id=jf.origid) as samplecount " +
+		"from jobfolders jf left join customer cust on cust.ar_code = jf.ar_code where " +
+		"jf.deleted=0 and jf.folderstatus='COMMITED' and jf.origid=57712";
+
+	jfr = sqlhand.gpSqlFirstRow(sqlstm);
+	if(jfr == null) return;
+
+	PdfReader pdfReader = new PdfReader(testfn);
+	PdfStamper pdfStamper = new PdfStamper(pdfReader,new FileOutputStream(outfn));
+	BaseFont bf_helv = BaseFont.createFont(BaseFont.HELVETICA, "Cp1252", false);
+	PdfContentByte cb = pdfStamper.getUnderContent(1);
+
+/*
+	Image image = Image.getInstance(pixfn);
+	image.setAbsolutePosition(50f, 750f);
+	cb.addImage(image);
+*/
+	pageheight = 820; // take pageheight-ypos
+
+	cb.beginText();
+
+	cb.setFontAndSize(bf_helv,12);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("customer_name")), 128, 580, 0);
+	cb.setFontAndSize(bf_helv,10);
+
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("folderno_str")), 385, 622, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, jfr.get("datecreated").toString().substring(0,10), 385, 602, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("attention")), 128, 602, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("telephone_no")), 128, 557, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("fax_no")), 385, 557, 0);
+
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, jfr.get("samplecount").toString(), 320, 492, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("temperature")), 320, 476, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("deliverymode")), 320, 459, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("customerpo")), 320, 440, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("customercoc")), 320, 440, 0);
+
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, (jfr.get("allgoodorder") == 1) ? "X" : "",85, 388, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, (jfr.get("paperworknot") == 1) ? "X" : "",85, 376, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, (jfr.get("paperworksamplesnot") == 1) ? "X" : "",85, 364, 0);
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, (jfr.get("samplesdamaged") == 1) ? "X" : "",85, 352, 0);
+
+	cb.showTextAligned(PdfContentByte.ALIGN_LEFT, kiboo.checkNullString(jfr.get("extranotes")), 128, 310, 0);
+
+	//cb.showTextAligned(PdfContentByte.ALIGN_LEFT, thetext, xpos, ypos, 0); // for doing positioning
+
+	cb.endText();
+
+	// now draw a line below the headline
+	/*
+	cb.setLineWidth(1f); 
+	cb.moveTo(0, 755);
+	cb.lineTo(595, 755);
+	cb.stroke();
+	*/
+
+	pdfStamper.close();
+	alert("whope..");
+}
+
+void runMe(Object iwhich)
+{
+	itype = iwhich.getId();
+
+	if(itype.equals("run_emailsra"))
+	{
+		param = "fn=" + folder_tb.getValue();
+		guihand.globalActivateWindow(mainPlayground,"workbox","samplereg/autoEmailSRA_v1.zul",
+			kiboo.makeRandomId("esa"), param, useraccessobj);
+	}
+	
+	if(itype.equals("showselmonth"))
+	{
+		ksel = lbhand.getListcellItemLabel(trylb1.getSelectedItem(),1);
+		alert("month selected: " + ksel);
+	}
+}
+
+void doDrop(DropEvent event, Object droped)
+{
+	Object dragged = event.getDragged();
+	Object findrws = findgrd = null;
+
+	if(droped instanceof Div)
+	{
+		cd1 = droped.getChildren().toArray();
+		for(i=0; i<cd1.length; i++)
+		{
+			if(cd1[i] instanceof Grid)
+			{
+				findgrd = cd1[i];
+				break;
+			}
+		}
+		if(findgrd != null)
+		{
+			cd2 = findgrd.getChildren().toArray();
+			for(i=0; i<cd2.length; i++)
+			{
+				if(cd2[i] instanceof Rows)
+				{
+					findrws = cd2[i];
+					break;
+				}
+			}
+		}
+	}
+	//alert(dragged + " :: " + droped + " :: " + findgrd + " :: " + findrws);
+	if(findrws != null) dragged.setParent(findrws); // actually moving
+}
+
+]]>
+</zscript>
+
+<style>
+
+.myrotated
+{  
+-webkit-transform: rotate(45deg);
+-moz-transform: rotate(45deg);
+-o-transform: rotate(45deg);
+writing-mode: lr-tb;
+}
+
+.rotate2
+{
+-webkit-transform: rotate(360deg); 
+-moz-transform: rotate(360deg); 
+-o-transform: rotate(360deg);
+-ms-transform: rotate(360deg);
+}
+
+.r90 {
+-webkit-transform: rotate(100deg);
+-moz-transform: rotate(100deg);
+-o-transform: rotate(90deg);
+-ms-transform: rotate(90deg);
+transform: rotate(100deg);
+width: 1em;
+line-height: 1ex; 
+}
+
+.rnew
+{
+background-color: #001640;
+color: white;
+height:50px;
+padding-bottom: 10px;
+writing-mode: tb-rl;
+-webkit-transform: rotate(90deg);
+-moz-transform: rotate(90deg);
+width: -moz-fit-content;
+width: fit-content;
+font-size:20px;
+}
+
+.container
+{
+	/* this will give container dimension, because floated child nodes don't give any */
+	/* if your child nodes are inline-blocked, then you don't have to set it */
+	overflow: auto;
+}
+
+.container .head
+{
+	/* float your elements or inline-block them to display side by side */
+	float: left;
+	/* these are height and width dimensions of your header */
+	height: 10em;
+	width: 1.5em;
+	/* set to hidden so when there's too much vertical text it will be clipped. */
+	overflow: hidden;
+	/* these are not relevant and are here to better see the elements */
+	background: #2e3436;
+	margin-right: 1px;
+		-moz-box-shadow: 4px 5px 7px #000000;
+-webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;
+
+}
+
+.container .head .vert
+{
+	/* line height should be equal to header width so text will be middle aligned */
+	line-height: 1.5em;
+	/* setting background may yield better results in IE text clear type rendering */
+	color: #eeeeee;
+	display: block;
+	/* this will prevent it from wrapping too much text */
+	white-space: nowrap;
+	/* so it stays off the edge */
+	padding-left: 3px;
+	/* IE specific rotation code */
+	writing-mode: tb-rl;
+	filter: flipv fliph;
+	/* CSS3 specific totation code */
+	/* translate should have the same negative dimension as head height */
+	transform: rotate(270deg) translate(-10em,0);
+	transform-origin: 0 0;
+	-moz-transform: rotate(270deg) translate(-10em,0);
+	-moz-transform-origin: 0 0;
+	-webkit-transform: rotate(270deg) translate(-10em,0);
+	-webkit-transform-origin: 0 0;
+	text-shadow:3px 3px 3px #666666;
+
+}
+
+.ctn { 	height:30px; margin:5px; }
+
+.little-caption
+{
+	float:left;
+	font-size:12px;
+	-webkit-transform: rotate(-90deg);
+	-moz-transform: rotate(-90deg);
+	filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+	width:150px;
+	height:100px;
+	background:#333;
+	color:#eeeeee;
+}
+ 
+.big-toe { float:left; font-size:30px; width:200px; background:#75507b; color:#eeeeee; margin-left:auto; margin-right:auto; }
+
+.z-button-os {
+	color: #FFFFFF;
+	font-weight: bold;
+	text-shadow: 0 -1px 0 rgba(0,0,0,1), 0 0 0 rgba(252,0,21,0);
+	padding: 7px 17px;
+	border: 1px solid #000000;
+	border-radius: 3px;
+	-moz-border-radius: 3px;
+	-webkit-border-radius: 3px;
+	/* IE9 SVG, needs conditional override of 'filter' to 'none' */
+	background: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/Pgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdmlld0JveD0iMCAwIDEgMSIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSI+CiAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkLXVjZ2ctZ2VuZXJhdGVkIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzJlMmUyZSIgc3RvcC1vcGFjaXR5PSIxIi8+CiAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMzAzMDMiIHN0b3Atb3BhY2l0eT0iMSIvPgogIDwvbGluZWFyR3JhZGllbnQ+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0idXJsKCNncmFkLXVjZ2ctZ2VuZXJhdGVkKSIgLz4KPC9zdmc+);
+	background: -moz-linear-gradient(top, rgba(46,46,46,1) 0%, rgba(3,3,3,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(46,46,46,1)), color-stop(100%,rgba(3,3,3,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, rgba(46,46,46,1) 0%,rgba(3,3,3,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, rgba(46,46,46,1) 0%,rgba(3,3,3,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, rgba(46,46,46,1) 0%,rgba(3,3,3,1) 100%); /* IE10+ */
+	background: linear-gradient(top, rgba(46,46,46,1) 0%,rgba(3,3,3,1) 100%); /* W3C */
+	filter: none\0/;
+	box-shadow: 0 3px 0 rgba(0,0,0,1), inset 0 0 1px rgba(255,255,255,0.6);
+	-moz-box-shadow: 0 3px 0 rgba(0,0,0,1), inset 0 0 1px rgba(255,255,255,0.6);
+	-webkit-box-shadow: 0 3px 0 rgba(0,0,0,1), inset 0 0 1px rgba(255,255,255,0.6);
+	cursor: pointer;
+}
+.z-button-os:hover {
+	color: #61e7f3;
+	background: rgb(64,64,64); /* Old browsers */
+	/* IE9 SVG, needs conditional override of 'filter' to 'none' */
+	background: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/Pgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdmlld0JveD0iMCAwIDEgMSIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSI+CiAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkLXVjZ2ctZ2VuZXJhdGVkIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzQwNDA0MCIgc3RvcC1vcGFjaXR5PSIxIi8+CiAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwZTBlMGUiIHN0b3Atb3BhY2l0eT0iMSIvPgogIDwvbGluZWFyR3JhZGllbnQ+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0idXJsKCNncmFkLXVjZ2ctZ2VuZXJhdGVkKSIgLz4KPC9zdmc+);
+	background: -moz-linear-gradient(top, rgba(64,64,64,1) 0%, rgba(14,14,14,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(64,64,64,1)), color-stop(100%,rgba(14,14,14,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, rgba(64,64,64,1) 0%,rgba(14,14,14,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, rgba(64,64,64,1) 0%,rgba(14,14,14,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, rgba(64,64,64,1) 0%,rgba(14,14,14,1) 100%); /* IE10+ */
+	background: linear-gradient(top, rgba(64,64,64,1) 0%,rgba(14,14,14,1) 100%); /* W3C */
+	filter: none\0/; /* IE9 */
+}
+.z-button-os:active {
+	margin: 3px 0 -3px 0;
+	padding: 7px 17px;
+	background: rgb(23,23,23); /* Old browsers */
+	/* IE9 SVG, needs conditional override of 'filter' to 'none' */
+	background: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/Pgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdmlld0JveD0iMCAwIDEgMSIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSI+CiAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkLXVjZ2ctZ2VuZXJhdGVkIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzE3MTcxNyIgc3RvcC1vcGFjaXR5PSIxIi8+CiAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMyNjI2MjYiIHN0b3Atb3BhY2l0eT0iMSIvPgogIDwvbGluZWFyR3JhZGllbnQ+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0idXJsKCNncmFkLXVjZ2ctZ2VuZXJhdGVkKSIgLz4KPC9zdmc+);
+	background: -moz-linear-gradient(top, rgba(23,23,23,1) 0%, rgba(38,38,38,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(23,23,23,1)), color-stop(100%,rgba(38,38,38,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, rgba(23,23,23,1) 0%,rgba(38,38,38,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, rgba(23,23,23,1) 0%,rgba(38,38,38,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, rgba(23,23,23,1) 0%,rgba(38,38,38,1) 100%); /* IE10+ */
+	background: linear-gradient(top, rgba(23,23,23,1) 0%,rgba(38,38,38,1) 100%); /* W3C */
+	filter: none\0/; /* IE9 */
+	box-shadow: 0 1px 0 rgba(255,255,255,0.5), inset 0 0 1px rgba(255,255,255,0.6);
+	-moz-box-shadow: 0 1px 0 rgba(255,255,255,0.5), inset 0 0 1px rgba(255,255,255,0.6);
+	-webkit-box-shadow: 0 1px 0 rgba(255,255,255,0.5), inset 0 0 1px rgba(255,255,255,0.6);
+}
+.z-button-os.z-button-os-disd {
+	cursor: default;
+	color: #2e2e2e;
+	background: #151515;
+	box-shadow: none;
+	-moz-box-shadow: none;
+	-webkit-box-shadow: none;
+}
+.z-button-os.z-button-os-disd:active {
+	margin: 0;
+	left: 0;
+}
+
+.rotate {
+-webkit-transform: rotate(-90deg);
+-moz-transform: rotate(-90deg);
+-ms-transform: rotate(-90deg);
+-o-transform: rotate(-90deg);
+filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+}
+
+.rotate2 {
+color:#333;
+	border:0px solid red;
+	writing-mode:tb-rl;
+	-webkit-transform:rotate(90deg);
+	-moz-transform:rotate(90deg);
+	-o-transform: rotate(90deg);
+	white-space:nowrap;
+	display:block;
+	bottom:0;
+	width:20px;
+	height:20px;
+	font-family: ‘Trebuchet MS’, Helvetica, sans-serif;
+	font-size:24px;
+	font-weight:normal;
+	text-shadow: 0px 0px 1px #333;
+}
+
+#buttbox {
+
+box-shadow: 1px 0px 1px rgb(32, 56, 145), 0px 1px 1px rgb(56, 82, 177), 2px 1px 1px rgb(32, 56, 145),
+1px 2px 1px rgb(56, 82, 177), 3px 2px 1px rgb(32, 56, 145), 2px 3px 1px rgb(56, 82, 177),
+4px 3px 1px rgb(32, 56, 145), 3px 4px 1px rgb(56, 82, 177), 5px 4px 1px rgb(32, 56, 145),
+4px 5px 1px rgb(56, 82, 177), 6px 5px 1px rgb(32, 56, 145);
+
+background: none repeat scroll 0% 0% rgba(78, 104, 199, 0.9);
+outline: 0pt none;
+border-radius: 3pt 3pt 3pt 3pt;
+border: 0pt none;
+display: inline-block;
+color: white;
+white-space: nowrap;
+padding: 5px;
+line-height: 1.4;
+position: relative;
+top: -5px;
+margin: 5px 5px;
+
+}
+
+.btn {
+  color: white;
+  font-family: Helvetica, Arial, Sans-Serif;
+  font-size: 20px;
+  text-decoration: none;
+  text-shadow: -1px -1px 1px #616161;
+  position: relative;
+  padding: 5px 5px;
+  -webkit-box-shadow: 5px 5px 0 #666;
+  -moz-box-shadow: 5px 5px 0 #666;
+  -webkit-transition: all 0.3s ease;
+  -moz-transition: all 0.3s ease;
+  margin: 10px 10px 0 0;
+}
+
+.btn:hover {
+  -webkit-box-shadow: 0px 0px 0 #666;
+  -moz-box-shadow: 0px 0px 0 #666;
+  top: 5px;
+  left: 5px;
+}
+
+</style>
+<!--
+8px 0pt 25px 2px rgba(0, 0, 0, 0.3);
+
+-->
+
+<?component name="tipcolor" macroURI="/macros/macrocomp1.zul"?>
+
+<div width="1200px">
+<panel id="checklist_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new java.util.Date()" />
+<!-- <textbox multiline="true" height="100px" width="50%" /> -->
+<!--
+<div>
+	<label value="X" />
+	<textbox id="xpos_tb" value="100" />
+	<label value="Y" />
+	<textbox id="ypos_tb" value="100" />
+	<label value="PgHeight" />
+	<textbox id="pgh_tb" value="820" />
+	<label value="Text" />
+	<textbox id="text_tb" value="TESTING TEXT" />
+	<button label="Stamp it.." style="text-shadow:5px 5px 5px #000000;" onClick="srnStamper()" />
+</div>
+
+<button label="TESTING.." mold="os" width="100px" height="30px" />
+
+<div>
+	<label value="folder" /><textbox id="folder_tb" value="55712" />
+	<button id="run_emailsra" label="run email sra window" onClick="runMe(self)" />
+</div>
+
+<div style="background:#f57900;
+-moz-box-shadow: 4px 5px 7px #000000;
+-webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:5px;margin:10px
+" width="500px">
+
+	<listbox id="trylb1" mold="select" style="font-size:9px" />
+	<button id="showselmonth" label="show selected month" onClick="runMe(self)" />
+	<div id="custcatholder" />
+</div>
+
+<separator height="10px" />
+
+<div style="background:#888a85;padding:5px" >
+<hbox> 
+<div class="container">
+    <div class="head" style="background:#204a87;">
+        <div class="vert" style="background:#204a87;">E N V I R O N M E N T A L</div>
+    </div>
+   	<div class="head">
+		<div class="vert">Microbiology</div>
+	</div>
+
+</div>
+
+<div class="container">
+    <div class="head" style="background:#f57900;">
+        <div class="vert" style="background:#f57900;">F O O D</div>
+    </div>
+	<div class="head">
+		<div class="vert">Microbiology</div>
+	</div>
+</div>
+</hbox>
+</div>
+
+<separator height="10px" />
+
+<tipcolor bstyle="background:#556677;" bwidth="200px" bheight="20px" blockish="background:#4e9a06;"
+ words="Some macro testing thing" />
+ 
+<groupbox xmlns:w='client'>
+testing groupbox
+
+<button id="t" height="30px" width="100%" label="Slide Down"
+	onClick="jq(this.$f('t')).hide().slideDown(1000)" />
+
+</groupbox>
+-->
+
+<!--
+<hbox style="float:left;">
+    <label sclass="big-toe">
+		Hello some other things you might want to put here
+    </label>
+    <label sclass="little-caption">
+		world world world again and again time after time
+	</label>
+	<label sclass="big-toe">
+	Big toe again going on here
+	</label>
+</hbox>
+-->
+
+<!--
+<div height="500px" style="background:#8f5902" >
+<label sclass="buttbox" multiline="true">
+LOAD THE MOTHERSHIP
+</label>
+
+<label sclass="buttbox" multiline="true">
+NUKE MOTHERSHIP
+</label>
+
+<label sclass="btn" style=";background:#204a87">
+what the..
+</label>
+<button label="try pdfbox" onClick="trypdfbox()" />
+</div>
+-->
+
+<!--
+<div>
+<button label="Try gdata" onClick="trygData()" />
+<separator height="3px" />
+<label id="gdataoutp" multiline="true" />
+<image id="img" />
+</div>
+-->
+<!--
+<button label="gen jasper" onClick="doReport()" />
+<jasperreport id="report" height="360px" src="/rwimg/Untitled_report_1.jasper"
+type="pdf" datasource="getConnection()" />
+-->
+
+<hbox>
+
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="200px" height="300px"
+droppable="true" onDrop="doDrop(event,self);" >
+<label style="font-size:14px;font-weight:bold" value="New quotations" />
+<separator height="3px" />
+<grid>
+	<rows id="d_rows1">
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 1-1" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 1-2" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 1-3" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 1-4" />
+		</row>
+	</rows>
+</grid>
+</div>
+
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="200px" height="300px"
+droppable="true" onDrop="doDrop(event,self);" >
+<label style="font-size:14px;font-weight:bold" value="Almost there" />
+<separator height="3px" />
+<grid>
+	<rows id="d_rows2" style="background:#e95252" >
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 2-1" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 2-2" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 2-3" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 2-4" />
+		</row>
+	</rows>
+</grid>
+</div>
+
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="200px" height="300px"
+droppable="true" onDrop="doDrop(event,self);" >
+<label style="font-size:14px;font-weight:bold" value="70% To-Buy" />
+<separator height="3px" />
+<grid>
+	<rows id="d_rows3" style="background:#e95252" >
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 3-1" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 3-2" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 3-3" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 3-4" />
+		</row>
+	</rows>
+</grid>
+</div>
+
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="200px" height="300px"
+droppable="true" onDrop="doDrop(event,self);" >
+<label style="font-size:14px;font-weight:bold" value="WON!!!" />
+<separator height="3px" />
+<grid>
+	<rows id="d_rows4" style="background:#e95252" >
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 4-1" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 4-2" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 4-3" />
+		</row>
+		<row draggable="true" onDrop="doDrop(event,self);">
+			<label value="item 4-4" />
+		</row>
+	</rows>
+</grid>
+</div>
+
+
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+/*
+    import java.io.*;
+    import java.sql.*;
+    import org.zkoss.util.media.AMedia;
+    import net.sf.jasperreports.engine.JasperRunManager;
+    import net.sf.jasperreports.engine.JRDataSource;
+
+    void doReport() {
+        InputStream is = null;
+        try {
+            //generate report pdf stream
+            is = Thread.currentThread().getContextClassLoader()
+                .getResourceAsStream( "/rwimg/star.jpg" );
+
+                alert(is); return;
+
+            final Map params = new HashMap();
+
+            final byte[] buf =
+                JasperRunManager.runReportToPdf(is, params, getConnection());
+
+            //prepare the AMedia for iframe
+            final InputStream mediais = new ByteArrayInputStream(buf);
+            final AMedia amedia =
+                new AMedia("FirstReport.pdf", "pdf", "application/pdf", mediais);
+
+            //set iframe content
+            report.setContent(amedia);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+    }
+    private static Connection getConnection()
+    throws ClassNotFoundException, SQLException
+    {
+        //Change these settings according to your local configuration
+        String driver = "net.sourceforge.jtds.jdbc.Driver";
+        String connectString = "jdbc:jtds:sqlserver://192.168.100.201/rwsdb2";
+        String user = "testme";
+        String password = "9090";
+
+        Class.forName(driver);
+        Connection conn = DriverManager.getConnection(connectString, user, password);
+        return conn;
+	}
+*/
+
+BufferedImage newimg()
+{
+	BufferedImage bi = new BufferedImage(1024, 800, BufferedImage.TYPE_INT_RGB);
+	Graphics2D g2d = bi.createGraphics();
+	g2d.setStroke(new BasicStroke(5));
+	g2d.drawString("Java 2D", 50, 50);
+	g2d.fillRoundRect(250, 20, 70, 60, 10, 10);
+	//Line2D line = update ? new Line2D.Double(10, 10, 130, 130) : new Line2D.Double(10, 130, 130, 10);
+	Line2D line = new Line2D.Double(10, 10, 130, 130);
+	Rectangle2D retangle = new Rectangle2D.Double(25, 25, 85, 85);
+	//g2d.setColor(update ? Color.cyan : Color.RED);
+	g2d.setColor(Color.RED);
+	g2d.draw(line);
+	//g2d.setColor(update ? Color.yellow : Color.pink);
+	g2d.setColor(Color.yellow);
+	g2d.draw(retangle);
+	return bi;
+}
+
+//img.setContent(newimg());
+
+void trygData()
+{
+	CalendarService myService = new CalendarService("rwco-rws-0.03");
+	alert(myService);
+
+	myService.setUserCredentials("rentwisenotify@gmail.com", "dell2000", "GOOGLE");
+
+	URL feedUrl = new URL("http://www.google.com/calendar/feeds/default/allcalendars/full");
+	//CalendarFeed resultFeed = myService.getFeed(feedUrl, CalendarFeed.class);
+	
+	/*
+	gdataoutp.setValue("Your calendars:\n");
+
+	for (int i = 0; i < resultFeed.getEntries().size(); i++)
+	{
+		CalendarEntry entry = resultFeed.getEntries().get(i);
+		gdataoutp.setValue( gdataoutp.getValue() + "Your calendars: " + entry.getTitle().getPlainText() + "\n");
+	}
+	*/
+}
+
+void trypdfbox()
+{
+PDDocument document = new PDDocument();
+PDPage page = new PDPage();
+document.addPage( page );
+
+// Create a new font object selecting one of the PDF base fonts
+PDFont font = PDType1Font.HELVETICA_BOLD;
+
+// Start a new content stream which will "hold" the to be created content
+PDPageContentStream contentStream = new PDPageContentStream(document, page);
+
+// Define a text content stream using the selected font, moving the cursor and drawing the text "Hello World"
+contentStream.beginText();
+contentStream.setFont( font, 12 );
+contentStream.moveTextPositionByAmount( 100, 700 );
+contentStream.drawString( "Hello World" );
+contentStream.endText();
+
+// Make sure that the content stream is closed:
+contentStream.close();
+
+// Save the results and ensure that the document is properly closed:
+document.save( session.getWebApp().getRealPath("tmp/testpdfbox.pdf") );
+document.close();
+
+}
+
+/*
+luhand.populateListBox_ValueSelection(trylb1,"MONTHS_SELECTION",2,1);
+luhand.populateDynamic_Mysoft(5, custcatholder,"trylb2","font-size:9px");
+*/
+/*
+int x = 10, y = 10;
+
+void draw(int x1, int y1, int x2, int y2) {
+BufferedImage bi = new BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB);
+Graphics2D g2d = bi.createGraphics();
+Line2D line = new Line2D.Double(x1, y1, x2, y2);
+g2d.setColor(Color.blue);
+g2d.setStroke(new BasicStroke(3));
+g2d.draw(line);
+img.setContent(bi);
+}
+draw(x, y, x += 10, y += 10);
+*/
+
+
+/*
+<style>
+.z-panel-header
+{
+	color:#eeeeee;
+	background:#204a87;
+}
+
+.z-menupopup-cnt .z-menuitem-over .z-menuitem-cl,
+.z-menupopup-cnt .z-menuitem-over .z-menuitem-cr,
+.z-menupopup-cnt .z-menuitem-over .z-menuitem-cm,
+.z-menupopup-cnt .z-menu-over .z-menu-cl,
+.z-menupopup-cnt .z-menu-over .z-menu-cr,
+.z-menupopup-cnt .z-menu-over .z-menu-cm {
+background:#204a87;
+}
+
+}
+
+</style>
+*/
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

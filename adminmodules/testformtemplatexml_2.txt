@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theform width="600px">
+<notes>
+Designed by: Victor
+Purpose: Initial testing template XML
+</notes>
+
+<header title="Customer info" titlestyle="color:#ffffff;font-weight:bold" style="background:#667788;padding:2px" spans="4" />
+
+<row>
+	<label value="AR CODE" />
+	<textbox id="ar_code" disabled="true" />
+	<label value="Category" />
+	<textbox id="category" />
+</row>
+
+<row spans=",3">
+	<label value="Customer name" />
+	<textbox id="customer_name" width="99%" />
+</row>
+<row spans=",3">
+	<label value="Address1" />
+	<textbox id="address1" width="99%" />
+</row>
+
+<row spans=",3">
+	<label value="Address2" />
+	<textbox id="address2" width="99%" />
+</row>
+
+<row spans=",3">
+	<label value="Address3" />
+	<textbox id="address3" width="99%" />
+</row>
+
+<row spans=",3">
+	<label value="Address4" />
+	<textbox id="address4" width="99%" />
+</row>
+
+<row>
+	<label value="Telephone" />
+	<textbox id="telephone_no" width="99%" />
+	<label value="Fax" />
+	<textbox id="fax_no" width="99%" />
+</row>
+
+<row spans=",3">
+	<label value="E-Mail" />
+	<textbox id="e_mail" width="99%" />
+</row>
+
+<row>
+	<label value="Contact 1" />
+	<textbox id="contact_person1" width="99%" />
+	<label value="Contact 2" />
+	<textbox id="contact_person2" width="99%" />
+</row>
+	
+</theform>
+

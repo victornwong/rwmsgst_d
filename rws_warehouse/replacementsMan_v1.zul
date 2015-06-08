@@ -1,0 +1,675 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="replmentrma_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="./replacementMan_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Local RMA";
+MYVERSION = "v0.2";
+MYPANEL = "replmentrma_pan";
+/*
+Title		: Goods return and replacements management (local-RMA)
+Written by	: Victor Wong
+Dated		: 02/08/2013
+
+*NOTES*
+
+*/
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+RMAS_DIV_WIDTH = "700px";
+
+glob_sel_rma_li = null;
+glob_selected_rma = "";
+glob_sel_fc6custid = "";
+glob_sel_rmauser = "";
+glob_rma_status = "";
+glob_rma_pickupby = "";
+glob_rma_completed = "";
+glob_sel_rmaitem = "";
+glob_sel_assettag = "";
+glob_rmaitem_li = null; // glob rma-items LB selected LI
+
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = "";
+	refreshrma = false;
+	msgtext = "";
+
+	lnkc = LOCALRMA_PREFIX + glob_selected_rma;
+
+	if(itype.equals("pickuprma_b"))
+	{
+		if(glob_selected_rma.equals("")) return;
+		if(!glob_rma_pickupby.equals("")) { msgtext = "RMA already being pickup.."; }
+		else
+		{
+			sqlstm = "update rw_localrma set pickupby='" + useraccessobj.username + "', pickupdate='" + todaydate + "' " + 
+			"where (pickupby is null or pickupby <> '" + useraccessobj.username + "') and origid=" + glob_selected_rma;
+
+			if(glob_sel_rma_li != null)
+			{
+				lbhand.setListcellItemLabel(glob_sel_rma_li,5,useraccessobj.username);
+				lbhand.setListcellItemLabel(glob_sel_rma_li,6,todaydate);
+
+				// TODO audit log
+			}
+		}
+	}
+
+	if(itype.equals("updrma_b")) // update RMA details
+	{
+		if(glob_selected_rma.equals("")) return;
+		ldela = kiboo.replaceSingleQuotes(l_delivery_addr.getValue());
+		lnots = kiboo.replaceSingleQuotes(l_notes.getValue());
+		sqlstm = "update rw_localrma set delivery_addr='" + ldela + "',rma_notes='" + lnots + "' " +
+		"where origid=" + glob_selected_rma;
+		//refreshrmas = true;
+		msgtext = "RMA details updated..";
+		add_RWAuditLog(lnkc, "", "[RepM] Update RMA details " + lnkc, useraccessobj.username);
+	}
+
+	if(itype.equals("savermaitem_b"))
+	{
+		if(glob_sel_rmaitem.equals("")) return;
+
+		inotes = kiboo.replaceSingleQuotes(rmai_notes.getValue());
+		inass = kiboo.replaceSingleQuotes(rmai_newasset_tag.getValue());
+		imoni = kiboo.replaceSingleQuotes(rmai_monitor.getValue());
+		igfx = kiboo.replaceSingleQuotes(rmai_gfxcard.getValue());
+		ibatt = kiboo.replaceSingleQuotes(rmai_battery.getValue());
+		ipwra = kiboo.replaceSingleQuotes(rmai_poweradaptor.getValue());
+		ioth = kiboo.replaceSingleQuotes(rmai_others.getValue());
+		iram = kiboo.replaceSingleQuotes(rmai_ram.getValue());
+		ihdd = kiboo.replaceSingleQuotes(rmai_hdd.getValue());
+
+		iram2 = kiboo.replaceSingleQuotes(rmai_ram2.getValue());
+		ihdd2 = kiboo.replaceSingleQuotes(rmai_hdd2.getValue());
+		iram3 = kiboo.replaceSingleQuotes(rmai_ram3.getValue());
+		ihdd3 = kiboo.replaceSingleQuotes(rmai_hdd3.getValue());
+		iram4 = kiboo.replaceSingleQuotes(rmai_ram4.getValue());
+		ihdd4 = kiboo.replaceSingleQuotes(rmai_hdd4.getValue());
+
+		sqlstm = "update rw_localrma_items set notes='" + inotes + "',newasset_tag='" + inass + "',monitor='" + imoni + "'," +
+		"gfxcard='" + igfx + "',battery='" + ibatt + "',poweradaptor='" + ipwra + "',others='" + ioth + "', " +
+		"hdd='" + ihdd + "', ram='" + iram + "', ram2='" + iram2 + "',ram3='" + iram3 + "',ram4='" + iram4 +"', " +
+		"hdd2='" + ihdd2 + "',hdd3='" + ihdd3 + "',hdd4='" + ihdd4 + "' " +
+		"where origid=" + glob_sel_rmaitem;
+
+		//msgtext = "RMA item details updated..";
+	}
+
+	if(itype.equals("completeitem_b"))
+	{
+		if(glob_sel_rmaitem.equals("")) return;
+		doFunc(savermaitem_b); // do a save before trying to complete the item..
+		completeRMA_item(glob_sel_rmaitem);
+	}
+
+	if(itype.equals("rmalogs_b")) // view RMA logs
+	{
+		showSystemAudit(auditlogs_holder,lnkc,"");
+		auditlogs_pop.open(iwhat);
+	}
+
+	if(itype.equals("completerma_b")) // complete/fulfill the RMA
+	{
+		if(glob_selected_rma.equals("")) return;
+		if(!glob_rma_completed.equals(""))
+		{
+			msgtext = "RMA already completed, no need to re-fulfill.";
+		}
+		else
+		if(checkRMACompletedItems(glob_selected_rma))
+		{
+			sqlstm = "update rw_localrma set completed='" + todaydate + "' where origid=" + glob_selected_rma;
+			msgtext = "Great, RMA fulfilled, notification email sent";
+			refreshrma = true;
+			sendEmailNotification(1); // send notif to CS and etc
+			add_RWAuditLog(lnkc, "", "[RepM] Fulfill RMA " + lnkc, useraccessobj.username);
+		}
+		else
+		{
+			msgtext = "Cannot fulfill this RMA, incomplete item(s)..";
+		}
+	}
+
+	if(itype.equals("rmadocs_b"))
+	{
+		if(glob_selected_rma.equals("")) return;
+		docupopup.open(iwhat);
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refreshrma) showLocalRMA();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+// Go through the replacement parts key-in -- make sure not already assigned to another RMA
+void completeRMA_item(String irmai)
+{
+	rir = getLocalRMAItem_rec(irmai);
+	if(rir == null) { guihand.showMessageBox("ERR: Cannot access RMA items table.."); return; }
+	statmsg = "";
+	kerr = 0;
+	dome = 0;
+	partslist = "";
+	lnkc = LOCALRMA_PREFIX + glob_selected_rma;
+	chgasset = false;
+
+	newasst = kiboo.checkNullString(rir.get("newasset_tag"));
+	if(!newasst.equals(""))
+	{
+		chkass = checkReplacementParts(newasst);
+		statmsg += rmaitem_errorMsg("ASSET",newasst,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+		{
+			partslist += "'" + newasst + "',";
+			chgasset = true;
+		}
+	}
+
+	moni = kiboo.checkNullString(rir.get("monitor"));
+	if(!moni.equals(""))
+	{
+		chkass = checkReplacementParts(moni);
+		statmsg += rmaitem_errorMsg("MONITOR",moni,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + moni + "',";
+	}
+
+	gfxc = kiboo.checkNullString(rir.get("gfxcard"));
+	if(!gfxc.equals(""))
+	{
+		chkass = checkReplacementParts(gfxc);
+		statmsg += rmaitem_errorMsg("GFXCARD",gfxc,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + gfxc + "',";
+	}
+
+	batt = kiboo.checkNullString(rir.get("battery"));
+	if(!batt.equals(""))
+	{
+		chkass = checkReplacementParts(batt);
+		statmsg += rmaitem_errorMsg("BATTERY",batt,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + batt + "',";
+	}
+
+	pwradp = kiboo.checkNullString(rir.get("poweradaptor"));
+	if(!pwradp.equals(""))
+	{
+		chkass = checkReplacementParts(pwradp);
+		statmsg += rmaitem_errorMsg("PWRADAPTOR",pwradp,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + pwradp + "',";
+	}
+	
+	ihdd = kiboo.checkNullString(rir.get("hdd"));
+	if(!ihdd.equals(""))
+	{
+		chkass = checkReplacementParts(ihdd);
+		statmsg += rmaitem_errorMsg("HDD",ihdd,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + ihdd + "',";
+	}
+
+	iram = kiboo.checkNullString(rir.get("ram"));
+	if(!iram.equals(""))
+	{
+		chkass = checkReplacementParts(iram);
+		statmsg += rmaitem_errorMsg("RAM",iram,chkass);
+		dome++;
+		if(chkass != 4)
+			kerr++;
+		else
+			partslist += "'" + iram + "',";
+	}
+
+	othrs = kiboo.checkNullString(rir.get("others"));
+	if(!othrs.equals("")) dome++;
+
+	if(dome == 0) statmsg += "\nNOTHING to complete..";
+	if(kerr > 0) statmsg += "\n\n" + kerr.toString() + " error(s) found.. you cannot complete this replacement";
+
+	if(dome > 0 && kerr == 0) // got some parts to update w/o errs
+	{
+		todaydate =  kiboo.todayISODateTimeString();
+		sqlstm = "";
+
+		// TODO chgasset flag set -- need to retrieve old-asset from customer and update other stuff
+
+		if(!partslist.equals(""))
+		{
+			partslist = partslist.substring(0,partslist.length()-1);
+			sqlstm += "update stockmasterdetails set rma_id=" + glob_selected_rma + 
+			" where stock_code in (" + partslist + ");"; // update rma_id in parts
+
+			kpts = partslist.split(",");
+			for(i=0;i<kpts.length;i++) // per-parts audit-log
+			{
+				kk = kpts[i].replaceAll("'","");
+				add_RWAuditLog(kk,"","Assigned to " + lnkc, useraccessobj.username);
+			}
+		}
+
+		// update rw_localrma_items completeby & completedate
+		sqlstm += "update rw_localrma_items set completeby='" + useraccessobj.username + "',completedate='" + todaydate + "' " +
+		"where origid=" + irmai + ";";
+
+		sqlhand.gpSqlExecuter(sqlstm);
+
+		// RMA-item audit log
+		add_RWAuditLog(lnkc,irmai,"[RepM] Complete RMA item : " + irmai, useraccessobj.username);
+
+		// update rma_items LB (rmaitms_headers)
+		lbhand.setListcellItemLabel(glob_rmaitem_li,5,useraccessobj.username);
+		toggleRMAItems_butts(true); // disable rma-items butt
+
+		updateRMA_completeditems(glob_selected_rma);
+
+		statmsg += "\nThis item is now completed..";
+		//statmsg += "\n\n" + sqlstm;
+	}
+
+	completestat_lbl.setValue(statmsg);
+	completeitem_pop.open(completeitem_b);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = "";
+	refreshrmas = false;
+	msgtext = "";
+
+	adminpop.close();
+
+	if(itype.equals("clrpikup_b"))
+	{
+		if(glob_selected_rma.equals("")) return;
+		sqlstm = "update rw_localrma set pickupdate=null, pickupby=null where origid=" + glob_selected_rma;
+		refreshrmas = true;
+		toggleRMAItems_butts(true);
+	}
+
+	if(itype.equals("clrcomplete_b"))
+	{
+		if(glob_selected_rma.equals("")) return;
+		sqlstm = "update rw_localrma set completed=null where origid=" + glob_selected_rma;
+		refreshrmas = true;
+	}
+	
+	if(itype.equals("adminclritm_b"))
+	{
+		if(glob_sel_rmaitem.equals("")) return;
+
+		tsqls = "select newasset_tag,monitor,gfxcard,battery,poweradaptor,hdd,ram from rw_localrma_items where origid=" + glob_sel_rmaitem;
+		kr = sqlhand.gpSqlFirstRow(tsqls);
+		if(kr == null) return;
+
+		nasst = kiboo.checkNullString(kr.get("newasset_tag"));
+		moni = kiboo.checkNullString(kr.get("monitor"));
+		gfxc = kiboo.checkNullString(kr.get("gfxcard"));
+		batt = kiboo.checkNullString(kr.get("battery"));
+		pwad = kiboo.checkNullString(kr.get("poweradaptor"));
+		ihdd = kiboo.checkNullString(kr.get("hdd"));
+		iram = kiboo.checkNullString(kr.get("ram"));
+
+		ArrayList prts = new ArrayList();
+		if(!nasst.equals("")) prts.add("'" + nasst + "'");
+		if(!moni.equals("")) prts.add("'" + moni + "'");
+		if(!gfxc.equals("")) prts.add("'" + gfxc + "'");
+		if(!batt.equals("")) prts.add("'" + batt + "'");
+		if(!pwad.equals("")) prts.add("'" + pwad + "'");
+		if(!ihdd.equals("")) prts.add("'" + ihdd + "'");
+		if(!iram.equals("")) prts.add("'" + iram + "'");
+
+		partsl = kiboo.convertStringArrayToString(kiboo.convertArrayListToStringArray(prts));
+		sqlstm = "update stockmasterdetails set rma_id=null where stock_code in (" + partsl + ");"; // clear parts rma_id
+		sqlstm += "update rw_localrma_items set completeby=null, completedate=null where origid=" + glob_sel_rmaitem + ";"; // clear rw_localrma_items
+
+		lbhand.setListcellItemLabel(glob_rmaitem_li,5,"");
+		toggleRMAItems_butts(false);
+		msgtext = "RMA item parts cleared..";
+	}
+
+	if(!sqlstm.equals("")) { sqlhand.gpSqlExecuter(sqlstm); updateRMA_completeditems(glob_selected_rma); }
+	if(refreshrmas) showLocalRMA();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="completeitem_pop">
+<div style="background:#babdb6;
+	-moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+<label style="font-size:14px;font-weight:bold;">Completing RMA item</label>
+<separator height="5px" />
+<label id="completestat_lbl" multiline="true" />
+
+<button label="Ok" style="font-size:9px" onClick="completeitem_pop.close()" />
+
+</div>
+</popup>
+
+<popup id="auditlogs_pop">
+<div style="background:#ef2929;
+	-moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="500px" >
+<label style="font-size:14px;font-weight:bold;color:#ffffff">Audit Logs</label>
+<separator height="3px" />
+<div id="auditlogs_holder" />
+<separator height="3px" />
+<button label="Ok" style="font-size:9px" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<popup id="adminpop">
+	<button id="clrpikup_b" label="Clear pickup" style="font-size:9px" onClick="adminFunc(self)" />
+	<button id="clrcomplete_b" label="Clear complete" style="font-size:9px" onClick="adminFunc(self)" />
+</popup>
+
+<popup id="docupopup">
+<div style="background:#3465a4;
+	-moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="500px" >
+<label style="font-size:14px;font-weight:bold;color:#ffffff">DOCUMENTS / ATTACHMENTS</label>
+<separator height="3px" />
+<hbox>
+	<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(LOCALRMA_PREFIX,glob_selected_rma)" />
+	<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+	<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+	<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile(documents_holder,LOCALRMA_PREFIX,glob_selected_rma)" />
+</hbox>
+<separator height="3px" />
+<div id="documents_holder" />
+
+</div>
+</popup>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,LOCALRMA_PREFIX,glob_selected_rma)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,LOCALRMA_PREFIX,glob_selected_rma)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<!-- MAIN STARTS -->
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox> <!-- main hbox -->
+
+<div style="background:#2e3436;
+	-moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${RMAS_DIV_WIDTH}" >
+
+<label style="font-size:14px;color:#ffffff;font-weight:bold">PENDING RMAs</label>
+<separator height="3px" />
+<grid>
+	<rows>
+		<row>
+			<label value="Start date" style="font-size:9px" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			<label value="End date" style="font-size:9px" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row spans=",3">
+			<label value="Search" style="font-size:9px" />
+			<hbox>
+				<textbox id="search_tb" width="200px" style="font-size:9px" />
+				<button label="Load" style="font-size:9px" onClick="showLocalRMA()" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<hbox>
+	<button id="pickuprma_b" label="Pickup RMA" style="font-size:9px" onClick="doFunc(self)" />
+	<button id="completerma_b" label="FULFILL" style="" onClick="doFunc(self)" />
+	<button id="admin_b" label="ADMIN" style="color:#ff0000" onClick="adminpop.open(self)" />
+</hbox>
+<separator height="3px" />
+<div id="rmas_holder" />
+
+</div>
+
+<div id="workarea" style="background:#555753;
+	-moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" visible="false" >
+
+<hbox>
+	<label value="RMA#" style="font-size:14px;font-weight:bold;color:#ffffff" />
+	<separator width="5px" />
+	<label id="l_origid" style="font-size:14px;font-weight:bold;color:#ffffff" />
+	<separator width="15px" />
+	<label value="Owner :" style="font-size:14px;font-weight:bold;color:#ffffff" />
+	<separator width="5px" />
+	<label id="l_createdby" style="font-size:14px;font-weight:bold;color:#ffffff" />
+</hbox>
+<separator height="3px" />
+
+<grid>
+	<rows>
+		<row spans="1,3">
+			<label value="Priority" style="font-size:9px" />
+			<label id="l_priority" />
+		</row>
+		<row spans="1,3">
+			<label value="Customer" style="font-size:14px;font-weight:bold;" />
+			<label id="l_customername" style="" />
+		</row>
+		<row spans="1,3">
+			<label value="Delivery Address" style="font-size:9px" />
+			<textbox id="l_delivery_addr" style="font-size:9px" width="99%" height="60px" multiline="true" />
+		</row>
+		<row spans="1,3">
+			<label value="This RMA notes" style="font-size:9px" />
+			<textbox id="l_notes" style="font-size:9px" width="99%" height="60px" multiline="true" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+
+<button id="updrma_b" label="Update details" style="font-size:9px" onClick="doFunc(self)" />
+<button id="rmadocs_b" label="Documents" style="font-size:9px" onClick="doFunc(self)" />
+<button id="rmalogs_b" label="View logs" style="font-size:9px" onClick="doFunc(self)" />
+
+<separator height="3px" />
+<label style="font-size:14px;color:#ffffff;font-weight:bold">RMA ITEMS</label>
+<separator height="3px" />
+
+<div id="rmaitems_holder" />
+<separator height="3px" />
+
+<grid>
+	<rows>
+		<row spans="1,3">
+			<label value="Current Asset tag" style="font-size:9px" />
+			<hbox>
+			<label id="rmai_asset_tag" style="font-weight:bold" />
+			<separator width="10px" />
+			<button label="Check asset" style="font-size:9px" disabled="true" />
+			<label id="rmai_origid" style="font-size:9px" />
+			</hbox>
+		</row>
+		<row spans="1,3">
+			<label value="Problem" style="font-size:9px" />
+			<label id="rmai_problem" style="font-size:9px" multiline="true" />
+		</row>
+		<row spans="1,3">
+			<label value="Action" style="font-size:9px" />
+			<label id="rmai_action" style="font-size:9px" multiline="true" />
+		</row>
+		<row spans="1,3">
+			<button id="al_newasset_tag" label="NEW Asset tag" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_newasset_tag" width="99%" />
+		</row>
+		<row>
+			<button id="al_ram" label="RAM1" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_ram" width="99%" />
+			<button id="al_hdd" label="HDD1" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_hdd" width="99%" />
+		</row>
+		<row>
+			<button id="al_ram2" label="RAM2" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_ram2" width="99%" />
+			<button id="al_hdd2" label="HDD2" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_hdd2" width="99%" />
+		</row>
+		<row>
+			<button id="al_ram3" label="RAM3" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_ram3" width="99%" />
+			<button id="al_hdd3" label="HDD3" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_hdd3" width="99%" />
+		</row>
+		<row>
+			<button id="al_ram4" label="RAM4" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_ram4" width="99%" />
+			<button id="al_hdd4" label="HDD4" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_hdd4" width="99%" />
+		</row>
+		<row>
+			<button id="al_monitor" label="Monitor" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_monitor" width="99%" />
+			<button id="al_gfxcard" label="GfxCard" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_gfxcard" width="99%" />
+		</row>
+		<row>
+			<button id="al_battery" label="Battery" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_battery" width="99%" />
+			<button id="al_pwradaptor" label="PwrAdaptor" style="font-size:9px" onClick="showPartsAuditLog(self)" />
+			<textbox id="rmai_poweradaptor" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Others" style="font-size:9px" />
+			<textbox id="rmai_others" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Per item notes" style="font-size:9px" />
+			<textbox id="rmai_notes" style="font-size:9px" multiline="true" width="99%" height="40px" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<hbox>
+	<button id="savermaitem_b" label="Save details" style="font-size:9px" onClick="doFunc(self)" />
+	<button id="completeitem_b" label="Complete this" style="font-weight:bold" onClick="doFunc(self)" />
+	<button id="adminclritm_b" label="CLEAR" style="color:#ff0000" onClick="adminFunc(self)" visible="false" />
+</hbox>
+
+</div>
+
+</hbox> <!-- ENDOF main hbox -->
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(startdate);
+kiboo.setTodayDatebox(enddate);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminclritm_b.setVisible(true);
+}
+
+//showLocalRMA();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

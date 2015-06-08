@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="logistricm_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Logistic Management";
+MYVERSION = "v0.1";
+MYPANEL = "logsicstpan";
+/*
+Title		: Logistic management -- create dispatch-list and so on
+Written by	: Victor Wong
+Dated		: 21/08/2013
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

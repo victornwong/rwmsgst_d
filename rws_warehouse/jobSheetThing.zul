@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="jobshetthingmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="./jobsheet/jobsheet_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "PROD Jobsheet";
+MYVERSION = "v0.1";
+MYPANEL = "jobsheetpanel";
+/*
+<zscript src="../rws_account/jobMaker_funcs.zs" />
+@Title Job sheet thing for production
+@Author Victor Wong
+@Since 27/08/2014
+
+@Notes
+*/
+
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+HashMap plx = new HashMap();
+HashMap pl_itemtypes = new HashMap();
+glob_sel_job = glob_sel_jobsheet = glob_sel_jstat = glob_sel_picklist = "";
+last_joblist_type = 0;
+
+listjobs_extrasql = ""; // set by other modu used in jobsheet_funcs.showJobs()
+reqitems_grid_type = 1; // prod-side, req-items grid type - no asset-tags colm
+checkitems_doubleclicker = null;
+
+class itmdoubleclik implements org.zkoss.zk.ui.event.EventListener
+{
+	// specific check-items double-cliker event-handler to replace selected item-request
+	// modify for other modules, used in jobsheet_funcs.showCheckstock_win()
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		ifnd = lbhand.getListcellItemLabel(isel,1);
+		try
+		{
+			jk = pl_rows.getChildren().toArray();
+			for(i=0;i<jk.length;i++)
+			{
+				ki = jk[i].getChildren().toArray();
+				if(ki[0].isChecked()) ki[2].setValue(ifnd);
+			}
+		} catch (Exception e) {}
+	}
+}
+checkitems_doubleclicker = new itmdoubleclik();
+
+void pl_DoFunc(String itype) // pick-list functions dispenser
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = refresh_joblist = hideworkarea = false;
+	unm = useraccessobj.username;
+
+	if(itype.equals("pladd_b")) // add 1 pick-list item
+	{
+		itm = "NEW ITEM " + String.valueOf(Math.round(Math.random() * 1000));
+		plx.put(itm,0);
+		refresh = true;
+	}
+
+	if(itype.equals("plrem_b")) // remove ticked items
+	{
+		try
+		{
+			jk = pl_rows.getChildren().toArray();
+			for(i=0;i<jk.length;i++)
+			{
+				ki = jk[i].getChildren().toArray();
+				if(ki[0].isChecked())
+				{
+					plx.remove(ki[2].getValue()); // remove item-name from Hashmap
+				}
+			}
+			refresh = true;
+		} catch (Exception e) {}
+	}
+
+	if(itype.equals("plsave_b")) // save pick-list
+	{
+		try
+		{
+			jnt = kiboo.replaceSingleQuotes(j_extranotes.getValue().trim());
+			itms = qtys = "";
+			jk = pl_rows.getChildren().toArray();
+			for(i=0;i<jk.length;i++)
+			{
+				ki = jk[i].getChildren().toArray();
+				itms += kiboo.replaceSingleQuotes( ki[2].getValue().trim().replaceAll("~"," ") ) + "~";
+				qtys += kiboo.replaceSingleQuotes( ki[3].getValue().trim().replaceAll("~"," ") ) + "~";
+			}
+
+			try { itms = itms.substring(0,itms.length()-1); } catch (Exception e) {}
+			try { qtys = qtys.substring(0,qtys.length()-1); } catch (Exception e) {}
+
+			sqlstm = "if not exists (select 1 from rw_jobpicklist where parent_job=" + glob_sel_job + ") " +
+			"insert into rw_jobpicklist (parent_job,username,datecreated,pl_items,pl_qty,pstatus,extranotes) values " +
+			"(" + glob_sel_job + ",'" + unm + "','" + todaydate + "','" + itms + "','" + qtys + "','DRAFT','" + jnt + "') " +
+			"else " +
+			"update rw_jobpicklist set pl_items='" + itms + "', pl_qty='" + qtys + "', extranotes='" + jnt + "' where parent_job=" + glob_sel_job + ";";
+
+			refresh_joblist = true;
+			msgtext = "Items request list saved..";
+
+		} catch (Exception e) {}
+	}
+
+	if(itype.equals("plcommit_b")) // commit pick-list, lock the buttons
+	{
+		if(glob_sel_jobsheet.equals("")) return;
+
+		if(Messagebox.show("Once committed, no more modification..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "update rw_jobpicklist set pstatus='COMMIT', commitdate='" + todaydate + "', commitby='" + unm + "' where origid=" + glob_sel_jobsheet;
+		refresh_joblist = hideworkarea = true;
+		toggButts(true);
+
+		subj = "RE: Job pick-list submitted - " + glob_sel_jobsheet;
+		emsg = "Job items pick-list submitted for job " + glob_sel_job + ". Do process ASAP";
+
+		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username,
+			"victor@rentwise.com", subj, emsg );
+	}
+
+	if(itype.equals("chkstock_b")) // check stock ticked items
+	{
+		try
+		{
+			jk = pl_rows.getChildren().toArray();
+			ArrayList itms = new ArrayList();
+			for(i=0;i<jk.length;i++)
+			{
+				ki = jk[i].getChildren().toArray();
+				if(ki[0].isChecked())
+					itms.add(kiboo.replaceSingleQuotes(ki[2].getValue().trim()));
+					//itms += "'" + kiboo.replaceSingleQuotes(ki[2].getValue().trim()) + "',";
+			}
+			//try { itms = itms.substring(0,itms.length()-1); } catch (Exception e) {}
+			//if(itms.equals("")) return;
+			if(itms.size() == 0) return;
+			showCheckstock_win(winsholder,itms);
+
+		} catch (Exception e) {}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) drawPicklist(plx);
+	if(refresh_joblist) showJobs(last_joblist_type);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+	if(hideworkarea) workarea.setVisible(false);
+}
+
+]]>
+</zscript>
+
+<popup id="adminPop">
+	<div style="background:#EE1010;padding:3px">
+		<vbox>
+			<button id="admclrpckup_b" label="Clear pickup" sclass="k9mo" onClick="js_adminDo(self.getId())" />
+			<button id="admclrcommit_b" label="Clear commit" sclass="k9mo" onClick="js_adminDo(self.getId())" />
+		</vbox>
+	</div>
+</popup> <!-- ENDOF adminPop -->
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#516182">
+
+	<label id="saved_label" value="SAVED.." style="color:#ffffff;text-decoration:blink;font-weight:bold" visible="false" />
+	<button visible="false" id="ji_calc_b" label="Calc" sclass="k9" onClick="jobItems(self)" />
+
+	<hbox style="padding:3px">
+		<label value="Start date" sclass="k9b" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<label value="End date" sclass="k9b" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+
+		<textbox id="searhtxt_tb" width="100px" sclass="k9" />
+		<button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
+
+		<textbox id="jobid_tb" width="50px" sclass="k9" />
+		<button label="by job" sclass="k9mo" onClick="showJobs(2)" />
+
+		<textbox id="picklist_tb" width="50px" sclass="k9" visible="false" />
+
+		<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" onClick="adminPop.open(self)" visible="false" />
+	</hbox>
+
+	<div id="jobs_holder" />
+	<separator height="3px" />
+
+	<vbox id="workarea" visible="false">
+		<div sclass="shadowbox" style="background:#CB533A">
+			<label id="jobtitle_lb" sclass="subhead1" />
+		</div>
+		<hbox>
+			<div sclass="shadowbox" style="background:#1D69A5">
+				<vbox>
+					<label value="Job" sclass="subhead1" />
+					<hbox>
+						<button id="pickup_b" label="Pickup + request items" sclass="k9mo" onClick="pickJob_reqitems()" />
+					</hbox>
+					<div id="items_holder" width="450px" />
+				</vbox>
+			</div>
+
+			<div sclass="shadowbox" style="background:#1D69A5">
+				<vbox>
+					<label value="Jobsheet - Items request" sclass="subhead1" />
+					<label value="WH extra notes" sclass="k9mo" style="color:#ffffff" />
+					<textbox id="j_extranotes" multiline="true" width="99%" height="60px" sclass="k9" />
+					<hbox>
+						<button id="pladd_b" label="Add item" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+						<button id="plrem_b" label="Remove" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+						<button id="plsave_b" label="SAVE" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+						<button id="plcommit_b" label="COMMIT" sclass="k9mo" style="color:#D21111" onClick="pl_DoFunc(self.getId())" />
+						<button id="chkstock_b" label="Check + pick item" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+					</hbox>
+					<div id="pl_holder" />
+				</vbox>
+			</div>
+
+			<vbox visible="false">
+				<hbox id="grandtotalbox" visible="false" >
+					<vbox>
+						<label value="Total monthly rental" style="color:#eeeeee;font-weight:bold" />
+						<separator bar="true" />
+						<label value="Job Grand Total" style="color:#eeeeee;font-weight:bold" />
+						<separator bar="true" />
+					</vbox>
+					<vbox>
+						<label id="grandmonthly" sclass="subhead2" />
+						<label id="grandtotal" sclass="subhead2" style=";text-decoration:underline" />
+					</vbox>
+				</hbox>
+			<!-- <label value="NOTI.ME" style="font-size:80px;color:#eb531a;font-weight:bold" /> -->
+			</vbox>
+		</hbox>
+	</vbox>
+
+	<label id="debug" multiline="true" style="color:#ffffff" />
+	<div id="winsholder" visible="false" />
+
+<zscript>
+<![CDATA[
+//showJobs(1);
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+	jobid_tb.setValue("1585");
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

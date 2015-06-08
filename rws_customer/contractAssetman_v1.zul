@@ -1,0 +1,684 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="contassm_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="./contractAsset_funcs.zs" />
+<zscript src="../rws_warehouse/pickBOM_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Contract / Asset Management (like Contractcare)";
+MYVERSION = "v0.1";
+MYPANEL = "contassm1";
+/*
+Title		: Leasing contract and assets management
+Written by	: Victor Wong
+Dated		: 17/07/2013
+
+*/
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+SimpleDateFormat yearonly = new SimpleDateFormat("yyyy");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+glob_selected_lc_li = null;
+glob_selected_ass_li = null;
+
+glob_selected_lc = "";
+glob_selected_ass = "";
+glob_selected_asstag = "";
+last_lc_loadtype = 0;
+
+global_selected_customerid = "";
+global_selected_customername = "";
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	//custr = getFocus_CustomerRec(global_selected_customerid);
+	l_fc6_custid.setValue(global_selected_customerid);
+	//i_customer_name.setValue(global_selected_customername);
+}
+
+// Customize this for other mods to produce the linking-code for rw_jobnotes
+// used at DIV and jobNotes_funcs.zs
+String JN_linkcode()
+{
+	if(glob_selected_lc.equals("")) return "";
+	return LC_PREFIX + glob_selected_lc;
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshlcs = false;
+	refresh_wlc = false; // refresh the whole LB
+	newlcflag = false;
+	msgtext = "";
+	sqlstm = "";
+
+	if(itype.equals("updlc_b")) // update LC
+	{
+		if(glob_selected_lc.equals("")) return;
+		//i_lc_no
+
+		f6c = l_fc6_custid.getValue();
+		lcustn = kiboo.replaceSingleQuotes(customername.getValue());
+		lstart = kiboo.getDateFromDatebox(i_lstartdate);
+		lend = kiboo.getDateFromDatebox(i_lenddate);
+		lperi =	kiboo.replaceSingleQuotes(i_period.getValue());
+		lstat = i_lstatus.getSelectedItem().getLabel();
+		lrem = kiboo.replaceSingleQuotes(i_remarks.getValue());
+		lrmm = kiboo.replaceSingleQuotes(i_rm_month.getValue());
+		lrmc = kiboo.replaceSingleQuotes(i_rm_contract.getValue());
+
+		sqlstm = "update rw_leasingcontract set lstartdate='" + lstart + "',lenddate='" + lend + "'," +
+		"fc6_custid='" + f6c + "',customer_name='" + lcustn + "'," +
+		"period=" + lperi + ",lstatus='" + lstat + "',remarks='" + lrem + "',rm_month=" + lrmm +
+		",rm_contract=" + lrmc + " where origid=" + glob_selected_lc;
+
+		refreshlcs = true;
+	}
+
+	if(itype.equals("newlc_b")) // new LC
+	{
+		sqlstm = "insert into rw_leasingcontract (customer_name,datecreated,username,period,lstartdate,lenddate,remarks," +
+		"RM_Month,RM_Contract,lstatus) values (" +
+		"'NEW UNASSIGNED LC','" + todaydate + "','" + useraccessobj.username + "',0,'" + todaydate + "','" + todaydate + "'," +
+		"'',0.0,0.0,'ACTIVE')";
+
+		newlcflag = true; // special refresh flag for new LC --
+	}
+
+	if(itype.equals("dellc_b")) // delete LC -- TODO need to check access-rights
+	{
+		if(glob_selected_lc.equals("")) return;
+		if (Messagebox.show(glob_selected_lc + ": Delete this LC..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		//sqlstm = "delete from rw_leasingcontract where origid=" + glob_selected_lc;
+		// soft-delete
+		sqlstm = "update rw_leasingcontract set deleted=1 where origid=" + glob_selected_lc;
+
+		lc_lb.removeChild(glob_selected_lc_li);
+		//updateFoundStuff_labels(lc_found_lbl,lc_lb," LC(s) found");
+
+		asset_metagrid.setVisible(false);
+		lc_metagrid.setVisible(false);
+
+		glob_selected_ass = ""; // reset var
+		glob_selected_lc = "";
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refreshlcs) updateLC_li(glob_selected_lc_li,glob_selected_lc);
+	if(refresh_wlc) showLC(last_lc_loadtype);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	if(newlcflag)
+	{
+		s_customer_tb.setValue("NEW UNASSIGNED LC");
+		showLC(2);
+	}
+}
+
+void assetFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshass = false; // refresh 1 list-item
+	refresh_wass = false;
+	msgtext = "";
+	sqlstm = "";
+
+	if(itype.equals("updass_b")) // update asset
+	{
+		if(glob_selected_ass.equals("")) return;
+
+		kast = kiboo.replaceSingleQuotes(i_asset_tag.getValue());
+		ksn = kiboo.replaceSingleQuotes(i_serial_no.getValue());
+		ktyp = kiboo.replaceSingleQuotes(i_type.getValue());
+		kbrn = kiboo.replaceSingleQuotes(i_brand.getValue());
+		kmodl = kiboo.replaceSingleQuotes(i_model.getValue());
+		kcap = kiboo.replaceSingleQuotes(i_capacity.getValue());
+		kcolo = kiboo.replaceSingleQuotes(i_color.getValue());
+		kcoa = kiboo.replaceSingleQuotes(i_coa.getValue());
+		kram = kiboo.replaceSingleQuotes(i_ram.getValue());
+		khdd = kiboo.replaceSingleQuotes(i_hdd.getValue());
+		kother = kiboo.replaceSingleQuotes(i_others.getValue());
+		kloca = kiboo.replaceSingleQuotes(i_location.getValue());
+		mmk = i_collected.getSelectedItem().getLabel();
+		kcoll = (mmk.equals("YES")) ? "1" : "0";
+		kremk = kiboo.replaceSingleQuotes(i_ass_remarks.getValue());
+
+		sqlstm = "update rw_leaseequipments set asset_tag='" + kast + "',serial_no='" + ksn + "'," +
+		"type='" + ktyp + "',brand='" + kbrn + "',model='" + kmodl + "',capacity='" + kcap + "'," +
+		"color='" + kcolo + "',coa='" + kcoa + "',ram='" + kram + "',hdd='" + khdd + "',others='" + kother + "'," +
+		"location='" + kloca + "',remarks='" + kremk + "', collected=" + kcoll +
+		" where origid=" + glob_selected_ass;
+
+		refreshass = true;
+	}
+
+	if(itype.equals("newass_b")) // new asset
+	{
+		if(glob_selected_lc.equals("")) return;
+		sqlstm = "insert into rw_leaseequipments (asset_tag,serial_no,lc_parent) values " +
+		"('NEW ASSET','NO SERIAL'," + glob_selected_lc + ")";
+		refresh_wass = true;
+	}
+
+	if(itype.equals("delass_b")) // delete assets
+	{
+		if(glob_selected_ass.equals("")) return;
+		if (Messagebox.show(glob_selected_ass + ": This will be a hard delete..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from rw_leaseequipments where origid=" + glob_selected_ass + ";";
+
+		// null smd.lc_id for recs-sync
+		sqlstm += "update stockmasterdetails set lc_id=null where stock_code='" + glob_selected_asstag + "';";
+
+		lcassets_lb.removeChild(glob_selected_ass_li);
+		//updateFoundStuff_labels(lc_assetsfound_lbl,lcassets_lb, " asset/item(s) found");
+
+		asset_metagrid.setVisible(false);
+		glob_selected_ass = ""; // reset var
+		i_bom_id.setValue("");
+	}
+
+	if(itype.equals("replaceass_b")) // replace asset--
+	{
+	}
+
+	if(itype.equals("importbom_b"))
+	{
+		if(glob_selected_lc.equals("")) return;
+		if(glob_sel_importbom.equals("")) return; // glob_sel_importbom def in: TODO
+		importBOMToLC(glob_selected_lc,glob_sel_importbom);
+	}
+
+	if(itype.equals("viewbombuild_b"))
+	{
+		ibid = i_bom_id.getValue();
+		if(!ibid.equals(""))
+		{
+			tprm = "bom=" + ibid + "&ass=" + glob_selected_asstag;
+
+			activateModule(mainPlayground,"workbox","rws_warehouse/showBOMBuildWindow_v1.zul",kiboo.makeRandomId("bbm"),
+			tprm, useraccessobj);
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refreshass) updateAsset_li(glob_selected_ass_li,glob_selected_ass);
+	if(refresh_wass) showAssets(glob_selected_lc);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+// Actually importing BOM's builds into LC
+// TODO 29/08/2013 just assume BOM is VERIFIED, but still need do checks later
+void importBOMToLC(String ilcid, String ibid)
+{
+	pmsg = "Processing BOM import";
+	ierr = 0; blnkastg = 0;
+	assettags = "";
+
+	sqlstm = "select srid.asset_tag, srid.bomtype, smd.supplier_part_number as serial_no," +
+	"smd.brandname as brand, smd.description as model " +
+	"from stockrentalitems_det srid " +
+	"left join stockmasterdetails smd on smd.stock_code=srid.asset_tag " +
+	"where parent_id=" + ibid;
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+
+	if(rcs.size() == 0)
+	{
+		pmsg += "\nNothing to import..";
+		ierr++;
+	}
+
+	for(d : rcs)
+	{
+		astg = kiboo.checkNullString(d.get("asset_tag")).trim();
+		if(astg.equals("")) blnkastg++;
+		else
+		{
+			pmsg += "\n\t" + astg;
+			ast = assetLinkToLC(astg);
+			switch(ast)
+			{
+				case 0:
+					pmsg += " NOT FOUND in stock-master";
+					ierr++;
+					break;
+				case 1:
+					pmsg += " OK";
+					assettags += "'" + astg + "',";
+					break;
+				case 2:
+					pmsg += " ALREADY LINKED to ";
+					lnlc = assetExistInLC(astg);
+					if(!lnlc.equals(""))
+					{
+						pmsg += "LC" + lnlc;
+					}
+
+					ierr++;
+					break;
+			}
+		}
+	}
+
+	if(blnkastg > 0)
+		pmsg += "\nERR: Found " + blnkastg.toString() + " blank build(s)/asset-tag";
+
+	if(ierr == 0 && blnkastg == 0) // if no error found - can insert LC-id into asset
+	{
+		usqlstm = "";
+
+		for(d : rcs) // insert assets into rw_leaseequipments
+		{
+			btype = "DT";
+			if( kiboo.checkNullString(d.get("bomtype")).equals("NOTEBOOK") ) btype = "NB";
+			if( kiboo.checkNullString(d.get("bomtype")).equals("MONITOR") ) btype = "MT";
+
+			usqlstm += "insert into rw_leaseequipments (lc_parent,asset_tag,serial_no,type,brand,model,bom_id) values " +
+			"(" + ilcid + ",'" + d.get("asset_tag") + "','" + kiboo.checkNullString(d.get("serial_no")) + "'," +
+			"'" + btype + "','" + kiboo.checkNullString(d.get("brand")) + "'," + 
+			"'" + kiboo.checkNullString(d.get("model")) + "'," + ibid + ");";
+		}
+
+		try {
+			assettags = assettags.substring(0,assettags.length()-1);
+		} catch (Exception e) {}
+
+		// update smd.lc_id (every asset-tag)
+		usqlstm += "update stockmasterdetails set lc_id=" + ilcid + " where stock_code in (" + assettags + ");";
+		// update stockrentalitems.lc_id (BOM main rec)		
+		usqlstm += "update stockrentalitems set lc_id=" + ilcid + " where origid=" + ibid;
+
+		//pmsg += "\n\n" + usqlstm;
+
+		pmsg += "\n\nBOM's build(s) imported into LC" + ilcid;
+
+		sqlhand.gpSqlExecuter(usqlstm);
+		showAssets(ilcid); // refresh
+	}
+
+	importbom_stat_lbl.setValue(pmsg);
+	importbom_statpop.open(importbom_b);
+}
+
+// Util-func: update some label on listbox items-count
+void updateFoundStuff_labels(Label tlabel, Listbox tlistb, String iposts)
+{
+	icnt = tlistb.getItemCount().toString();
+	tlabel.setValue(icnt + " " + iposts);
+}
+
+]]>
+</zscript>
+
+<style>
+
+.subhead {
+	font-size:16px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+.subhead2 {
+	font-size:24px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+</style>
+
+<popup id="importbom_statpop">
+<div width="500px" >
+	<label id="importbom_stat_lbl" multiline="true" />
+	<separator height="3px" />
+	<button label="OK" onClick="bomimport_pop.close(); importbom_statpop.close()" />
+</div>
+</popup> <!-- ENDOF importbom_statpop -->
+
+<popup id="bomimport_pop">
+<div style="background:#f9b12d; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<hbox>
+<div>
+	<label value="IMPORT BOM" style="font-weight:bold;font-size:14px" />
+	<separator height="2px" />
+	<div id="imp_boms_holder" width="600px" />
+	<separator height="2px" />
+	<button label="View job breakdown" style="font-size:9px" onClick="impBOM_viewJob()" />
+</div>
+
+<div>
+	<label id="impbomselected" value="BUILDS" style="font-weight:bold;font-size:14px" />
+	<separator height="2px" />
+	<div id="bitems_holder" width="350px" />
+	<separator height="2px" />
+	<button id="importbom_b" label="Import builds" style="font-weight:bold" onClick="assetFunc(self)" />
+</div>
+
+</hbox>
+
+</div>
+</popup> <!-- ENDOF bomimport_pop -->
+
+<popup id="pickcustomer_popup">
+<div style="background:#f9b12d; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+	<hbox>
+		<label style="font-size:9px">Customer name</label>
+		<textbox id="searchcust_tb" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="findCustomers()" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<div id="foundcusts_holder" width="400px" />
+		<separator width="5px" />
+		<div width="400px" id="custfound_wa" visible="false" >
+			<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+			<separator height="2px" />
+			<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+			<separator height="3px" />
+			<button label="Select this customer" style="font-size:9px" onClick="assignCustomer()" />
+		</div>
+	</hbox>
+	<label id="selectcustid" visible="false" />
+</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,LC_PREFIX,glob_selected_lc)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,LC_PREFIX,glob_selected_lc)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div style="background:#3465a4; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+<hbox>
+
+<button label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,searchboxes,searchtitle)" />
+
+<hbox id="searchboxes" >
+<grid width="400px">
+	<rows>
+		<row>
+			<label value="LC start year" style="font-size:9px" />
+			<listbox id="s_limit_start" style="font-size:9px" mold="select" />
+			<label value="LC end year" style="font-size:9px" />
+			<listbox id="s_limit_end" style="font-size:9px" mold="select" />
+		</row>
+		<row spans="1,1,2">
+			<label value="LC status" style="font-size:9px" />
+			<listbox id="s_lcstatus" mold="select" style="font-size:9px" />
+			<hbox>
+				<button label="Load by status" style="font-size:9px" onClick="showLC(1)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<grid width="400px">
+	<rows>
+		<row>
+			<label value="LC No." style="font-size:9px" />
+			<textbox id="s_lcno_tb" style="font-size:9px" width="99%" />
+			<hbox>
+				<button label="by LC" style="font-size:9px" onClick="showLC(3)" />
+			</hbox>
+		</row>
+		<row>
+			<label value="Customer" style="font-size:9px" />
+			<textbox id="s_customer_tb" style="font-size:9px" width="99%" />
+			<hbox>
+				<button label="Search" style="font-size:9px" onClick="showLC(2)" />
+				<button label="Load new" style="font-size:9px"
+				onClick='s_customer_tb.setValue("NEW UNASSIGNED LC"); showLC(2)' />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+</hbox>
+
+<label id="searchtitle" sclass="subhead" value="SEARCH" visible="false" />
+
+</hbox> <!-- ENDOF search-boxes + blinder hbox -->
+
+</div>
+
+<div style="background:#75507b; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+<hbox>
+	<button label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,wophbox,lclisttitle)" />
+	<label id="lclisttitle" sclass="subhead" value="LIST" visible="false" />
+	<separator width="3px" />
+	<button id="newlc_b" label="New LC" style="font-weight:bold" onClick="doFunc(self)" />
+	<button id="dellc_b" label="Delete" style="font-weight:bold" onClick="doFunc(self)" disabled="true" />
+</hbox>
+<separator height="2px" />
+
+<hbox id="wophbox">
+	<div>
+		<label id="lc_found_lbl" style="font-size:9px;color:#dddddd" />
+		<separator height="2px" />
+		<div id="lc_holder" width="750px" />
+	</div>
+
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="420px" id="jobnotes_div" visible="false" >
+		<label sclass="subhead">JOB NOTES</label>
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,JN_linkcode())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" style="font-size:9px" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" style="font-size:9px" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" style="font-size:9px" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			
+		</div>
+	</div>
+</hbox>
+</div>
+
+<separator height="2px" />
+
+<div id="lcworkarea" visible="false" style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000;
+	-webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<separator height="3px" />
+
+<hbox>
+<button label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,lcworkarea2,lcworktitle)" />
+<label id="lcworktitle" sclass="subhead" value="LC DETAILS" visible="false" />
+
+<div id="lcworkarea2">
+<hbox>
+<vbox width="600px" id="wka1" >
+
+	<div id="lcform_holder" />
+	
+	<button id="updlc_b" label="Update LC.." style="font-weight:bold" onClick="doFunc(self)" />
+
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+		<label sclass="subhead">ATTACHMENT / DOCUMENTS</label>
+		<separator height="3px" />
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" style="font-size:9px"
+				onClick="showUploadPopup(LC_PREFIX,glob_selected_lc)" />
+			<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+			<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(self)" />
+			<button id="deletedoc_btn" label="Delete" style="font-size:9px"
+				onClick="deleteFile(documents_holder,LC_PREFIX,glob_selected_lc)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="documents_holder" />
+	</div>
+</vbox>
+
+<vbox id="wka2">
+	<!-- <label id="lc_assetsfound_lbl" style="font-size:9px;color:#dddddd" /> -->
+	<div id="lcasset_holder" />
+	<hbox>
+		<button id="newass_b" label="New asset/item" style="font-weight:bold" onClick="assetFunc(self)" />
+		<button id="replaceass_b" label="REPLACE" style="font-weight:bold" onClick="assetFunc(self)" />
+		<button id="delass_b" label="Delete" style="font-weight:bold" onClick="assetFunc(self)" disabled="true" />
+		<button label="Import from BOM" style="font-weight:bold" onClick="popImportBOM(self)" />
+	</hbox>
+
+	<div id="assetworkarea" visible="false">
+		<grid>
+			<rows>
+				<row>
+					<label value="BOM" style="font-size:9px" />
+					<label id="i_bom_id" style="font-weight:bold" />
+					<button id="viewbombuild_b" label="View build" style="font-size:9px;font-weight:bold" onClick="assetFunc(self)" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="2px" />
+		<div id="assetparts_formholder" />
+		<separator height="2px" />
+		<button id="updass_b" label="Update details" style="font-weight:bold" onClick="assetFunc(self)" />
+	</div>
+
+</vbox>
+</hbox>
+</div> <!-- ENDOF lcworkarea2 -->
+
+</hbox>
+</div> <!-- ENDOF lcworkarea -->
+
+<zscript>
+<![CDATA[
+
+glob_formmaker = dynamicForm(assetparts_formholder, "asset_metagrid", "7");
+glob_formmaker2 = dynamicForm(lcform_holder, "lc_metagrid", "8");
+
+class assigncustClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		pickcustomer_popup.open(event.getTarget());
+	}
+}
+assigncustomer_b.addEventListener("onClick", new assigncustClick()); // in form-xml
+
+populateLCStatus_dd(s_lcstatus);
+populateLCStatus_dd(i_lstatus);
+
+luhand.populateListbox_ByLookup(s_limit_start, "LEASING_YEARS", 2);
+luhand.populateListbox_ByLookup(s_limit_end, "LEASING_YEARS", 2);
+
+yronly = yearonly.format(new Date());
+lstyr = (Integer.parseInt(yronly) - 1).toString();
+
+lbhand.matchListboxItems(s_limit_end,yronly);
+lbhand.matchListboxItems(s_limit_start,lstyr);
+
+if(useraccessobj.accesslevel == 9)
+{
+	dellc_b.setDisabled(false);
+	delass_b.setDisabled(false);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

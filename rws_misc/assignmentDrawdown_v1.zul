@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="assgdrwdown"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+
+<zscript>
+<![CDATA[
+MYTITLE = "Assignment Projection";
+MYVERSION = "v0.1";
+MYPANEL = "assgdrgdopan";
+/*
+Title		: Assignment projection for drawdown from CTC or watever
+Written by	: Victor Wong
+Dated		: 30/10/2013
+
+Revisions:
+*/
+import java.util.*;
+import java.text.*;
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+REPORTS_PATH = "sharedocs";
+
+SimpleDateFormat dtf3 = new SimpleDateFormat("yyyyMMdd");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+SimpleDateFormat monthonly = new SimpleDateFormat("M");
+SimpleDateFormat monthonlystr = new SimpleDateFormat("MMM");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+DecimalFormat nf3 = new DecimalFormat("#####0.00");
+DecimalFormat nf4 = new DecimalFormat("###,##0.00");
+
+Object invsreg_data = null;
+
+glob_sel_assr = "";
+
+// pretty hardcoded to juggle invoices to be charge-out against invoices-already-charge-out
+void juggAssignment()
+{
+	todaydate = dtf2.format( new Date() );
+	InputStream inps = null;
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	org.apache.poi.hssf.usermodel.HSSFCell kcell;
+
+	try {
+		if(invsreg_data == null) return;
+		if(invsreg_data.thefiledata == null) return;
+		inps = new ByteArrayInputStream(invsreg_data.thefiledata);
+	} catch (Exception e) { guihand.showMessageBox("ERR: Upload the proper worksheet for this bugger to work.."); return; }
+
+	HSSFWorkbook excelWB = new HSSFWorkbook(inps);
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	sht0 = excelWB.getSheetAt(0);
+	numrows = sht0.getPhysicalNumberOfRows()+1;
+
+	colstart = 28;
+	String[] hds = { "Assigned","Asg.Dt","Asg.Mth","Current","NMonth","NNMonth" };
+	for(j=0; j<hds.length; j++) // headers start from AC(28)
+	{
+		excelInsertString(sht0,0,colstart+j,hds[j]);
+	}
+
+	dbug = dbug2 = "";
+
+	for(i=1; i<numrows; i++)
+	{
+		rwino = rwidate = financier = periodtype = "";
+		monthlyrental = totalrental = 0.0;
+		rentalperiod = actualmonths = monthdiff = 0;
+		doit = rentamt = nonfin = false;
+		idemsg = "";
+
+		try {
+
+		checkrow = sht0.getRow(i);
+
+		kcell = checkrow.getCell(13); // get financier
+		if(kcell != null)
+		{
+			financier = POI_GetCellContentString(kcell,evaluator,"").trim();
+			//idemsg += " finc> " + financier;
+		}
+
+		if(financier.equals("CTC")) doit = true; // TODO HARDCODED , only CTC
+		else nonfin = true;
+
+		kcell = checkrow.getCell(2); // get RWI No.
+		if(kcell != null)
+		{
+			rwino = POI_GetCellContentString(kcell,evaluator,"").trim();
+			//idemsg += " rwi> " + rwino;
+		}
+
+		kcell = checkrow.getCell(3); // get RWI date
+		if(kcell != null)
+		{
+			rwidate = POI_GetCellContentString(kcell,evaluator,"").trim();
+			//idemsg += " dte> " + rwidate;
+
+			sqlstm = "select datediff(m,'" + rwidate + "','" + todaydate + "') as mthdiff";
+			kil = sqlhand.gpSqlFirstRow(sqlstm);
+			monthdiff = kil.get("mthdiff");
+
+			//idemsg += " mdiff> " + monthdiff.toString();
+		}
+
+		kcell = checkrow.getCell(20); // rental-period
+		if(kcell != null)
+		{
+			kki = POI_GetCellContentString(kcell,evaluator,"").trim();
+			//idemsg += " rntp> " + kki;
+
+			try { rentalperiod = Integer.parseInt(kki); } catch (Exception e) {}
+		}
+
+		kcell = checkrow.getCell(22); // monthly rental
+		if(kcell != null)
+		{
+			kii = POI_GetCellContentString(kcell,evaluator,"").trim();
+			//idemsg += " mthy> " + kii;
+			try { monthlyrental = Float.parseFloat( kii.replaceAll(",","") ); } catch (Exception e) {}
+		}
+
+		kcell = checkrow.getCell(23); // period type
+		if(kcell != null)
+		{
+			periodtype = POI_GetCellContentString(kcell,evaluator,"").trim().toUpperCase();
+			//idemsg += " prdty> " + periodtype;
+
+			actualmonths = rentalperiod;
+			if(periodtype.equals("QUARTERLY")) actualmonths = rentalperiod * 3;
+
+			//idemsg += " actmth> " + actualmonths.toString();
+		}
+
+		} catch (Exception e) {}
+
+		if(doit && monthlyrental > 0 && actualmonths >= 24)
+		{
+			kr = rwiAleadyAssigned(rwino);
+			if(kr != null) // check if RWI already assigned
+			{
+				// if assigned, just show the draw-down amt
+				//idemsg += " alrdyass> " + nf3.format(kr.get("draw_amount")) + "\n";
+				//dbug += idemsg;
+				// inset already-assigned amount into AC(28)
+				excelInsertNumber(sht0,i,colstart, nf3.format(kr.get("draw_amount")) );
+				excelInsertString(sht0,i,colstart + 1, kr.get("draw_date_type") );
+				excelInsertString(sht0,i,colstart + 2, monthonlystr.format(kr.get("drawdown_date")) );
+			}
+			else
+			{
+				totalmonth = monthlyrental * rentalperiod;
+				wopimnt = 36 - monthdiff;
+
+				//idemsg += " ttlr> " + totalmonth.toString() + " wopimnt> " + wopimnt.toString() + "\n";
+				//dbug += idemsg;
+
+				casgt = (totalmonth * wopimnt) / 36 * 0.89; // TODO 89percent HARDCODED
+				nasgt = (totalmonth * (wopimnt-1)) / 36 * 0.89;
+				nnasgt = (totalmonth * (wopimnt-2)) / 36 * 0.89;
+
+				excelInsertNumber(sht0,i, colstart + 3, nf3.format(casgt) );
+				excelInsertNumber(sht0,i, colstart + 4, nf3.format(nasgt) );
+				excelInsertNumber(sht0,i, colstart + 5, nf3.format(nnasgt) );
+/*
+				dbug2 += 
+				"totalmonth: " + totalmonth.toString() + " mntdiff: " + monthdiff.toString() +
+				" wopimnt: " + wopimnt.toString() + " monthlyrental: " + monthlyrental + "\n" +
+				"casgt: " + nf3.format(casgt) + " nasgt: " + nf3.format(nasgt) + " nnasgt: " + nf3.format(nnasgt) + "\n\n";
+*/
+			}
+		}
+
+		if(nonfin) // customer with no assigned financier -- remove from worksheet
+		{
+			sht0.removeRow(checkrow);
+		}
+
+	}
+
+	//alert(dbug2);
+
+	tfname = "prjass_" + dtf3.format(new Date()) + ".xls";
+	outfn = session.getWebApp().getRealPath(REPORTS_PATH + "/" + tfname);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+
+	downloadFile(kasiexport,tfname,outfn);
+}
+
+Object rwiAleadyAssigned(String iwhat)
+{
+	sqlstm = "select draw_amount,draw_date_type,drawdown_date from rw_assigned_rwi where rwi_no='" + iwhat + "'";
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
+void showAssignmentMeta(String iwhat)
+{
+	trc = getDrawdownAssignment_rec(iwhat);
+	if(trc == null) { guihand.showMessageBox("dBERR: Cannot access RWIs assignment table"); return; }
+
+	a_rwi_no.setValue( kiboo.checkNullString(trc.get("rwi_no")) );
+	a_drawdown_date.setValue( trc.get("drawdown_date") );
+
+	if(trc.get("draw_amount") != null)
+		a_draw_amount.setValue( nf3.format(trc.get("draw_amount")) );
+
+	lbhand.matchListboxItems(a_draw_date_type, kiboo.checkNullString(trc.get("draw_date_type")) );
+	a_remarks.setValue( kiboo.checkNullString(trc.get("remarks")) );
+	lbhand.matchListboxItems(a_financer, kiboo.checkNullString(trc.get("financer")) );
+
+	assrform_holder.setVisible(true);
+}
+
+Object[] assrhds =
+{
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("RWI",true,"70px"),
+	new listboxHeaderWidthObj("Drw.Amt",true,"80px"),
+	new listboxHeaderWidthObj("Drw.Dte",true,"80px"),
+	new listboxHeaderWidthObj("Month",true,"60px"),
+	new listboxHeaderWidthObj("Fincr",true,"60px"),
+	new listboxHeaderWidthObj("Remarks",true,""),
+};
+
+class assrclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_assr = lbhand.getListcellItemLabel(isel,0);
+		showAssignmentMeta(glob_sel_assr);
+	}
+}
+
+void showAssignedRecs()
+{
+	sct = kiboo.replaceSingleQuotes(srch_tb.getValue().trim());
+	Listbox newlb = lbhand.makeVWListbox_Width(assgrecs_holder, assrhds, "assgs_lb", 21);
+
+	sqlstm = "select * from rw_assigned_rwi ";
+	if(!sct.equals("")) sqlstm += "where rwi_no like '%" + sct + "%' or remarks like '%" + sct + "%' ";
+	sqlstm += "order by drawdown_date desc";
+	recs = sqlhand.gpSqlGetRows(sqlstm);
+
+	if(recs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", new assrclik());
+
+	for(d : recs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add( d.get("origid").toString() );
+		kabom.add( kiboo.checkNullString(d.get("rwi_no")) );
+		kabom.add( (d.get("draw_amount") == null) ? "0.00" : nf3.format(d.get("draw_amount")) );
+		kabom.add( kiboo.checkNullString(d.get("draw_date_type")) );
+		kabom.add( monthonlystr.format(d.get("drawdown_date")) );
+		kabom.add( kiboo.checkNullString(d.get("financer")) );
+		kabom.add( kiboo.checkNullString(d.get("remarks")) );
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate = kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = false;
+
+	try { // remove previous iframe/amedia child in kasiexport, else screw-up UI - download window kept-on popup
+		m = kasiexport.getChildren().toArray();
+		m[0].setParent(null);
+	} catch (Exception e) {}
+
+	if(itype.equals("newassr_b"))
+	{
+		sqlstm = "insert into rw_assigned_rwi (rwi_no,drawdown_date,draw_amount,draw_date_type,remarks,financer) values " +
+		"('UNKNOWN','" + todaydate + "',0,'10th','','CTC')";
+		refresh = true;
+	}
+
+	if(itype.equals("remassr_b"))
+	{
+	}
+
+	if(itype.equals("upldass_b"))
+	{
+	}
+
+	if(itype.equals("updassr_b"))
+	{
+	}
+
+	if(itype.equals("upsched_b"))
+	{
+		invsreg_data = new uploadedWorksheet();
+		invsreg_data.getUploadFileData();
+		if(invsreg_data.thefiledata == null) return;
+		srfsales_filename.setValue( kiboo.checkNullString(invsreg_data.thefilename) );
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showAssignedRecs();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="debugpop">
+<div>
+<textbox id="debugbox" multiline="true" height="500px" width="600px" />
+</div>
+</popup>
+
+<style>
+
+.subhead2 {
+	font-size:24px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+.subhead1 {
+	font-size:18px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<hbox>
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+	<label sclass="subhead1" value="Processor" />
+	<separator height="3px" />
+
+	<grid width="450px">
+		<rows>
+			<row>
+				<button id="upsched_b" label="Upload SRFSALES worksheet" style="font-weight:bold" onClick="doFunc(self)" />
+				<label id="srfsales_filename" style="font-size:9px" />
+			</row>
+			<row>
+				<button id="juggdata_b" label="Juggle assignment/draw-down" style="font-weight:bold" onClick="juggAssignment()" />		
+			</row>
+		</rows>
+	</grid>
+
+</div>
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="600px" >
+
+	<label sclass="subhead1" value="Assigned/Drawdown Records" />
+	<separator height="3px" />
+
+	<hbox>
+		<textbox id="srch_tb" />
+		<button label="Dig/Load" onClick="showAssignedRecs()" />
+	</hbox>
+	<separator height="3px" />
+	<hbox style="background:#97b83a;padding:2px">
+		<button id="newassr_b" label="Insert record" onClick="doFunc(self)" />
+		<button id="remassr_b" label="Remove" onClick="doFunc(self)" />
+		<!--
+		<separator width="15px" />
+		<button id="upldass_b" label="Upload assigned records" />
+		-->
+	</hbox>
+	<separator height="3px" />
+	<div id="assgrecs_holder" />
+	<separator height="3px" />
+
+	<div id="assrform_holder" visible="false">
+	<separator height="3px" />
+	<button id="updassr_b" label="Update.." style="font-weight:bold" onClick="doFunc(self)" />
+	</div>
+
+</div>
+
+</hbox>
+
+<div id="kasiexport" visible="false" />
+<zscript>
+<![CDATA[
+
+assrform = dynamicForm(assrform_holder, "assr_metagrid", "21");
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

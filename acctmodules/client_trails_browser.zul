@@ -1,0 +1,548 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="clienttrails_browswer_fun"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.5";
+/*
+Title : Client trails browser
+Coding began date : 17/6/2010
+Written by : Victor Wong
+
+03/04/2012: optimize and port to byte-compl
+
+**NOTES**
+Let user view trails for client - (eg. "when invoice is sent out")
+
+*/
+/*
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+samphand = new SampleReg();
+
+LISTBOX_LIMIT = 200;
+
+// these used to create DocumentTable.docu_link field -- IMPORTANT!!
+DOCUATTACH_BYCUSTOMER = 1;
+DOCUATTACH_BYFOLDER = 2;
+global_docuattach_type = 0;
+
+global_selected_arcode = "";
+global_selected_folderno = "";
+
+global_selected_doculink = "";
+
+Object[] customers_lb_headers = {
+	new listboxHeaderObj("AR Code",true),
+	new listboxHeaderObj("Customer.Name",true),
+};
+
+// Search documents by customer-name - in DocumentTable, documents about client are stored with ar_code
+// customername_tb
+void searchDocuLinkByCustomer()
+{
+	customername = kiboo.replaceSingleQuotes(customername_tb.getValue());
+	if(customername.equals("")) return;
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select ar_code,customer_name from Customer where customer_name like '%" + customername + "%' order by customer_name";
+	custrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(custrecs.size() == 0 || custrecs == null)
+	{
+		guihand.showMessageBox("Sorry, cannot find what you're looking for..");
+		return;
+	}
+
+	Listbox newlb = lbhand.makeVWListbox(doculink_bycustomer_div, customers_lb_headers, "customers_lb", 30);
+
+	for(crec : custrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(crec.get("ar_code"));
+		kabom.add(crec.get("customer_name"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+	doculink_title.setValue("Search by customer");
+	doculink_bycustomer_div.setVisible(true);
+	doculink_byfolder_div.setVisible(false);
+}
+
+
+// Load documents by customer
+//lbhand.makeVWListbox(doculink_bycustomer_div, customers_lb_headers, "customers_lb", 30);
+//global_selected_arcode
+void loadCustomerDocs_Clicker()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(doculink_bycustomer_div,"customers_lb")) return;
+
+	selitem = customers_lb.getSelectedItem();
+	global_selected_arcode = lbhand.getListcellItemLabel(selitem,0);
+	global_docuattach_type = DOCUATTACH_BYCUSTOMER;
+
+	icompanyname = sqlhand.getCompanyName(global_selected_arcode);
+	document_title_lbl.setValue("[" + global_selected_arcode + "] " + icompanyname);
+
+	populateDocumentsListbox(global_selected_arcode);
+	documents_groupbox.setVisible(true);
+}
+
+// Load customer trails
+void loadCustomerTrails_Clicker()
+{
+
+}
+
+Object[] alldocs_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Crt.Date",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Owner",true),
+};
+
+// Show the documents - uses DocumentStorage
+// thedocuments_div
+void populateDocumentsListbox(String idoculink)
+{
+	Listbox newlb = lbhand.makeVWListbox(thedocuments_div, alldocs_lb_headers, "alldocs_lb", 5);
+
+	ds_sql = sqlhand.als_DocumentStorage();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,file_description,docu_status,username,datecreated from DocumentTable where docu_link like '%" + idoculink + "%'";
+	docsrecs = ds_sql.rows(sqlstm);
+	ds_sql.close();
+
+	if(docsrecs.size() == 0) return;
+	newlb.setRows(30);
+	for(docitem : docsrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(docitem.get("origid").toString());
+		kabom.add(docitem.get("file_title"));
+		kabom.add(docitem.get("file_description"));
+		kabom.add(docitem.get("datecreated").toString().substring(0,10));
+		kabom.add(docitem.get("docu_status"));
+		kabom.add(docitem.get("username"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void attachDoc_Clicker()
+{
+	fileupl_file_title.setValue("");
+	fileupl_file_description.setValue("");
+	fileupl_docu_status.setSelectedIndex(0);
+	uploadFileDetails_Popup.open(sjd_new_btn);
+}
+
+// let user view the docu - copied from doculink.zul
+void viewLinkingDocument()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(thedocuments_div,"alldocs_lb")) return;
+	eorigid = alldocs_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = kiboo.makeRandomId("vdoc");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+
+// popup button clicker
+void uploadLinkingDocument_clicker()
+{
+	doculink_str = "";
+	toupdate = "";
+
+	if(global_docuattach_type == DOCUATTACH_BYCUSTOMER)
+	{
+		doculink_str = "DOCU" + global_selected_arcode;
+		toupdate = global_selected_arcode;
+	}
+
+	if(global_docuattach_type == DOCUATTACH_BYFOLDER)
+	{
+		doculink_str = "DOCU" + global_selected_folderno;
+		toupdate = global_selected_folderno;
+	}
+
+	if(doculink_str.equals("")) return;
+
+	docustatus_str = fileupl_docu_status.getSelectedItem().getLabel();
+	ftitle = kiboo.replaceSingleQuotes(fileupl_file_title.getValue());
+	fdesc = kiboo.replaceSingleQuotes(fileupl_file_description.getValue());
+
+	if(ftitle.equals(""))
+	{
+		guihand.showMessageBox("Please enter a title..");
+		return;
+	}
+
+	uploadLinkingDocument(useraccessobj.username, useraccessobj.branch, kiboo.getDateFromDatebox(hiddendatebox), doculink_str, docustatus_str, ftitle, fdesc);
+	populateDocumentsListbox(toupdate); // refresh documents lb
+}
+
+// Delete document from DocumentTable
+// 17/6/2010: only admin can delete at the moment
+void deleteDocument()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(thedocuments_div,"alldocs_lb")) return;
+
+	// 17/6/2010: only admin can delete
+	if(useraccessobj.accesslevel < 9)
+	{
+		guihand.showMessageBox("Sorry.. only admin can delete document at the moment");
+		return;
+	}
+
+	eorigid = alldocs_lb.getSelectedItem().getLabel();
+
+	docurec = getLinkingDocumentMetadataRec(eorigid);
+	docu_username = docurec.get("username");
+
+	// security: check if user is owner of document - admin can delete whateva
+	if(!docu_username.equals(useraccessobj.username))
+	{
+		if(useraccessobj.accesslevel < 9)
+		{
+			guihand.showMessageBox("Sorry.. not owner, cannot delete document");
+			return;
+		}
+	}
+
+	if (Messagebox.show("Delete this document: " + docurec.get("file_title"), "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		ds_sql = sqlhand.als_DocumentStorage();
+		if(ds_sql == null) return;
+		sqlstatem = "delete from DocumentTable where origid=" + eorigid;
+		ds_sql.execute(sqlstatem);
+		ds_sql.close();
+
+		toupdate = "";
+
+		if(global_docuattach_type == DOCUATTACH_BYCUSTOMER) toupdate = global_selected_arcode;
+		if(global_docuattach_type == DOCUATTACH_BYFOLDER) toupdate = global_selected_folderno;
+		if(!toupdate.equals("")) populateDocumentsListbox(toupdate); // refresh supporting docu LB
+	}
+}
+
+// Popup document update clicker - real db oper here
+void updateLinkingDocDetails()
+{
+	if(global_selected_doculink.equals("")) return;
+
+	filetitle = update_file_title.getValue();
+	filedesc = update_file_description.getValue();
+	docustat = update_docu_status.getSelectedItem().getLabel();
+
+	if(filetitle.equals(""))
+	{
+		guihand.showMessageBox("Please enter a title..");
+		return;
+	}
+
+	updateDocument_Rec(global_selected_doculink, filetitle, filedesc, docustat);
+	updateFileDetails_Popup.close();
+
+	toupdate = "";
+
+	if(global_docuattach_type == DOCUATTACH_BYCUSTOMER) toupdate = global_selected_arcode;
+	if(global_docuattach_type == DOCUATTACH_BYFOLDER) toupdate = global_selected_folderno;
+	if(!toupdate.equals("")) populateDocumentsListbox(toupdate); // refresh supporting docu LB
+}
+
+// Allow owner of document to change details
+void changeDocDetails_Clicker()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(thedocuments_div,"alldocs_lb")) return;
+
+	global_selected_doculink = alldocs_lb.getSelectedItem().getLabel();
+	docurec = getLinkingDocumentMetadataRec(global_selected_doculink);
+	testuser = docurec.get("username");
+
+	if(!testuser.equals(useraccessobj.username))
+	{
+		if(useraccessobj.accesslevel < 9)
+		{
+			guihand.showMessageBox("Sorry.. you're not the owner, cannot modify");
+			return;
+		}
+	}
+
+	// populate the update-docu popup textboxes
+	update_file_title.setValue(docurec.get("file_title"));
+	update_file_description.setValue(docurec.get("file_description"));
+	lbhand.matchListboxItems(update_docu_status, docurec.get("docu_status"));
+	updateFileDetails_Popup.open(sjd_mod_btn);
+}
+
+Object[] folders_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("arcode",false),
+	new listboxHeaderObj("Folder.No",true),
+	new listboxHeaderObj("Customer.Name",true),
+};
+
+// Let user search docu-link using partial folder number - will search JobFolders.folderno_str
+void searchDocuLinkByFolder()
+{
+	partialfolder = kiboo.replaceSingleQuotes(foldernumber_tb.getValue());
+	if(partialfolder.equals("")) return;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select top 200 origid,ar_code,folderno_str from JobFolders where folderno_str like '%" + partialfolder + "%' order by folderno_str";
+	folderrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(folderrecs.size() == 0 || folderrecs == null)
+	{
+		guihand.showMessageBox("Sorry, cannot find what you're looking for..");
+		return;
+	}
+
+	Listbox newlb = lbhand.makeVWListbox(doculink_byfolder_div, folders_lb_headers, "folders_lb", 30);
+
+	for(foldrec : folderrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(foldrec.get("origid").toString());
+		kabom.add(foldrec.get("ar_code"));
+
+		folderno = foldrec.get("folderno_str");
+		kabom.add(folderno);
+
+		iar_code = foldrec.get("ar_code");
+		icompanyname = "Undefined";
+
+		if(!iar_code.equals(""))
+		{
+			// 11/6/2010: hardcode ar_code CASH and CASH USD in mysoft. Load customer info from table CashSales_CustomerInfo
+			if(iar_code.equals("CASH") || iar_code.equals("CASH USD"))
+			{
+				csrec = samphand.getCashSalesCustomerInfo_Rec(folderno);	// get rec based on folder no
+				if(csrec != null)
+					icompanyname = "CshAct: " + csrec.get("customer_name");
+				else
+					icompanyname = "CshAct: Undefined";
+			}
+			else
+				icompanyname = sqlhand.getCompanyName(iar_code);
+		}
+
+		kabom.add(icompanyname);
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+	doculink_title.setValue("Search by folder");
+	doculink_bycustomer_div.setVisible(false);
+	doculink_byfolder_div.setVisible(true);
+}
+
+// Load documents attached to folder
+// doculink_byfolder_div
+void loadFolderDocs_Clicker()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(doculink_byfolder_div,"folders_lb")) return;
+
+	selitem = folders_lb.getSelectedItem();
+	global_selected_folderno = lbhand.getListcellItemLabel(selitem,0);
+	global_docuattach_type = DOCUATTACH_BYFOLDER;
+
+	arcode = lbhand.getListcellItemLabel(selitem,1);
+	folderstr = lbhand.getListcellItemLabel(selitem,2);
+	icompanyname = lbhand.getListcellItemLabel(selitem,3);
+
+	document_title_lbl.setValue("[" + folderstr + "] " + icompanyname);
+
+	populateDocumentsListbox(global_selected_folderno);
+	documents_groupbox.setVisible(true);
+}
+
+]]>
+</zscript>
+
+<!-- to show input boxes to update details for linking-document popup -->
+<popup id="updateFileDetails_Popup">
+<groupbox style="padding:3px">
+<caption label="File details" />
+	<hbox>
+		<label value="Title" />
+		<separator width="3px" />
+		<textbox id="update_file_title" width="200px" />
+	</hbox>
+	<hbox>
+		<label value="Desc" />
+		<textbox id="update_file_description" multiline="true" height="60px" width="200px" />
+	</hbox>
+	<hbox>
+		<label value="Status" />
+		<listbox id="update_docu_status" mold="select" rows="1" style="font-size:9px" />
+	</hbox>
+	<separator width="5px" />
+	<hbox>
+		<button label="Update" onClick="updateLinkingDocDetails()"  style="font-size:9px" />
+		<button label="Close" onClick="updateFileDetails_Popup.close()"  style="font-size:9px" />
+	</hbox>
+</groupbox>
+</popup>
+<!-- end of popup -->
+
+
+<!-- to show input boxes to get details for uploaded file popup -->
+<popup id="uploadFileDetails_Popup">
+<groupbox>
+<caption label="Upload document" />
+	<vbox style="padding:2px">
+		<hbox>
+			<label value="Title" />
+			<separator width="1px" />
+			<textbox id="fileupl_file_title" width="200px" />
+		</hbox>
+		<hbox>
+			<label value="Desc" />
+			<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" />
+		</hbox>
+		<hbox>
+			<label value="Status" />
+			<listbox id="fileupl_docu_status" mold="select" rows="1" style="font-size:9px" />
+		</hbox>
+		<separator width="5px" />
+		<hbox>
+			<button label="Select file" style="font-size:9px" onClick="uploadLinkingDocument_clicker()" />
+			<button label="Close" style="font-size:9px" onClick="uploadFileDetails_Popup.close()" />
+		</hbox>
+	</vbox>
+</groupbox>
+</popup>
+<!-- end of popup -->
+
+<div width="1200px">
+<panel id="clienttrails_browswer_panel" title="Client Trails Browser ${MYVERSION}" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<div>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<borderlayout height="600px">
+<north title="Search input" height="50px" splittable="true" collapsible="true">
+<div style="padding:3px">
+	<vbox>
+		<hbox>
+			<label style="font-size:9px" value="Customer name" />
+			<separator width="5px" />
+			<textbox id="customername_tb" width="200px" style="font-size:9px" />
+			<separator width="5px" />
+			<button id="searchbycustomer_btn" style="font-size:9px" label="Search customers" onClick="searchDocuLinkByCustomer()" />
+		</hbox>
+		
+		<!--
+		<hbox>
+			<label style="font-size:9px" value="Job/Folder" />
+			<separator width="32px" />
+			<textbox id="foldernumber_tb" width="100px" style="font-size:9px" />
+			<separator width="105px" />
+			<button id="searchbyfolder_btn" style="font-size:9px" label="Search by folder" onClick="searchDocuLinkByFolder()" />
+			<label value="(eg. partial ALSM0010 or 1002)" style="font-size:9px" />
+		</hbox>
+		-->
+		
+	</vbox>
+</div>	
+</north>
+
+<center>
+	<div>
+		<borderlayout height="500px">
+			<west title="Companies" width="40%" splittable="true" collapsible="true">
+				<div style="padding:3px">
+					<div style="padding:2px;background:#aabb77">
+						<label id="doculink_title" value="..." />
+					</div>
+
+					<div id="doculink_bycustomer_div" visible="false">
+						<button label="Load trails" style="font-size:9px" onClick="loadCustomerTrails_Clicker()" />
+						<separator height="3px" />
+					</div>
+
+					<div id="doculink_byfolder_div" visible="false">
+						<button label="Load documents" style="font-size:9px" onClick="loadFolderDocs_Clicker()" />
+						<separator height="3px" />
+					</div>
+
+				</div>
+			</west>
+
+			<center>
+			<!--
+				<div>
+					<groupbox id="documents_groupbox" style="padding:3px" visible="false">
+						<caption label="Documents" />
+							<div style="padding:2px;background:#aabb77">
+								<label id="document_title_lbl" value="..." />
+							</div>
+							
+							<vbox style="padding:3px">
+								<div id="thedocuments_div" />
+									<hbox>
+										<button id="sjd_new_btn" label="Attach document" style="font-size:9px" onClick="attachDoc_Clicker()" />
+										<button id="sjd_mod_btn" label="Change details" style="font-size:9px" onClick="changeDocDetails_Clicker()" />
+										<button id="sjd_view_btn" label="View document" style="font-size:9px" onClick="viewLinkingDocument()" />
+										<button id="sjb_delete_btn" label="Delete" style="font-size:9px" onClick="deleteDocument()" />
+									</hbox>
+							</vbox>
+					</groupbox>
+				</div>
+			-->
+			
+			
+			
+			</center>
+		</borderlayout>
+	</div>
+</center>
+
+</borderlayout>
+
+</div>
+</panelchildren>
+</panel>
+</div>
+
+<zscript>
+<![CDATA[
+kiboo.setTodayDatebox(hiddendatebox);
+
+lbhand.populateDropdownListbox(fileupl_docu_status, doculink_status);
+lbhand.populateDropdownListbox(update_docu_status, doculink_status);
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+
+]]>
+</zscript>
+</zk>

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="shwbomwin"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="./rentalsBOM_funcs.zs" />
+<zscript src="./assignJobID_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "BOM List Breakdown";
+MYVERSION = "v0.1";
+MY_ID = "showbomwind";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+param_bomid = Executions.getCurrent().getParameter("bom");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+String JN_linkcode()
+{
+	if(param_bomid == null) return "";
+	return BOM_PREFIX + param_bomid;
+}
+
+]]>
+</zscript>
+
+<style>
+.subhead2 {	font-size:24px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead1 { font-size:18px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; 	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px }
+</style>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+
+<div id="workarea" width="680px" >
+<label id="error_message" sclass="subhead1" style="color:#cc0000" />
+<hbox>
+<button label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,bommetagrid,lb1)" />
+<grid id="bommetagrid" >
+	<rows>
+		<row>
+			<label id="bomheader" style="font-weight:bold" value="BOM#" />
+			<label id="bomuserheader" value="User" />
+			<label value="Category" style="font-size:9px" />
+			<listbox id="bomcategory" mold="select" rows="1" />
+		</row>
+		<row spans="1,3">
+			<label value="Customer" style="font-size:9px" />
+			<label id="customername" style="font-weight:bold" />
+		</row>
+		<row spans="1,1,2">
+			<label value="Job Link: JOB" style="font-size:9px" />
+			<label id="job_id" style="font-weight:bold;font-size:15px" />
+			<button label="View job details" style="font-size:9px;font-weight:bold"
+				onClick="viewJobWindow(job_id.getValue(),null);" />
+		</row>
+	</rows>
+</grid>
+<label id="lb1" sclass="subhead1" value="BOM METADATA" style="color:#babdb6" visible="false" />
+</hbox>
+
+<separator height="2px" />
+<hbox>
+	<button label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,jobnotes_div,lb0)" />
+
+	<div sclass="shadowbox" style="background:#555753;" width="650px" id="jobnotes_div" visible="false" >
+		<label sclass="subhead1">JOB NOTES</label>
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,JN_linkcode())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" style="font-size:9px" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" style="font-size:9px" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" style="font-size:9px" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			
+		</div>
+	</div>
+	<label id="lb0" sclass="subhead1" value="JOB NOTES" style="color:#babdb6" visible="false" />
+</hbox>
+
+<separator height="2px" />
+
+<hbox>
+<button id="blnd2" label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,builds_holder,lb2)" />
+<div id="builds_holder" />
+<label id="lb2" sclass="subhead1" value="BUILD ITEMS" style="color:#babdb6" visible="false" />
+</hbox>
+
+<separator height="2px" />
+
+<hbox>
+<button id="blnd3" label="-" style="font-weight:bold" onClick="blindTings_withTitle(self,form_holder,lb3)" />
+<div id="form_holder" />
+<label id="lb3" sclass="subhead1" value="DETAILS" style="color:#babdb6" visible="false" />
+</hbox>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+if(param_bomid != null)
+{
+	luhand.populateListBox_ValueSelection(bomcategory,"BOM_CATEGORY",2,8);
+
+	showbomwind.setTitle(MYTITLE + " :: " + param_bomid);
+
+	glob_formmaker = dynamicForm(form_holder, "build_details_grid", "2");
+	global_selected_bom = param_bomid;
+	showBOMMetadata(global_selected_bom);
+	showBuildItems(global_selected_bom);
+
+	blindTings_withTitle(blnd2,builds_holder,lb2);
+	blindTings_withTitle(blnd3,form_holder,lb3);
+}
+else
+{
+	error_message.setValue("ERROR: NO BOM FOUND..");
+}
+
+//if(param_bomid == null) showbomwind.close();
+
+]]>
+</zscript>
+
+</window>
+</zk>

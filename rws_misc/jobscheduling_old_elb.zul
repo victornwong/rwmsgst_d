@@ -1,0 +1,1398 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="jobsched_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/searchSelectCustomer_v1.zs" />
+<zscript src="../alsglobal/fileUploading.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MOD_TITLE = "Field Sampling Schedule";
+MYVERSION = "v0.3";
+/*
+Title		: Job scheduling - sampling and others
+Written by	: Victor Wong
+Dated		: 01/07/2012
+
+TODO: maybe add some func to upload to mysoft for billing - uses DO
+
+*/
+/*
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.math.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+gridhand = new GridHandler();
+
+SAMPLINGJOB_PREFIX = "SJB";
+
+PLANNING_BARCOLOR = "#bfbfbf";
+CONFIRMED_BARCOLOR = "#ffa500";
+DONE_BARCOLOR = "#2bab2a";
+CANCEL_BARCOLOR = "#a52a2a";
+POSTPONE_BARCOLOR = "#1e90ff";
+
+String[] global_jobstats = {"PLANNING","CONFIRM","DONE","CANCEL","POSTPONE"};
+
+last_list_type = 1;
+
+// column position of jobs_lb
+JOBLB_ORIGID = 0;
+JOBLB_STATUS = 8;
+
+global_selected_job = "";
+global_selected_status = "";
+
+global_xmlfilename = ""; //kiboo.makeRandomId(useraccessobj.username) + ".xml";
+
+void deletePreviousFile()
+{
+	// delete previous xml file..
+	if(!global_xmlfilename.equals(""))
+	{
+		thefn = session.getWebApp().getRealPath("tmp/" + global_xmlfilename);
+		File f1 = new File(thefn);
+		f1.delete();
+	}
+}
+
+//--- to be used in searchSelectCustomer_v1.zs
+class CallMeObject
+{
+	public Object companyrec;
+	public Object callme;
+
+	void doSomething()
+	{
+		if(companyrec == null) return;
+
+		// get what's in companyrec and populate fields -- can be customized for other mods
+		m_ar_code.setValue(companyrec.get("ar_code"));
+		m_customer_name.setValue(companyrec.get("customer_name"));
+		m_address1.setValue(companyrec.get("address1"));
+		m_address2.setValue(companyrec.get("address2"));
+		m_address3.setValue(companyrec.get("address3"));
+		m_contact_person.setValue(companyrec.get("contact_person1"));
+		m_contact_person2.setValue(companyrec.get("contact_person2"));
+		m_telephone.setValue(companyrec.get("telephone_no"));
+
+		selectcustomer_popup.close();
+	}
+}
+
+local_callme = new CallMeObject();
+//---
+
+void jobUpdateButtons(boolean iwhat)
+{
+	update_btn.setDisabled(iwhat);
+	assign_customer_btn.setDisabled(iwhat);
+	copyaddress_btn.setDisabled(iwhat);
+}
+
+void controlButtons(boolean iwhat)
+{
+	confirm_btn.setDisabled(iwhat);
+	jobdone_btn.setDisabled(iwhat);
+	postpone_btn.setDisabled(iwhat);
+	cancel_btn.setDisabled(iwhat);
+	assign_customer_btn.setDisabled(iwhat);
+	checklistmanager_btn.setDisabled(iwhat);
+}
+
+// decimalbox uses bigdecimal ..
+void setDecimalboxValue(Object idecimalbox, Object iwhat)
+{
+	if(iwhat == null) iwhat = "0";
+	BigDecimal value = new BigDecimal(iwhat);
+	idecimalbox.setValue(value);
+}
+
+void showJobMetadata()
+{
+	jrec = sqlhand.getJobSchedule_Rec(global_selected_job);
+	if(jrec == null) return;
+
+	jobtitle_lbl.setValue("Sampling Job: " + jrec.get("origid").toString());
+
+	m_ar_code.setValue(kiboo.checkNullString(jrec.get("ar_code")));
+	m_customer_name.setValue(kiboo.checkNullString(jrec.get("customer_name")));
+	m_address1.setValue(kiboo.checkNullString(jrec.get("address1")));
+	m_address2.setValue(kiboo.checkNullString(jrec.get("address2")));
+	m_address3.setValue(kiboo.checkNullString(jrec.get("address3")));
+	m_contact_person.setValue(kiboo.checkNullString(jrec.get("contact_person")));
+	m_telephone.setValue(kiboo.checkNullString(jrec.get("telephone")));
+
+	m_contact_person2.setValue(kiboo.checkNullString(jrec.get("contact_person2")));
+	m_telephone2.setValue(kiboo.checkNullString(jrec.get("telephone2")));
+
+	m_jobdescription.setValue(kiboo.checkNullString(jrec.get("jobdescription")));
+	m_extranotes.setValue(kiboo.checkNullString(jrec.get("extranotes")));
+
+	if(jrec.get("jobstartdate") != null) m_jobstartdate.setValue(jrec.get("jobstartdate"));
+	if(jrec.get("jobenddate") != null) m_jobenddate.setValue(jrec.get("jobenddate"));
+
+	//if(jrec.get("jobstatus") != null) lbhand.matchListboxItems(m_jobstatus,jrec.get("jobstatus"));
+	if(jrec.get("jobtype") != null) lbhand.matchListboxItems(m_jobtype,jrec.get("jobtype"));
+	
+	m_project_id.setValue(kiboo.checkNullString(jrec.get("project_id")));
+	m_site_name.setValue(kiboo.checkNullString(jrec.get("site_name")));
+	m_site_address1.setValue(kiboo.checkNullString(jrec.get("site_address1")));
+	m_site_address2.setValue(kiboo.checkNullString(jrec.get("site_address2")));
+	m_site_address3.setValue(kiboo.checkNullString(jrec.get("site_address3")));
+
+	m_manhours.setValue(kiboo.checkNullString(jrec.get("manhours")));
+
+	// clear workerholder
+	kaka = workerholder.getChildren().get(0).getChildren().get(0).getChildren().toArray();
+	for(int i=0;i<kaka.length;i++)
+	{
+		luhand.clearCheckboxTicked(kaka[i]);
+	}
+
+	// grid-rows juggler
+	if(jrec.get("jobworkers") != null)
+	{
+		kaka = workerholder.getChildren().get(0).getChildren().get(0).getChildren().toArray();
+		for(int i=0;i<kaka.length;i++)
+		{
+			luhand.tickCheckboxes(kaka[i],jrec.get("jobworkers"));
+		}
+	}
+
+	// billing stuff
+	m_billed.setSelectedIndex(-1); // clear first
+
+	BigDecimal value = new BigDecimal(0);
+	m_labor_cost.setValue(value);
+	m_rental_cost.setValue(value);
+	m_mobilization_cost.setValue(value);
+	m_accomodation_cost.setValue(value);
+
+	if(jrec.get("billed") != null) m_billed.setSelectedIndex(jrec.get("billed"));
+
+	setDecimalboxValue(m_labor_cost, jrec.get("labor_cost"));
+	setDecimalboxValue(m_rental_cost, jrec.get("rental_cost"));
+	setDecimalboxValue(m_mobilization_cost, jrec.get("mobilization_cost"));
+	setDecimalboxValue(m_accomodation_cost, jrec.get("accomodation_cost"));
+
+	m_labor_cost_notes.setValue(kiboo.checkNullString(jrec.get("labor_cost_notes")));
+	m_rental_cost_notes.setValue(kiboo.checkNullString(jrec.get("rental_cost_notes")));
+	m_mobilization_cost_notes.setValue(kiboo.checkNullString(jrec.get("mobilization_cost_notes")));
+	m_accomodation_cost_notes.setValue(kiboo.checkNullString(jrec.get("accomodation_cost_notes")));
+
+	m_folderno_str.setValue(kiboo.checkNullString(jrec.get("folderno_str")));
+
+	// if job status not "planning" or "postpone", disable update_btn
+	jobUpdateButtons(false);
+	jstta = jrec.get("jobstatus");
+	if( jstta != null)
+	{
+		if(!jstta.equals("PLANNING") && !jstta.equals("POSTPONE")) jobUpdateButtons(true);
+	}
+
+}
+
+// onSelect event for listJobSchedules()
+class joblb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = jobs_lb.getSelectedItem();
+		global_selected_job = lbhand.getListcellItemLabel(isel,JOBLB_ORIGID);
+		global_selected_status = lbhand.getListcellItemLabel(isel,JOBLB_STATUS);
+
+		showJobMetadata();
+		fillDocumentsList(SAMPLINGJOB_PREFIX, global_selected_job); // fileUploading.zs
+
+		chkid = SAMPLINGJOB_PREFIX + global_selected_job;
+		showCheckList(checklist_holder,"checklist_lb",chkid);
+
+		workarea.setVisible(true);
+	}
+}
+
+Object[] jobs_headers = 
+{
+	new listboxHeaderWidthObj("###",true,"20px"),
+	new listboxHeaderWidthObj("Dated",true,"40px"),
+	new listboxHeaderWidthObj("ReqBy",true,"40px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Job",true,""),
+	new listboxHeaderWidthObj("Start",true,"40px"),
+	new listboxHeaderWidthObj("End",true,"40px"),
+	new listboxHeaderWidthObj("Type",true,"50px"),
+	new listboxHeaderWidthObj("Stat",true,"50px"),
+	new listboxHeaderWidthObj("Bill",true,"20px"),
+	new listboxHeaderWidthObj("Folder",true,""),
+};
+
+// itype: 1=by date and searchtext, 2=by jobtype, 3=by jobstatus, 4=by worker
+void listJobSchedules(int itype)
+{
+	last_list_type = itype;
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	searchtext = kiboo.replaceSingleQuotes(searhtxt_tb.getValue()).trim();
+	if(searchtext.equals("")) searchtext = "%"; else searchtext = "%" + searchtext + "%";
+
+	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobs_headers, "jobs_lb", 20);
+
+	sqlstmhead = "select top 200 origid,datecreated,username,customer_name,jobdescription," + 
+	"jobstartdate,jobenddate,jobtype,jobstatus,extranotes, " + 
+	"project_id,site_name,billed,jobworkers,folderno_str from elb_jobschedules where ";
+
+	// default itype=1
+	sqlstmcond = "(customer_name like '" + searchtext + "' or jobdescription like '" + searchtext + "' or " +
+	"site_name like '" + searchtext + "' or site_address1 like '" + searchtext + "' or site_address2 like '" + searchtext + "' or " +
+	"site_address3 like '" + searchtext + "' or contact_person like '" + searchtext + "' or contact_person2 like '" + searchtext + "' or " +
+	"project_id like '" + searchtext + "') and ";
+
+	switch(itype)
+	{
+		case 2: // jobtype
+			jot = jobtype_dd.getSelectedItem().getLabel();
+			sqlstmcond = "jobtype='" + jot + "' and ";
+		break;
+		case 3: // jobstatus
+			jos = jobstatus_dd.getSelectedItem().getLabel();
+			sqlstmcond = "jobstatus='" + jos + "' and ";
+		break;
+		case 4: // worker
+			wok = worker_dd.getSelectedItem().getLabel();
+			sqlstmcond = "jobworkers like '%" + wok + "%' and ";
+		break;
+	}
+
+	sqlstmtail = "(datecreated between '" + sdate + "' and '" + edate + "') or " + 
+	"(jobstartdate between '" + sdate + "' and '" + edate + "') " +
+	"order by origid";
+
+	sqlstm = sqlstmhead + sqlstmcond + sqlstmtail;
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	alert(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.addEventListener("onSelect", new joblb_onSelect());
+
+	// lines to create .xml file for <timeline>
+	deletePreviousFile();
+
+	global_xmlfilename = kiboo.makeRandomId(useraccessobj.username) + ".xml";
+	thefn = session.getWebApp().getRealPath("tmp/" + global_xmlfilename);
+	
+	FileWriter fstream = new FileWriter(thefn);
+	BufferedWriter outbw = new BufferedWriter(fstream);
+
+	joms = "<data>\n";
+
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		jid = dpi.get("origid").toString();
+		kabom.add(jid);
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(kiboo.checkNullString(dpi.get("username")));
+		kabom.add(kiboo.checkNullString(dpi.get("customer_name")));
+		kabom.add(kiboo.checkNullString(dpi.get("jobdescription")));
+		kabom.add(kiboo.checkNullDate(dpi.get("jobstartdate"),"---"));
+		kabom.add(kiboo.checkNullDate(dpi.get("jobenddate"),"---"));
+
+		kabom.add(kiboo.checkNullString(dpi.get("jobtype")));
+		ksta = kiboo.checkNullString(dpi.get("jobstatus"));
+		kabom.add(ksta);
+		billed = (dpi.get("billed") == null) ? "NO" : ((dpi.get("billed") == 0) ? "NO" : "YES");
+		kabom.add(billed);
+
+		kabom.add(kiboo.checkNullString(dpi.get("folderno_str")));
+
+		//kabom.add(lbhand.trimListitemLabel(kiboo.checkNullString(dpi.get("description")),80) );
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+
+		barcolor = PLANNING_BARCOLOR;
+		if(ksta.equals("CONFIRM")) barcolor = CONFIRMED_BARCOLOR;
+		if(ksta.equals("DONE")) barcolor = DONE_BARCOLOR;
+		if(ksta.equals("CANCEL")) barcolor = CANCEL_BARCOLOR;
+		if(ksta.equals("POSTPONE")) barcolor = POSTPONE_BARCOLOR;
+
+		titlething = "[" + jid + "] " + kiboo.escapedHTMLString(kiboo.checkNullString(dpi.get("jobdescription"))) + " [BILL:" + billed + "]";
+
+		joms += "<event start=\"" + kiboo.checkNullDate(dpi.get("jobstartdate"),"") + "\" end=\"" + kiboo.checkNullDate(dpi.get("jobenddate"),"") + "\" " +
+		"isDuration=\"true\" title=\"" + titlething + "\" color=\"" + barcolor + "\" >\n";
+
+		joms += "Client: " + kiboo.escapedHTMLString(kiboo.checkNullString(dpi.get("customer_name"))) + "&lt;br&gt;";
+		joms += "Job status: " + ksta + "&lt;br&gt;";
+		joms += "Project: " + kiboo.escapedHTMLString(kiboo.checkNullString(dpi.get("project_id"))) + "&lt;br&gt;";
+		joms += "Location: " + kiboo.escapedHTMLString(kiboo.checkNullString(dpi.get("site_name"))) + "&lt;br&gt;";
+		joms += "Staff: " + kiboo.checkNullString(dpi.get("jobworkers")) + "&lt;br&gt;";
+		joms += "&lt;hr&gt;";
+		joms += kiboo.escapedHTMLString(kiboo.checkNullString(dpi.get("extranotes")));
+		joms += "\n</event>";
+		
+	}
+
+	joms += "\n</data>";
+	outbw.write(joms);
+	outbw.close();
+
+	b1.setEventSourceUrl("tmp/" + global_xmlfilename);
+
+}
+
+// insert new sampling/whatever job
+void insertNewJob()
+{
+	tunm = useraccessobj.username;
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+	sqlstm = "insert into elb_jobschedules (datecreated,customer_name,username,jobstatus) values ('" + todate + "','','" + tunm + "','PLANNING')";
+	sqlhand.gpSqlExecuter(sqlstm);
+	if(last_list_type == 0) last_list_type = 1;
+	listJobSchedules(last_list_type); // refresh
+}
+
+// send a notification email to whoever def in SAMPLINGJOB_ADMIN_EMAIL
+void sendJobNotificationEmail()
+{
+	if(global_selected_job.equals("")) return;
+	jrec = sqlhand.getJobSchedule_Rec(global_selected_job);
+	if(nmr == null) return;
+	subjstr = "[SAMPLING JOB] Has been added";
+
+	msgbody =  "Job #: " + jrec.get("origid").toString();
+	msgbody +=  "\nRequested by: " + jrec.get("username");
+	msgbody += "\nDescription: " + kiboo.checkNullString(jrec.get("jobdescription"));
+	msgbody += "\nClient: " + kiboo.checkNullString(jrec.get("customer_name"));
+	msgbody += "\nProject: " + kiboo.checkNullString(jrec.get("project_id"));
+	msgbody += "\nLocation: " + kiboo.checkNullString(jrec.get("site_name"));
+	msgbody += "\nStart: " + kiboo.checkNullDate(jrec.get("jobstartdate"),"---") + " End: " + kiboo.checkNullDate(jrec.get("jobenddate"),"---");
+	msgbody += "\n\n" + kiboo.checkNullString(jrec.get("extranotes"));
+	msgbody += "\n\n-------\nThis is just a job notification email\nLogin to E-LABMAN for more information regarding this job";
+
+	topeople22 = luhand.getLookupChildItems_StringArray("SAMPLINGJOB_ADMIN_EMAIL",2);
+	topeople = kiboo.convertStringArrayToString(topeople22);
+	simpleSendEmail(SMTP_SERVER,"elabman@alsglobal.com.my",topeople,subjstr,msgbody);
+
+	sqlstm = "update elb_jobschedules set notified=1 where origid=" + global_selected_job;
+	sqlhand.gpSqlExecuter(sqlstm);
+}
+
+// itype: 1=update all, 2=update billing details only
+void updateJobSchedule(int itype)
+{
+	if(global_selected_job.equals("")) return;
+
+	arcod = m_ar_code.getValue();
+	cname = kiboo.replaceSingleQuotes(m_customer_name.getValue());
+	ad1 = kiboo.replaceSingleQuotes(m_address1.getValue());
+	ad2 = kiboo.replaceSingleQuotes(m_address2.getValue());
+	ad3 = kiboo.replaceSingleQuotes(m_address3.getValue());
+	contp = kiboo.replaceSingleQuotes(m_contact_person.getValue());
+	telp = kiboo.replaceSingleQuotes(m_telephone.getValue());
+
+	jobde = kiboo.replaceSingleQuotes(m_jobdescription.getValue());
+	jent = kiboo.replaceSingleQuotes(m_extranotes.getValue());
+	jsdate = kiboo.getDateFromDatebox(m_jobstartdate);
+	jedate = kiboo.getDateFromDatebox(m_jobenddate);
+	jtype = m_jobtype.getSelectedItem().getLabel();
+	//jstat = m_jobstatus.getSelectedItem().getLabel();
+
+	contp2 = kiboo.replaceSingleQuotes(m_contact_person2.getValue());
+	telp2 = kiboo.replaceSingleQuotes(m_telephone2.getValue());
+
+	projid = kiboo.replaceSingleQuotes(m_project_id.getValue());
+	sitna = kiboo.replaceSingleQuotes(m_site_name.getValue());
+	siad1 = kiboo.replaceSingleQuotes(m_site_address1.getValue());
+	siad2 = kiboo.replaceSingleQuotes(m_site_address2.getValue());
+	siad3 = kiboo.replaceSingleQuotes(m_site_address3.getValue());
+
+	mhors = kiboo.replaceSingleQuotes(m_manhours.getValue());
+
+	// get ticked workers
+	kaka = workerholder.getChildren().get(0).getChildren().get(0).getChildren().toArray();
+	workerstr = "";
+	for(int i=0;i<kaka.length;i++)
+	{
+		miks = luhand.saveCheckboxTicked(kaka[i]);
+		if(miks.length() > 0) workerstr += miks + "~";
+	}
+
+	// billing stuff
+	bflag = (m_billed.getSelectedIndex() == -1) ? "0" : m_billed.getSelectedIndex().toString();
+
+	DecimalFormat nf = new DecimalFormat("##.00");
+
+	lbrcost = (m_labor_cost.getValue() == null) ? "0" : nf.format(m_labor_cost.getValue());
+
+	lbrcnot = kiboo.replaceSingleQuotes(m_labor_cost_notes.getValue());
+
+	mobcost = (m_mobilization_cost.getValue() == null) ? "0" : nf.format(m_mobilization_cost.getValue());
+	mobcnot = kiboo.replaceSingleQuotes(m_mobilization_cost_notes.getValue());
+
+	rentcost = (m_rental_cost.getValue() == null) ? "0" : nf.format(m_rental_cost.getValue());
+	rentcnot = kiboo.replaceSingleQuotes(m_rental_cost_notes.getValue());
+
+	accdcost = (m_accomodation_cost.getValue() == null) ? "0" : nf.format(m_accomodation_cost.getValue());
+	accdcnot = kiboo.replaceSingleQuotes(m_accomodation_cost_notes.getValue());
+	
+	foldn = kiboo.replaceSingleQuotes(m_folderno_str.getValue());
+
+	sqlstm = "";
+	
+	switch(itype)
+	{
+		case 1: // update all
+	sqlstm = "update elb_jobschedules set customer_name='" + cname + "',address1='" + ad1 + "', address2='" + ad2 + "', address3='" + ad3 + "'," +
+	"contact_person='" + contp + "',telephone='" + telp + "',jobdescription='" + jobde + "',extranotes='" + jent + "'," +
+	"jobstartdate='" + jsdate + "',jobenddate='" + jedate + "',jobtype='" + jtype + "', manhours='" + mhors + "', " +
+	"contact_person2='" + contp2 + "', telephone2='" + telp2 + "', project_id='" + projid + "'," +
+	"site_name='" + sitna + "', site_address1='" + siad1 + "', site_address2='" + siad2 + "', site_address3='" + siad3 + "', " +
+	"jobworkers='" + workerstr + "', billed=" + bflag + ", " + 
+	"labor_cost=" + lbrcost + ", labor_cost_notes='" + lbrcnot + "', " +
+	"mobilization_cost=" + mobcost + ", mobilization_cost_notes='" + mobcnot + "', " +
+	"rental_cost=" + rentcost + ", rental_cost_notes='" + rentcnot + "', " +
+	"accomodation_cost=" + accdcost + ", accomodation_cost_notes='" + accdcnot + "', " +
+	"folderno_str='" + foldn + "', ar_code='" + arcod + "' " +
+	"where origid=" + global_selected_job;
+		break;
+
+		case 2: // only billing details
+	sqlstm = "update elb_jobschedules set billed=" + bflag + ", " +
+	"labor_cost=" + lbrcost + ", labor_cost_notes='" + lbrcnot + "', " +
+	"mobilization_cost=" + mobcost + ", mobilization_cost_notes='" + mobcnot + "', " +
+	"rental_cost=" + rentcost + ", rental_cost_notes='" + rentcnot + "', " +
+	"accomodation_cost=" + accdcost + ", accomodation_cost_notes='" + accdcnot + "', " +
+	"folderno_str='" + foldn + "', ar_code='" + arcod + "' " +
+	"where origid=" + global_selected_job;
+		break;
+	}
+
+	sqlhand.gpSqlExecuter(sqlstm);
+	listJobSchedules(last_list_type); // refresh
+	
+	// check if notified jobs supervisor
+	jrec = sqlhand.getJobSchedule_Rec(global_selected_job);
+	noti = jrec.get("notified");
+	tonotifi = false;
+	if(noti == null || noti == 0) tonotifi = true;
+
+	if(tonotifi)
+	{
+		sendJobNotificationEmail();
+	}
+}
+
+// itype: index to string-array below
+// String[] global_jobstats = {"PLANNING","CONFIRMED","DONE","CANCEL","POSTPONE"};
+void jobStatus(int itype)
+{
+	if(global_selected_job.equals("")) return;
+
+	sqlstm = "update elb_jobschedules set jobstatus='" + global_jobstats[itype] + "' where origid=" + global_selected_job;
+	sqlhand.gpSqlExecuter(sqlstm);
+	listJobSchedules(last_list_type); // refresh
+
+	switch(itype)
+	{
+		case 1: // confirmed
+		case 2: // done
+		case 3: // cancel
+			jobUpdateButtons(true);
+			break;
+	}
+}
+
+// itype: 1=delete job
+void adminFunc(int itype)
+{
+	if(global_selected_job.equals("")) return;
+	
+	switch(itype)
+	{
+		case 1:
+			if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+			sqlstm = "delete from elb_jobschedules where origid=" + global_selected_job;
+			sqlhand.gpSqlExecuter(sqlstm);
+
+			// delete the attached docs
+			docul = SAMPLINGJOB_PREFIX + global_selected_job;
+			sqlstm = "delete from DocumentTable where docu_link='" + docul + "'";
+			dmshand.dmsgpSqlExecuter(sqlstm);
+
+			// delete all check-lists
+			sqlstm = "delete from elb_checklist where parent_id='" + docul + "'";
+			sqlhand.gpSqlExecuter(sqlstm);
+
+			workarea.setVisible(false); // hide the workarea .. 
+			listJobSchedules(last_list_type); // refresh
+			break;
+	}
+}
+
+void copyClientAddressToSite()
+{
+	m_site_address1.setValue(m_address1.getValue());
+	m_site_address2.setValue(m_address2.getValue());
+	m_site_address3.setValue(m_address3.getValue());
+}
+
+// panel onClose .. delete previous XML file
+void dkk()
+{
+	deletePreviousFile();
+}
+
+// Check-list stuff - can be used in other mods - chg vars accordingly
+// TODO: convert into byte-codes
+//SAMPLINGJOB_PREFIX
+
+selected_checklist_id = "";
+selected_checkitem = null;
+last_checkitem = null;
+
+void showCheckItems()
+{
+	// remove previous chk-items grid if any
+	if(checkitems_holder.getFellowIfAny("checkitems_grid") != null) checkitems_grid.setParent(null);
+
+	// create the grid
+	thegrid = new Grid();
+	thegrid.setId("checkitems_grid");
+
+	gridrows = new Rows();
+	gridrows.setId("checkitems_rows");
+	gridrows.setParent(thegrid);
+
+	ckrec = sqlhand.getChecklist_Rec(selected_checklist_id);
+
+	if(ckrec != null)
+	{
+		// lets draw them checkboxes is available
+		String[] chkitems = sqlhand.clobToString(ckrec.get("list_items")).split("~");
+		ticked = sqlhand.clobToString(ckrec.get("ticked_items"));
+
+		for(i=0; i<chkitems.length; i++)
+		{
+			if(!chkitems[i].equals(""))
+			{
+			chki_row = gridhand.gridMakeRow("","","",gridrows);
+			ckbox = new Checkbox();
+			ckbox.setStyle("font-size:9px");
+			ckbox.setLabel(chkitems[i]);
+			ckbox.setParent(chki_row);
+			ckbox.addEventListener("onFocus", new chkitems_onClick());
+
+			if(ticked.indexOf(chkitems[i]) != -1) ckbox.setChecked(true);
+			}
+		}
+	}
+
+	thegrid.setParent(checkitems_holder);
+}
+
+class chklistlb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_checklist_id = lbhand.getListcellItemLabel(selitem,0);
+		c_list_name.setValue(lbhand.getListcellItemLabel(selitem,1));
+		showCheckItems();
+	}
+}
+
+void showCheckList(Div iholder, String ichklst_id, String iparentid)
+{
+	Object[] chklistlb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("List names",true,"list_name",1),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+
+	selected_checklist_id = ""; // reset
+	selected_checkitem = null;
+	last_checkitem = null;
+	c_list_name.setValue("");
+	c_item_input.setValue("");
+
+	// remove previous chk-items grid if any
+	if(checkitems_holder.getFellowIfAny("checkitems_grid") != null) checkitems_grid.setParent(null);
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select origid,list_name,username from elb_checklist where parent_id='" + iparentid + "'";
+
+	Listbox newlb = lbhand.makeVWListbox_onDB(iholder,chklistlb_headers,ichklst_id,5,sql,sqlstm);
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", new chklistlb_onSelect());
+	sql.close();
+}
+
+// itype: 1=new checklist, 2=delete, 3=save check-items and list-name
+void checkListFunc(int itype)
+{
+	if(global_selected_job.equals("")) return;
+
+	chkid = SAMPLINGJOB_PREFIX + global_selected_job;
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+
+	switch(itype)
+	{
+		case 1:
+			sqlstm = "insert into elb_checklist (datecreated,parent_id,username,list_name,list_items,ticked_items) values " +
+			"('" + todate + "','" + chkid + "','" + useraccessobj.username + "','NEW LIST','','')";
+			sqlhand.gpSqlExecuter(sqlstm);
+			break;
+
+		case 2:
+			if(selected_checklist_id.equals("")) return;
+			if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+			sqlstm = "delete from elb_checklist where origid=" + selected_checklist_id;
+			sqlhand.gpSqlExecuter(sqlstm);
+			checkitems_grid.setParent(null); // remove check-items grid
+			break;
+
+		case 3:
+			if(selected_checklist_id.equals("")) return;
+
+			rowlist = checkitems_rows.getChildren().toArray();
+			chkistr = "";
+			tickistr = "";
+			for(i=0;i<rowlist.length;i++)
+			{
+				mi = rowlist[i].getChildren().get(0);
+				milab = kiboo.replaceSingleQuotes(mi.getLabel().replaceAll("~","-"));
+				chkistr += milab + "~";
+
+				if(mi.isChecked()) tickistr += milab + "~";
+			}
+
+			listname = kiboo.replaceSingleQuotes(c_list_name.getValue().trim());
+
+			sqlstm = "update elb_checklist set list_name='" + listname + "',list_items='" + chkistr + "', ticked_items='" + tickistr + "' " + 
+			"where origid=" + selected_checklist_id;
+			sqlhand.gpSqlExecuter(sqlstm);
+			break;
+	}
+	showCheckList(checklist_holder,"checklist_lb",chkid); // refresh
+}
+
+class chkitems_onClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getTarget();
+		if(selitem == last_checkitem) return;
+		last_checkitem = selitem;
+		c_item_input.setValue(selitem.getLabel());
+	}
+}
+
+// itype: 1=update, 2=new, 3=delete, 4=import from template
+void checkItemsFunc(int itype)
+{
+	if(selected_checklist_id.equals("")) return;
+
+	clearme = false;
+	istri = c_item_input.getValue().trim();
+
+	switch(itype)
+	{
+		case 1: // update item
+			if(last_checkitem == null) return;
+			if(istri.equals("")) return;
+			last_checkitem.setLabel(istri);
+			break;
+
+		case 2: // new item
+			if(istri.equals("")) return;
+			chki_row = gridhand.gridMakeRow("","","",checkitems_rows);
+			ckbox = new Checkbox();
+			ckbox.setStyle("font-size:9px");
+			ckbox.setLabel(istri);
+			ckbox.setParent(chki_row);
+			ckbox.addEventListener("onFocus", new chkitems_onClick());
+
+			clearme = true;
+			break;
+
+		case 3: // delete item
+			if(last_checkitem == null) return;
+			granpa = last_checkitem.getParent();
+			last_checkitem.setParent(null);
+			granpa.setParent(null);
+			clearme = true;
+			break;
+			
+		case 4: // import from check-list template
+			checklist_templates_popup.close();
+
+			if(selected_checklist_template.equals("")) break;
+			cltemp = sqlhand.getChecklistTemplate_Rec(selected_checklist_template);
+			if(cltemp == null) return;
+
+			// lets draw them checkboxes if available
+			String[] chkitems = sqlhand.clobToString(cltemp.get("list_items")).split("~");
+
+			for(i=0; i<chkitems.length; i++)
+			{
+				if(!chkitems[i].equals(""))
+				{
+				chki_row = gridhand.gridMakeRow("","","",checkitems_rows);
+				ckbox = new Checkbox();
+				ckbox.setStyle("font-size:9px");
+				ckbox.setLabel(chkitems[i]);
+				ckbox.setParent(chki_row);
+				ckbox.addEventListener("onFocus", new chkitems_onClick());
+
+				//if(ticked.indexOf(chkitems[i]) != -1) ckbox.setChecked(true);
+				}
+			}
+
+			break;
+	}
+	
+	if(clearme)
+	{
+		last_checkitem = null;
+		c_item_input.setValue("");
+	}
+
+}
+
+// ENDOF Check-list stuff - can be used in other mods
+
+selected_checklist_template = "";
+
+class chklisttemplatelb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_checklist_template = lbhand.getListcellItemLabel(selitem,0);
+		//c_list_name.setValue(lbhand.getListcellItemLabel(selitem,1));
+	}
+}
+
+// onOpen for checklist_templates_popup - show the templates
+void showCheckListTemplates()
+{
+	Object[] chklisttmplb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("Check-list templates",true,"list_name",1),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+
+	// remove previous chk-items grid if any
+	//if(checkitems_holder.getFellowIfAny("checkitems_grid") != null) checkitems_grid.setParent(null);
+
+	selected_checklist_template = "";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select origid,list_name,username from elb_checklist_templates order by origid";
+
+	Listbox newlb = lbhand.makeVWListbox_onDB(chklisttemplates_holder,chklisttmplb_headers,"checklist_temp_lb",15,sql,sqlstm);
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", new chklisttemplatelb_onSelect());
+	sql.close();
+}
+
+void runCheckListTemplate_Manager()
+{
+	theparam = "";
+	uniqid = kiboo.makeRandomId("clt");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","alsglobal/checkListTemplate_v1.zul", uniqid, theparam, useraccessobj);
+}
+
+Component getPageFellow(String ipageid, String icompid)
+{
+	return self.getDesktop().getPage(ipageid).getFellowIfAny(icompid);
+}
+
+void classii()
+{
+	alert("clasiii");
+}
+
+void testme()
+{
+	mclb = getPageFellow("searchcust_ui","selectcustomer_popup");
+	woll = self.getDesktop().getPage("searchcust_ui").getZScriptVariable("newvar");
+	//alert(woll);
+	woll = "testing newvar";
+	//alert(woll);
+
+	mclb.open(assign_customer_btn);
+}
+
+// fill project_id combobox with distinct project_id from table .. discard null and blank
+// in-time these combobox will be choked full --
+// m_site_name , m_project_id
+// itype: 1=project_id, 2=site_name
+void fill_comboitems(int itype)
+{
+	sqlstm = "select distinct project_id from elb_jobschedules";
+	fieldstr = "project_id";
+	theparent = m_project_id; // HARDCODED for UI-codes below
+
+	switch(itype)
+	{
+		case 2:
+			sqlstm = "select distinct site_name from elb_jobschedules";
+			fieldstr = "site_name";
+			theparent = m_site_name;
+			break;
+	}
+
+	pirecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(pirecs.size() == 0) return;
+	if(pirecs == null) return;
+
+	for(dpi : pirecs)
+	{
+		pistr = dpi.get(fieldstr);
+		if(pistr != null)
+		{
+			if(!pistr.trim().equals(""))
+			{
+				Comboitem icomb = new Comboitem(pistr);
+				icomb.setParent(theparent);
+			}
+		}
+	}
+}
+
+void exportCheckList()
+{
+	exportListboxExcel(jobs_holder,"jobs_lb","samplingCheckList.xls",
+	jobs_headers,"SamplingJobs",kasiexport_holder,65);
+}
+
+]]>
+</zscript>
+
+<!-- check-list templates popup to let user select 1 -->
+<popup id="checklist_templates_popup" onOpen="showCheckListTemplates()">
+<groupbox mold="3d" width="350px">
+	<div id="chklisttemplates_holder" />
+	<separator height="3px" />
+	<button label="Import" style="font-size:9px" onClick="checkItemsFunc(4)" />
+</groupbox>
+</popup>
+<!-- ENDOF check-list templates popup to let user select 1 -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(SAMPLINGJOB_PREFIX, global_selected_job)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+<!-- ENDOF update file description popup -->
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(SAMPLINGJOB_PREFIX, global_selected_job)"  style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+<!-- ENDOF upload a file popup -->
+
+<!-- select customer popup , to be used by searchSelectCustomer_v1.zs -->
+<popup id="selectcustomer_popup">
+<div style="padding:3px">
+<hbox>
+<groupbox width="400px">
+	<caption label="Search" />
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="cust_search_tb" width="150px" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="searchCustomers(local_callme)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="foundcustomer_holder" />
+</groupbox>
+<groupbox id="custinfo_gb" width="300px" >
+	<caption label="Customer info" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Company" style="font-size:9px" />
+			<label id="cfind_company_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address1" style="font-size:9px" />
+			<label id="cfind_address1_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address2" style="font-size:9px" />
+			<label id="cfind_address2_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address3" style="font-size:9px" />
+			<label id="cfind_address3_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact " style="font-size:9px" />
+			<label id="cfind_contact_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Email" style="font-size:9px" />
+			<label id="cfind_email_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Tel" style="font-size:9px" />
+			<label id="cfind_tel_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Fax" style="font-size:9px" />
+			<label id="cfind_fax_lbl" style="font-size:9px" />
+		</row>
+		</rows>
+	</grid>
+</groupbox>
+
+</hbox>
+<separator height="3px" />
+<button label="X Close" style="font-size:9px" onClick="selectcustomer_popup.close()" />
+</div>
+</popup>
+<!-- ENDOF select customer popup -->
+
+<!-- style shit for timeline -->
+<style>
+.timeline-container, .timeline-band-layer-inner {
+font-size:10px;
+font-family:"Arial";
+}
+.timeline-event-bubble-title, .timeline-event-bubble-body,
+.timeline-event-bubble-time, .timeline-event-bubble-body {
+font-size:10px;
+font-family:"Arial";
+}
+</style>
+
+<div width="1200px">
+<panel id="jobsched_panel" title="${MOD_TITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" onClose="dkk()" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<!-- <button label="testme" onClick="testme()" /> -->
+
+<hbox>
+
+<!-- some color legends -->
+<vbox>
+	Legends:
+	<div style="background:${PLANNING_BARCOLOR};padding:2px">PLANNING</div>
+	<div style="background:${CONFIRMED_BARCOLOR};padding:2px">CONFIRMED</div>
+
+	<div style="background:${POSTPONE_BARCOLOR};padding:2px">POSTPONE</div>
+	<div style="background:${DONE_BARCOLOR};padding:2px">DONE</div>
+	<div style="background:${CANCEL_BARCOLOR};padding:2px">CANCEL</div>
+</vbox>
+
+<timeline height="400px" width="1110px">
+    <bandinfo width="70%" id="b1" intervalUnit="day" intervalPixels="40" highlight="true" >
+    </bandinfo>
+    <bandinfo width="30%" id="b2" intervalUnit="month" intervalPixels="200" syncWith="b1" >
+    </bandinfo>
+</timeline>
+
+</hbox>
+
+<label id="debugg" />
+
+<hbox>
+<div> <!-- jobs listing -->
+<groupbox mold="3d" width="650px">
+<grid>
+	<rows>
+		<row>
+			<label value="Start date" style="font-size:9px" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			<label value="End date" style="font-size:9px" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row spans=",2,">
+			<label value="Search" style="font-size:9px" />
+			<textbox id="searhtxt_tb" width="99%" style="font-size:9px" />
+			<button label="Load" style="font-size:9px" onClick="listJobSchedules(1)" />
+		</row>
+		<row>
+			<label value="Job type" style="font-size:9px" />
+			<hbox>
+				<listbox id="jobtype_dd" style="font-size:9px" mold="select" />
+				<button label="Dig" style="font-size:9px" onClick="listJobSchedules(2)" />
+			</hbox>
+			<label value="Status" style="font-size:9px" />
+			<hbox>
+				<listbox id="jobstatus_dd" style="font-size:9px" mold="select" />
+				<button label="Dig" style="font-size:9px" onClick="listJobSchedules(3)" />
+			</hbox>
+		</row>
+		<row spans=",3">
+			<label value="Staff" style="font-size:9px" />
+			<hbox>
+				<listbox id="worker_dd" style="font-size:9px" mold="select" />
+				<button label="Dig" style="font-size:9px" onClick="listJobSchedules(4)" />
+			</hbox>
+		</row>
+		<row spans="4">
+			<label style="font-size:8px">
+			(specify start and end date for all searches)
+			</label>
+		</row>
+	</rows>
+</grid>
+</groupbox>
+
+<groupbox mold="3d" width="650px">
+
+<hbox>
+	<button label="New job request" style="font-size:9px" onClick="insertNewJob()" />
+	<button id="confirm_btn" label="Confirm job" style="font-size:9px" onClick="jobStatus(1)" />
+	<button id="jobdone_btn" label="Job done" style="font-size:9px" onClick="jobStatus(2)" />
+	<button id="postpone_btn" label="Postpone" style="font-size:9px" onClick="jobStatus(4)" />
+	<button id="cancel_btn" label="Cancel job" style="font-size:9px" onClick="jobStatus(3)" />
+	<button id="exportchklist_btn" label="Export checklist" style="font-size:9px" onClick="exportCheckList()" />
+</hbox>
+
+<separator height="2px" />
+<div id="adminstuff" style="background:#a52a2a;padding:2px" visible="false">
+	<button label="set planning" style="font-size:9px" onClick="jobStatus(0)" />
+	<button label="Delete job" style="font-size:9px" onClick="adminFunc(1)" />
+</div>
+
+<separator height="3px" />
+<div id="jobs_holder" />
+
+</groupbox>
+
+</div> <!-- ENDOF jobs listing -->
+
+<div id="workarea" width="540px" visible="false"> <!-- job meta workarea -->
+
+<div style="padding:2px;background:#7f7f7f">
+<label id="jobtitle_lbl" style="color:#ffffff" value="Sampling job:" />
+</div>
+<separator height="3px" />
+
+<tabbox mold="accordion">
+<tabs>
+	<tab id="tab1" label="Client information" />
+	<tab id="tab2" label="Location/Job description/Sampling staff" />
+	<tab id="tab3" label="Supporting documents,emails and etc" />
+	<tab id="tab4" label="Check list" />
+	<tab id="billingtab" label="Billing details" visible="false" />
+</tabs>
+<tabpanels>
+
+<tabpanel> <!-- client information -->
+<grid>
+	<rows>
+		<row spans=",2,">
+			<label value="AR Code" style="font-size:9px" />
+			<label id="m_ar_code" style="font-size:9px" />
+			<button id="assign_customer_btn" label="Assign client" style="font-size:9px" onClick="selectcustomer_popup.open(self)" /> 
+			<!-- onClick="selectcustomer_popup.open(self)" /> -->
+		</row>
+		<row spans=",3">
+			<label value="Client name" style="font-size:9px" />
+			<textbox id="m_customer_name" width="99%" style="font-size:9px" />
+		</row>
+		<row spans=",3">
+			<label value="Address1" style="font-size:9px" />
+			<textbox id="m_address1" width="99%" style="font-size:9px" />
+		</row>
+		<row spans=",3">
+			<label value="Address2" style="font-size:9px" />
+			<textbox id="m_address2" width="99%" style="font-size:9px" />
+		</row>
+		<row spans=",3">
+			<label value="Address3" style="font-size:9px" />
+			<textbox id="m_address3" width="99%" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact person 1" style="font-size:9px" />
+			<textbox id="m_contact_person" width="99%" style="font-size:9px" />
+			<label value="Telephone 1" style="font-size:9px" />
+			<textbox id="m_telephone" width="99%" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact person 2" style="font-size:9px" />
+			<textbox id="m_contact_person2" width="99%" style="font-size:9px" />
+			<label value="Telephone 2" style="font-size:9px" />
+			<textbox id="m_telephone2" width="99%" style="font-size:9px" />
+		</row>
+
+	</rows>
+</grid>
+</tabpanel> <!-- ENDOF client information -->
+
+<tabpanel> <!-- location/job description -->
+<grid>
+	<rows>
+		<row>
+			<label value="Project name" style="font-size:9px" />
+			<combobox id="m_project_id" width="90%" style="font-size:9px" />
+			<label value="Location name" style="font-size:9px" />
+			<combobox id="m_site_name" width="90%" style="font-size:9px" />
+		</row>
+		<row spans="4">
+			<button id="copyaddress_btn" label="Copy address" style="font-size:9px" onClick="copyClientAddressToSite()" />
+		</row>
+		<row spans=",3">
+			<label value="LocAddress1" style="font-size:9px" />
+			<textbox id="m_site_address1" width="99%" style="font-size:9px" />
+		</row>
+		<row spans=",3">
+			<label value="LocAddress2" style="font-size:9px" />
+			<textbox id="m_site_address2" width="99%" style="font-size:9px" />
+		</row>
+		<row spans=",3">
+			<label value="LocAddress3" style="font-size:9px" />
+			<textbox id="m_site_address3" width="99%" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+
+<grid>
+	<rows>
+		<row spans=",3">
+			<label value="Job description" style="font-size:9px" />
+			<textbox id="m_jobdescription" width="99%" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Job start" style="font-size:9px" />
+			<datebox id="m_jobstartdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			<label value="Job end" style="font-size:9px" />
+			<datebox id="m_jobenddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row>
+			<label value="Job time" style="font-size:9px" />
+			<hbox>
+				<textbox id="m_manhours" style="font-size:9px" />
+				<label value="days" style="font-size:9px" />
+			</hbox>
+			<label value="Job type" style="font-size:9px" />
+			<listbox id="m_jobtype" style="font-size:9px" mold="select" />
+			<!--
+			<label value="Status" style="font-size:9px" />
+			<listbox id="m_jobstatus" style="font-size:9px" mold="select" />
+			-->
+		</row>
+		<row spans=",3">
+			<label value="Extra notes" style="font-size:9px" />
+			<textbox id="m_extranotes" multiline="true" width="99%" height="60px" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+
+<div style="background:#7f7f7f;padding:2px">
+	<label value="Sampling staff" style="color:#ffffff" />
+</div>
+<div id="workerholder" width="540px" />
+
+</tabpanel> <!-- ENDOF location/job description -->
+
+<tabpanel> <!-- supporting docs -->
+<hbox>
+	<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(global_selected_job)" />
+	<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+	<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+	<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile(SAMPLINGJOB_PREFIX, global_selected_job)" />
+</hbox>
+<separator height="3px" />
+<div id="documents_holder" />
+
+</tabpanel> <!-- ENDOF supporting docs -->
+
+<tabpanel> <!-- check-list -->
+<div>
+	<hbox>
+		<button label="New checklist" style="font-size:9px" onClick="checkListFunc(1)" />
+		<button label="Delete" style="font-size:9px" onClick="checkListFunc(2)" />
+		<button id="checklistmanager_btn" label="Check-list template manager" style="font-size:9px" onClick="runCheckListTemplate_Manager()" />
+	</hbox>
+	<separator height="2px" />
+	<div id="checklist_holder" />
+</div>
+<separator height="3px" />
+
+<div>
+<grid>
+	<rows>
+		<row spans=",2">
+			<label value="Name" style="font-size:9px" />
+			<textbox id="c_list_name" width="99%" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Item" style="font-size:9px" />
+			<textbox id="c_item_input" style="font-size:9px" multiline="true" width="99%" height="30px" />
+			<hbox>
+				<button label="*" style="font-weight:bold" onClick="checkItemsFunc(1)" />
+				<button label="+" style="font-weight:bold" onClick="checkItemsFunc(2)" />
+				<button label="-" style="font-weight:bold" onClick="checkItemsFunc(3)" />
+			</hbox>
+		</row>
+		<row spans="3">
+			<!-- <listbox id="checklist_items" checkmark="true" multiple="true" style="font-size:9px" onSelect="checkitems_onselect(self)" /> -->
+			<div id="checkitems_holder" />
+		</row>
+		<row spans="3">
+			<hbox>
+				<button label="Import template" style="font-size:9px" onClick="checklist_templates_popup.open(self)" />
+				<button label="Save list.." style="font-size:9px" onClick="checkListFunc(3)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+
+</div>
+
+</tabpanel> <!-- ENDOF check-list -->
+
+<tabpanel> <!-- billing details -->
+<grid>
+	<rows>
+		<row>
+			<label value="Job is billed" style="font-size:9px" />
+			<radiogroup id="m_billed">
+			    <radio id="ra2" label="NO" style="font-size:9px" />
+   				<radio id="ra1" label="YES" style="font-size:9px" />
+			</radiogroup>
+			<label value="Folder No." style="font-size:9px" />
+			<textbox id="m_folderno_str" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Labor cost" style="font-size:9px" />
+			<decimalbox id="m_labor_cost" style="font-size:9px" />
+			<label value="Cost notes" style="font-size:9px" />
+			<textbox id="m_labor_cost_notes" style="font-size:9px" multiline="true" width="99%" height="30px" />
+		</row>
+		<row>
+			<label value="Rental cost" style="font-size:9px" />
+			<decimalbox id="m_rental_cost" style="font-size:9px" />
+			<label value="Cost notes" style="font-size:9px" />
+			<textbox id="m_rental_cost_notes" style="font-size:9px" multiline="true" width="99%" height="30px" />
+		</row>
+		<row>
+			<label value="Mobilization cost" style="font-size:9px" />
+			<decimalbox id="m_mobilization_cost" style="font-size:9px" />
+			<label value="Cost notes" style="font-size:9px" />
+			<textbox id="m_mobilization_cost_notes" style="font-size:9px" multiline="true" width="99%" height="30px" />
+		</row>
+		<row>
+			<label value="Accomodation cost" style="font-size:9px" />
+			<decimalbox id="m_accomodation_cost" style="font-size:9px" />
+			<label value="Cost notes" style="font-size:9px" />
+			<textbox id="m_accomodation_cost_notes" style="font-size:9px" multiline="true" width="99%" height="30px" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button label="Update billing details ONLY" style="font-size:9px" onClick="updateJobSchedule(2)" />
+
+</tabpanel> <!-- ENDOF billing details -->
+
+</tabpanels>
+</tabbox>
+
+<separator height="3px" />
+<hbox>
+	<button id="update_btn" label="Update job details.." onClick="updateJobSchedule(1)" />
+	<button label="Resend notification email to supervisors" onClick="sendJobNotificationEmail()" />
+</hbox>
+
+</div> <!-- ENDOF job meta workarea -->
+
+</hbox>
+
+<div id="kasiexport_holder" />
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(startdate);
+kiboo.setTodayDatebox(enddate);
+
+luhand.populateListbox_ByLookup(jobtype_dd, "SAMPLINGJOB_TYPES", 2);
+luhand.populateListbox_ByLookup(jobstatus_dd, "SAMPLINGJOB_STATUS", 2);
+luhand.populateListbox_ByLookup(m_jobtype, "SAMPLINGJOB_TYPES", 2);
+//luhand.populateListbox_ByLookup(m_jobstatus, "SAMPLINGJOB_STATUS", 2);
+luhand.populateListbox_ByLookup(worker_dd, "SAMPLINGJOB_PEOPLE", 2);
+
+luhand.drawMultiColumnTickboxes("SAMPLINGJOB_PEOPLE",workerholder,"workers_grid",4,"font-size:9px");
+
+// fill-up project_id and site_name combo-box
+fill_comboitems(1);
+fill_comboitems(2);
+
+controlButtons(true); // default disable all control buttons
+// enable control buttons for users def
+if(sechand.allowedUser(useraccessobj.username,"SAMPLINGJOB_ADMIN"))
+{
+	controlButtons(false);
+	billingtab.setVisible(true);
+}
+
+if(useraccessobj.accesslevel > 8)
+{
+	adminstuff.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

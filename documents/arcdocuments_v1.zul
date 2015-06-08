@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="arcdocu_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Archive Documents";
+MYVERSION = "v0.1";
+/*
+Title		: archive documents viewer/searcher
+Written by	: Victor Wong
+
+**NOTES**
+
+Uses DocuArchives to search/view documents from 2011-12-31 backwards
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+glob_selected_origid = "";
+glob_selected_folderstr = "";
+selected_file_id = "";
+
+class doculb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = docu_lb.getSelectedItem();
+		selected_file_id = lbhand.getListcellItemLabel(selitem,0);
+	}
+}
+
+Object[] docarc_lb_headers = {
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("File",true,"120px"),
+	new listboxHeaderWidthObj("Description",true,""),
+	new listboxHeaderWidthObj("Uploader",true,"80px"),
+};
+
+void showArchiveDocumentsList(String iwhat)
+{
+	adms = sqlhand.archivedocs_Sql();
+	if(adms ==  null) { guihand.showMessageBox("ERR: Cannot access documents archive database.."); return; }
+
+	newlb = lbhand.makeVWListbox_Width(docu_holder,docarc_lb_headers,"docu_lb", 20);
+	doclink = "DOCS" + iwhat; // default since the beginning of time..
+
+	sqlstm = "select origid, file_title, file_description, datecreated, username " +
+	"from documenttable where docu_link='" + doclink + "' order by origid";
+
+	therecs = adms.rows(sqlstm);
+	adms.close();
+	if(therecs.size() == 0) { return; }
+	newlb.addEventListener("onSelect", new doculb_Listener());
+	for(dpi : therecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(kiboo.checkNullString(dpi.get("file_title")));
+		kabom.add(kiboo.checkNullString(dpi.get("file_description")));
+		kabom.add(dpi.get("username"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,SAMPLES_PREFIX,"");
+	}
+}
+
+class folderlb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = folders_lb.getSelectedItem();
+		glob_selected_folder = lbhand.getListcellItemLabel(selitem,0);
+		glob_selected_folderstr = lbhand.getListcellItemLabel(selitem,2);
+		
+		showArchiveDocumentsList(glob_selected_folderstr);
+	}
+}
+
+Object[] folders_lb_headers = {
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Folder",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+};
+
+// All searches by start-end date
+// itype: 1=by customer, 2=by folder, 3=by sample-id
+void loadFoldersList(int itype)
+{
+	last_foldersearch_type = itype;
+
+	sdate = kiboo.getDateFromDatebox(startdate);
+    edate = kiboo.getDateFromDatebox(enddate);
+	searchtext = kiboo.replaceSingleQuotes(customer_tb.getValue());
+	byfold = kiboo.replaceSingleQuotes(byfolder_tb.getValue());
+	bysamp = kiboo.replaceSingleQuotes(bysampleid_tb.getValue());
+	smarking = kiboo.replaceSingleQuotes(bysampmarking_tb.getValue());
+
+	sqlstm_head = "select top 300 jf.origid, jf.ar_code, jf.datecreated,jf.folderno_str, " + 
+	"cust.customer_name, csci.customer_name as cashcustomer " +
+	"from jobfolders jf " +
+	"left join customer cust on cust.ar_code = jf.ar_code " +
+	"left join jobsamples js on js.jobfolders_id = jf.origid " +
+	"left join cashsales_customerinfo csci on csci.folderno_str = jf.folderno_str " +
+	"where jf.deleted=0 ";
+
+	sqlstm_foot = "group by jf.origid, jf.ar_code, jf.datecreated, jf.folderno_str, cust.customer_name, csci.customer_name order by jf.datecreated";
+	//sqlstm_foot = " order by jf.datecreated";
+
+	//sqlstm_foot = "order by jf.datecreated desc";
+
+	bystext = "";
+	bydate = "and jf.datecreated between '" + sdate + "' and '" + edate + "' ";
+	switch(itype)
+	{
+		case 2:
+			bydate = " ";
+			bystext = "and jf.folderno_str like '%" + byfold + "%' ";
+			break;
+
+		case 3:
+			bydate = " ";		
+			bystext = "and js.sampleid_str like '_________%" + bysamp + "%' ";
+			break;
+
+		case 8:
+			bystext = "and js.samplemarking like '%" + smarking + "%' ";
+			break;
+
+		default:
+			if(!searchtext.equals("")) bystext = "and (cust.customer_name like '%" + searchtext + "%' " + 
+			"or csci.customer_name like '%" + searchtext + "%') ";
+			break;
+	}
+
+	newlb = lbhand.makeVWListbox_Width(folders_holder,folders_lb_headers,"folders_lb", 30);
+
+	sqlstm = sqlstm_head + bydate + bystext + sqlstm_foot;
+	therecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(therecs.size() == 0) { return; }
+	
+	newlb.addEventListener("onSelect", new folderlb_Listener());
+	
+	for(dpi : therecs)
+	{
+		try
+		{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(kiboo.checkNullString(dpi.get("folderno_str")));
+		compname = (dpi.get("customer_name") == null) ? dpi.get("cashcustomer") : 
+			((dpi.get("customer_name").equals("CASH ACCOUNT")) ? "CshAcct: " + dpi.get("cashcustomer") : dpi.get("customer_name")) ;
+		kabom.add(compname);
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,SAMPLES_PREFIX,"");
+		}
+		catch (NullPointerException e) {}
+	}
+}
+
+// itype: 1=view document
+void generalFuncs(int itype)
+{
+	switch(itype)
+	{
+		case 1:
+			if(selected_file_id.equals("")) return;
+			theparam = "docid=" + selected_file_id;
+			uniqid = kiboo.makeRandomId("vaf");
+			guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/view_archivefile.zul", uniqid, theparam, useraccessobj);
+			break;
+	}
+
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="arcdocu_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox>
+
+<!-- search criteria -->
+<vbox>
+	<grid width="300px">
+		<rows>
+			<row>
+				<label value="Start date" style="font-size:9px" />
+				<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+				<label value="End date" style="font-size:9px" />
+				<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			</row>
+			<row spans=",2,">
+				<label value="Customer" style="font-size:9px" />
+				<textbox id="customer_tb" width="99%" style="font-size:9px" />
+				<button label="Find" style="font-size:9px" onClick="loadFoldersList(1)" />
+			</row>
+			<row spans="4">
+				<label style="font-size:9px">
+				(Search for documents uploaded from 2010 till 2011 ONLY)
+				</label>
+			</row>
+		</rows>
+	</grid>
+
+	<grid width="300px">
+		<rows>
+			<row>
+				<label value="By folder" style="font-size:9px" />
+				<textbox id="byfolder_tb" style="font-size:9px" />
+				<button label="Dig" style="font-size:9px" onClick="loadFoldersList(2)" />
+			</row>
+			<row>
+				<label value="By sample.ID" style="font-size:9px" />
+				<textbox id="bysampleid_tb" style="font-size:9px" />
+				<button label="Dig" style="font-size:9px" onClick="loadFoldersList(3)" />
+			</row>
+		</rows>
+	</grid>
+
+	<grid>
+		<rows>
+			<row>
+				<label value="Sample marking" style="font-size:9px" />
+				<textbox id="bysampmarking_tb" style="font-size:9px" width="99%" />
+				<button label="Find" style="font-size:9px" onClick="loadFoldersList(8)" />
+			</row>
+		</rows>
+	</grid>
+</vbox>
+<!-- ENDOF search criteria -->
+
+<groupbox mold="3d">
+	<hbox>
+		<div id="folders_holder" width="450px" />
+
+		<vbox>
+			<div style="background:#75507b;padding:2px">
+				<button label="View document" style="font-size:9px" onClick="generalFuncs(1)" />
+			</div>
+			<div id="docu_holder" />
+		</vbox>
+	</hbox>
+</groupbox>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

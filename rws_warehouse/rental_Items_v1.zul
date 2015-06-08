@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rentalitems_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/showBOM_gen_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Rental Items/Equipments Management";
+MYVERSION = "v0.1.2";
+MYPANEL = "rentalipan";
+/*
+Title		: Rental Items management (desktop/laptop/monitors)
+Written by	: Victor Wong
+Dated		: 01/08/2013
+
+**NOTES**
+Uses stockmasterdetails but with diff stock_cat
+stkm.IsActive (bit) = set 1 to make things rentable , to use in BOM module too
+
+10/03/2014: optimize some codes
+
+*/
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+WORKAREA_BG = "#555753";
+HOLDERS_WIDTH = "650px";
+
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd");
+DecimalFormat nf = new DecimalFormat("#");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+global_selected_listitem = null;
+global_sel_stockcat = global_selected_stockcode = "";
+
+last_ref_stockcat = "";
+last_ref_type = 0;
+
+void populateItemMetadata(String istkcode)
+{
+	skr = getStockItem_rec(istkcode);
+	if(skr == null) { guihand.showMessageBox("ERR: Cannot access database.."); return; }
+
+	Object[] ob = { stock_code, entrydate, brandname, m_description, description2, qty_in_stock, qty_reorder,
+	last_purchase_date, last_purchase_price, palletno, itemgrade, field1_hdd, field2_ram, field3_opt, field4_osver,
+	field5_ossn, warehousecode, supplier_part_number };
+
+	String[] fl = { "Stock_Code", "EntryDate", "BrandName", "Description", "Description2", "Qty_In_Stock", "Qty_Reorder",
+	"Last_Purchase_Date", "Last_Purchase_Price", "palletno", "itemgrade", "NewField1", "NewField2", "NewField3", "NewField4",
+	"NewField5", "WarehouseCode", "Supplier_Part_Number" };
+
+	populateUI_Data(ob,fl,skr);
+
+	kisa = (skr.get("IsActive") == null) ? "NO" : ( (skr.get("IsActive") == true) ? "YES" : "NO" );
+	isactive.setValue(kisa);
+	//stockheader.setValue("Part Details: " + skr.get("Stock_Code"));
+
+	bomid = (skr.get("bom_id") != null) ? BOM_PREFIX + skr.get("bom_id").toString() : "";
+	bom_id.setValue(bomid);
+	bom_date.setValue( kiboo.checkNullDate(skr.get("bom_date"),"") );
+	fillDocumentsList(documents_holder,PARTS_PREFIX,istkcode);
+	workarea.setVisible(true);
+}
+
+Object[] partslb_headers = 
+{
+	new listboxHeaderWidthObj("StockCode",true,""),
+	new listboxHeaderWidthObj("S/Num",true,"50px"),
+	new listboxHeaderWidthObj("Brand",true,"60px"),
+	new listboxHeaderWidthObj("Model",true,""),
+	new listboxHeaderWidthObj("Grd",true,"30px"),
+	new listboxHeaderWidthObj("Stat",true,"30px"),
+	new listboxHeaderWidthObj("Rnta",true,"30px"),
+	new listboxHeaderWidthObj("BOM",true,"30px"),
+	new listboxHeaderWidthObj("WH",true,"30px"),
+	new listboxHeaderWidthObj("PO",true,"30px"),
+};
+
+class partslb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		global_selected_stockcode = lbhand.getListcellItemLabel(isel,0);
+		global_selected_listitem = isel;
+		populateItemMetadata(global_selected_stockcode);
+		
+		itml = isel.getParent().getId();
+		itml = itml.substring(0,itml.length()-3);
+		itemtype_lbl.setValue(itml);
+		global_sel_stockcat = itml; 
+	}
+}
+partsonclik = new partslb_onSelect();
+
+// knock-off from inventoryManager_v1.zul -- chopped some stuff
+// itype: 0=list by stockcat, 1=by warehouse, 2=by searchtext
+void refresh_Parts(String istkcat, int itype)
+{
+	last_ref_stockcat = istkcat;
+	last_ref_type = itype;
+
+	whcode = c_warehousecode.getSelectedItem().getLabel();
+	sct = kiboo.replaceSingleQuotes( c_searchtext.getValue().trim() );
+
+	lbholder = rentaldesktops_holder;
+	if(istkcat.equals("NOTEBOOK")) lbholder = rentalnotebooks_holder;
+	if(istkcat.equals("MONITOR")) lbholder = rentalmonitors_holder;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(lbholder, partslb_headers, istkcat + "_lb", 5);
+
+	sqlstm = "select top 100 stock_code,brandname,supplier_part_number,description," + 
+	"itemgrade,itemstatus,bom_id,isactive,warehousecode from stockmasterdetails ";
+
+	wherestr = "where stock_cat='" + istkcat + "' "; // def=list by stockcat
+	if(itype == 2) wherestr += "and warehousecode='" + whcode + "' ";
+	if(itype == 3) wherestr += "and (stock_code like '%" + sct + "%' or brandname like '%" + sct + "%' or " +
+		"supplier_part_number like '%" + sct + "%' or description like '%" + sct + "%') ";
+
+	sqlstm = sqlstm + wherestr + " order by entrydate desc";
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.setRows(20);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", partsonclik);
+	ArrayList kabom = new ArrayList();
+	for(dpi : screcs)
+	{
+		kabom.add(kiboo.checkNullString(dpi.get("stock_code")));
+		kabom.add(kiboo.checkNullString(dpi.get("supplier_part_number")));
+		kabom.add(kiboo.checkNullString(dpi.get("brandname")));
+		kabom.add(kiboo.checkNullString(dpi.get("description")));
+		kabom.add(kiboo.checkNullString(dpi.get("itemgrade")));
+		kabom.add(kiboo.checkNullString(dpi.get("itemstatus")));
+		kisa = (dpi.get("isactive") == null) ? "NO" : ( (dpi.get("isactive") == true) ? "YES" : "NO" );
+		kabom.add(kisa);
+		bomid = ( dpi.get("bom_id") == null ) ? "" : BOM_PREFIX + dpi.get("bom_id").toString();
+		kabom.add(bomid);
+		kabom.add(kiboo.checkNullString(dpi.get("warehousecode")));
+
+		//kabom.add(dpi.get("entrydate").toString().substring(0,10));
+		//kabom.add(lbhand.trimListitemLabel(kiboo.checkNullString(dpi.get("description")),80) );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+// iwhat=obj.getId(), isubtype=additional type func
+void doFunc(Object iwhat, int isubtype)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshactive = false;
+	refreshparts = false;
+	refreshparts_type = 1;
+	msgboxtext = "";
+	sqlstm = "";
+
+	stkcat = "DESKTOP"; // def isubtype 1
+
+	if(itype.equals("nwdesktop_b") || itype.equals("nwnotebook_b") || itype.equals("nwmonitor_b") )
+	{
+		switch(isubtype)
+		{
+			case 2:
+				stkcat = "NOTEBOOK";
+				break;
+			case 3:
+				stkcat = "MONITOR";
+				break;
+		}
+
+		spostfx = kiboo.makeRandomId(stkcat);
+
+		// def warehousecode=HQ
+		sqlstm = "insert into stockmasterdetails " + 
+		"(stock_code,stock_cat,entrydate,createdby,last_purchase_date,qty_in_stock,isactive,warehousecode) values " +
+		"('NEW " + spostfx + "','" + stkcat + "','" + todaydate + "','" + useraccessobj.username + "','" + todaydate + "',1,0,'HQ')";
+
+		refreshparts = true;
+		refreshparts_type = 1;
+		global_sel_stockcat = stkcat;
+		workarea.setVisible(false);
+	}
+	
+	if(itype.equals("savepartdet_b")) // update part details
+	{
+		if(global_selected_stockcode.equals("")) return;
+
+		stkcode = kiboo.replaceSingleQuotes(stock_code.getValue().trim());
+		if(stkcode.equals(""))
+		{
+			msgboxtext = "ERR: Cannot use blank stock-code/asset-tag";
+		}
+		/*
+		else
+		if(checkStockExist(stkcode))
+		{
+			msgboxtext = "ERR: Stock-code/Asset-tag exist .. ";
+		}
+		*/
+		else
+		{
+			Object[] ob = { entrydate, brandname, m_description, description2, qty_in_stock, qty_reorder, last_purchase_date,
+			last_purchase_price, palletno, itemgrade, supplier_part_number, warehousecode,
+			field1_hdd, field2_ram, field3_opt, field4_osver, field5_ossn };
+
+			dt = getString_fromUI(ob);
+
+			sqlstm = "update stockmasterdetails set stock_code='" + stkcode + "', createdby='" + useraccessobj.username + "'," +
+			"entrydate='" + dt[0] + "', brandname='" + dt[1] + "'," +
+			"description='" + dt[2] + "', description2='" + dt[3] + "', qty_in_stock=" + dt[4] + "," +
+			"qty_reorder=" + dt[5] + ", last_purchase_date='" + dt[6] + "', last_purchase_price=" + dt[7] + "," +
+			"palletno='" + dt[8] + "', itemgrade='" + dt[9] + "'," + 
+			"supplier_part_number='" + dt[10] + "', warehousecode='" + dt[11] + "'," + 
+			"newfield1='" + dt[12] + "',newfield2='" + dt[13] + "',newfield3='" + dt[14] + "',newfield4='" + dt[15] + "',newfield5='" + dt[16] + "' " +
+			"where stock_code='" + global_selected_stockcode + "';";
+
+			refreshparts = true;
+			global_sel_stockcat = last_ref_stockcat;
+			refreshparts_type = last_ref_type;
+
+			// update only list-item -- no need to update the whole lb - CAREFUL of column posi
+			lbhand.setListcellItemLabel(global_selected_listitem,0,stkcode);
+			lbhand.setListcellItemLabel(global_selected_listitem,2,dt[1]);
+			lbhand.setListcellItemLabel(global_selected_listitem,3,dt[2]);
+			lbhand.setListcellItemLabel(global_selected_listitem,4,dt[9]);
+		}
+	}
+
+	if(itype.equals("toggleactive_b")) // toggle isactive bit
+	{
+		if(global_selected_stockcode.equals("")) return;
+		// chk if already alloc in BOM
+		inbom = bom_id.getValue();
+		if(!inbom.equals(""))
+		{
+			guihand.showMessageBox("ERR: Item already allocated in a BOM.. cannot toggle rental-flag");
+			return;
+		}
+		sqlstm = "update stockmasterdetails set isactive = isactive-1 where stock_code='" + global_selected_stockcode + "'";
+		refreshactive = true;
+	}
+
+	if(itype.equals("bombuild_b")) // view bom/build popup
+	{
+		bomid = bom_id.getValue();
+		if(bomid.equals("")) return;
+		bomid = bomid.substring(3,bomid.length());
+
+		isqlstm = "select cust.name as customer,sri.customerid,sri.createdate,sri.createdby from stockrentalitems sri " +
+		"left join Focus5012.dbo.mr000 cust on cust.masterid = sri.customerid where cust.type=195 and sri.origid=" + bomid;
+		bomr = sqlhand.gpSqlFirstRow(isqlstm);
+		if(bomr == null) { msgboxtext = "ERR: cannot access BOM table.."; break; }
+
+		hdst = "\tDate: " + dtf.format(bomr.get("createdate"));
+		hdst += "\n\tCustomer: " + kiboo.checkNullString(bomr.get("customer")) + "\n\tUser: " + bomr.get("createdby");
+		bomid_lbl.setValue(BOM_PREFIX + bomid);
+		bomid_hdr.setValue(hdst);
+
+		showBuildItems(bomid,builds_holder);
+		bombuild_pop.open(iwhat);
+	}
+
+	if(itype.equals("dtfiltwh_b") || itype.equals("dtfiltst_b")) // desktop filter
+	{
+		global_sel_stockcat="DESKTOP";
+		refreshparts_type = (itype.equals("dtfiltst_b")) ? 3 : 2;
+		refreshparts = true;
+	}
+	if(itype.equals("nbfiltwh_b") || itype.equals("nbfiltst_b")) // notebook filter
+	{
+		global_sel_stockcat="NOTEBOOK";
+		refreshparts_type = (itype.equals("nbfiltst_b")) ? 3 : 2;
+		refreshparts = true;
+	}
+	if(itype.equals("mtfiltwh_b") || itype.equals("mtfiltst_b")) // monitor filter
+	{
+		global_sel_stockcat="MONITOR";
+		refreshparts_type = (itype.equals("mtfiltst_b")) ? 3 : 2;
+		refreshparts = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm); //alert(sqlstm);
+	if(refreshparts) refresh_Parts(global_sel_stockcat,refreshparts_type);
+	if(refreshactive) refreshIsActive(global_selected_stockcode);
+	if(!msgboxtext.equals("")) guihand.showMessageBox(msgboxtext);
+}
+
+// refresh IsActive label and selected list-item
+void refreshIsActive(String istkcod)
+{
+	populateItemMetadata(istkcod);
+	if(global_selected_listitem == null) return;
+	// update 1 list-item only
+	sqlstm = "select isactive from stockmasterdetails where stock_code='" + istkcod + "'";
+	jact = sqlhand.gpSqlFirstRow(sqlstm);
+	if(jact == null) return;
+	kisa = (jact.get("isactive") == null) ? "NO" : ( (jact.get("isactive") == true) ? "YES" : "NO" );
+	lbhand.setListcellItemLabel(global_selected_listitem,6,kisa); // TODO take note of col pos 5
+}
+
+void adminFunc(Object iwhat, int isubtype)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = "";
+	msgtext = "";
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="bombuild_pop">
+<div style="background:#c17d11; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="450px" >
+	<hbox>
+	<label id="bomid_lbl" style="color:#222222;font-size:16px;font-weight:bold" />
+	<label id="bomid_hdr" style="color:#222222" multiline="true" />
+	</hbox>
+	<separator height="3px" />
+	<div id="builds_holder" />
+</div>
+</popup>
+
+<popup id="adminpopup">
+
+</popup>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,PARTS_PREFIX,global_selected_stockcode)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,PARTS_PREFIX,global_selected_stockcode)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<grid width="500px">
+	<rows>
+		<row>
+			<label value="Warehouse" style="font-size:9px" />
+			<listbox id="c_warehousecode" mold="select" rows="1" style="font-size:9px" />
+			<label value="Search" style="font-size:9px" />
+			<textbox id="c_searchtext" style="font-size:9px" width="99%" />
+		</row>
+		<row spans="4">
+			<label style="font-size:9px">(Search by asset-tag,S/N,brand,model. Max. 200 records per search)</label>
+		</row>
+	</rows>
+</grid>
+
+</div> <!-- ENDOF search/flags -->
+<separator height="2px" />
+<hbox> <!-- main hbox -->
+
+<div>
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${HOLDERS_WIDTH}" >
+
+<hbox>
+	<label style="font-size:18px;font-weight:bold;color:#eeeeee">DESKTOPS</label>
+	<button id="dtfiltwh_b" label="by warehouse" style="font-size:9px" onClick="doFunc(self,1)" />
+	<button id="dtfiltst_b" label="by search" style="font-size:9px" onClick="doFunc(self,1)" />
+	<separator width="5px" />
+	<button id="nwdesktop_b" label="New desktop" style="font-size:9px" onClick="doFunc(self,1)" />
+</hbox>
+
+<separator height="2px" />
+<div id="rentaldesktops_holder" />
+
+</div>
+<separator height="3px" />
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${HOLDERS_WIDTH}" >
+
+<hbox>
+	<label style="font-size:18px;font-weight:bold;color:#eeeeee">NOTEBOOKS</label>
+	<button id="nbfiltwh_b" label="by warehouse" style="font-size:9px" onClick="doFunc(self,2)" />
+	<button id="nbfiltst_b" label="by search" style="font-size:9px" onClick="doFunc(self,2)" />
+	<separator width="5px" />
+	<button id="nwnotebook_b" label="New notebook" style="font-size:9px" onClick="doFunc(self,2)" />
+</hbox>
+
+<separator height="2px" />
+<div id="rentalnotebooks_holder" />
+
+</div>
+<separator height="3px" />
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${HOLDERS_WIDTH}" >
+
+<hbox>
+	<label style="font-size:18px;font-weight:bold;color:#eeeeee">MONITORS</label>
+	<button id="mtfiltwh_b" label="by warehouse" style="font-size:9px" onClick="doFunc(self,3)" />
+	<button id="mtfiltst_b" label="by search" style="font-size:9px" onClick="doFunc(self,3)" />
+	<separator width="5px" />
+	<button id="nwmonitor_b" label="New monitor" style="font-size:9px" onClick="doFunc(self,3)" />
+</hbox>
+<separator height="2px" />
+<div id="rentalmonitors_holder" />
+
+</div>
+</div> <!-- ENDOF rental-items main holders -->
+
+<div id="workarea" style="background:${WORKAREA_BG}; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+	<label id="itemtype_lbl" style="font-size:14px;font-weight:bold;color:#ffffff" />
+	<separator height="3px" />
+	<hbox>
+		<button id="savepartdet_b" label="Update details" style="font-size:9px" onClick="doFunc(self,0)" />
+		<button id="bombuild_b" label="View BOM/build" style="font-size:9px" onClick="doFunc(self,0)" />
+		<button id="toggleactive_b" label="Toggle item rentable" style="font-size:9px" onClick="doFunc(self,0)" />
+		<button id="admin_b" label="ADMIN" style="color:#ff0000" onClick="adminpopup.open(self)" visible="false" />
+	</hbox>
+	<separator height="2px" />
+
+	<div id="form_holder" />
+
+	<separator height="5px" />
+
+	<label style="color:#ffffff;font-weight:bold;font-size:14px" value="DOCUMENTS / ATTACHMENTS" />
+	<hbox>
+		<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(PARTS_PREFIX,global_selected_stockcode)" />
+		<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+		<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+		<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile(documents_holder,PARTS_PREFIX,global_selected_stockcode)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="documents_holder" />
+
+</div> <!-- ENDOF workarea -->
+
+</hbox> <!-- ENDOF main hbox -->
+
+<zscript>
+<![CDATA[
+
+glob_formmaker = dynamicForm(form_holder, "partmetaform", "1"); // in rwsqlfuncs.zs, need to move somewhere..
+
+luhand.populateListbox_ByLookup(itemgrade,"PARTS_GRADES",2);
+luhand.populateListbox_ByLookup(c_warehousecode,"OUTSOURCE_PARTNERS",2);
+
+//refresh_Parts("DESKTOP",1);
+//refresh_Parts("NOTEBOOK",1);
+//refresh_Parts("MONITOR",1);
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

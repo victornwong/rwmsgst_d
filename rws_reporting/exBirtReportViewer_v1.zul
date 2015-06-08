@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="exbirtreportviewer1_win"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v1.0";
+/*
+<zscript src="../alsglobal/alsglobal_birtreport.zs" />
+ 
+Title		: BIRT report viewer EXTERNAL
+Written by	: Victor Wong
+Dated		: 16/05/2011
+
+*NOTES*
+
+09/04/2012: knockoff from birtReportViewer_v2.zul - but uses external birt-URL instead (EXTERNAL_BIRTVIEWER)
+09/10/2011: access rptdesign filename from elb_menutree instead of hardcoded ones in alsglobal_birtreport.zs
+
+More generalized BIRT report viewer window to be used throughout the system - uses stuff in alsglobal_birtreport.zs
+- birtReportTemplates[] = for template filename
+
+parameters:
+bid = BIRT report id : index to birtReportTemplates[]
+rti = Report title : to be placed as window title
+*/
+import org.victor.*;
+
+sqlhand = new SqlFuncs();
+guihand = new GuiFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+birtreportid = Executions.getCurrent().getParameter("bid");
+reporttitle = Executions.getCurrent().getParameter("rti");
+
+void doBIRT(Div iparentdiv, String birtfn)
+{
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("600px");
+	thesrc = birtURL_external() + birtfn;
+	newiframe.setSrc(thesrc);
+	newiframe.setParent(iparentdiv);
+}
+
+]]>
+</zscript>
+
+<window id="exbirtreportv2" width="800px" height="670px" title="ex:Report Viewer ${MYVERSION}"
+position="center" mode="overlapped" border="normal" closable="true" sizable="true">
+<button label="Close window" style="font-size:9px" onClick="guihand.globalCloseWindow(mainPlayground,myincludeid)" />
+<separator height="3px" />
+<label id="whatever" />
+<div id="birt_div" />
+<zscript>
+<![CDATA[
+
+if(birtreportid != null)
+{
+	// 09/10/2011: access rptdesign filename stored in elb_menutree
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) guihand.globalCloseWindow(mainPlayground,myincludeid);
+	sqlstm = "select module_fn from elb_menutree where origid=" + birtreportid;
+	rrec = sql.firstRow(sqlstm);
+	sql.close();
+
+	if(rrec != null)
+		if(!rrec.get("module_fn").equals("")) // make sure something to show
+			 doBIRT(birt_div,rrec.get("module_fn"));
+}
+else
+	guihand.globalCloseWindow(mainPlayground,myincludeid);
+
+if(reporttitle != null) exbirtreportv2.setTitle("ex:Report Viewer " + MYVERSION + " : " + reporttitle);
+
+]]>
+</zscript>
+</window>
+</zk>
+

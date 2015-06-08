@@ -1,0 +1,731 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="staticlookup_mod"?>
+<zk>
+
+<zscript>
+<![CDATA[
+MYVERSION = "v1.0";
+/*
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+Title : Static lookup configurator (WINDOW)
+Written by : Victor Wong
+Dated : 02/03/2012
+
+**knockoff from qc/matrix_manager.zul
+Allow admin to configure lookups to be used in drop-down or watever. For PANEL version - lookupFieldsEditor_v1.zul
+06/04/2012: added funcs to show lookup-items metadata fields label as defined in lookupFieldsEditor_v1.zul
+14/05/2012: added funcs to add lookup-items from portaluser.username
+
+*/
+
+import org.victor.*;
+
+Generals kiboo = new Generals();
+SqlFuncs sqlhand = new SqlFuncs();
+ListboxHandler lbhandler = new ListboxHandler();
+LookupFuncs luhand = new LookupFuncs();
+SecurityFuncs sechand = new SecurityFuncs();
+GuiFuncs guihand = new GuiFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+param_lookup = Executions.getCurrent().getParameter("lu");
+param_wintitle = Executions.getCurrent().getParameter("wt");
+param_notstandalone = Executions.getCurrent().getParameter("st");
+
+Label submatrix_caption;
+Div sub_matrix_div;
+Div matrixclass_div;
+
+// Hardcoded.. change accordingly for other system : 112 = general lookups
+MATRIX_LOOKUP_ID = param_lookup;
+
+global_selected_matrixclass = "";
+global_matrixclass_disptext = "";
+global_selected_submatrix = "";
+
+Object[] submatrixclass_lb_headers = {
+	new listboxHeaderObj("ID",true),
+	new listboxHeaderObj("ValueName",true),
+	new listboxHeaderObj("DispText",true),
+};
+
+Object[] matrixclass_lb_headers = {
+	new listboxHeaderObj("ID",true),
+	new listboxHeaderObj("Lookups",true),
+	new listboxHeaderObj("Description",true),
+};
+
+class lookupOnSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+
+		global_selected_matrixclass = lbhandler.getListcellItemLabel(selitem,0);
+
+		if(param_notstandalone != null)
+			global_selected_matrixclass = "'" + lbhandler.getListcellItemLabel(selitem,0) + "'";
+
+		global_matrixclass_disptext = lbhandler.getListcellItemLabel(selitem,2);
+		//alert(global_selected_matrixclass + " :: " + global_matrixclass_disptext);
+		showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext);
+		workarea.setVisible(true);
+	}
+}
+
+// itype: 1=main lookup, 2=lookup.items
+void showLookups(int itype, Div iholder, String theparent, String parentdisptext)
+{
+	switch(itype)
+	{
+		case 1:
+			if(sub_matrix_div.getFellowIfAny("submatrix_lb") != null)
+			{
+				kabing = sub_matrix_div.getFellow("submatrix_lb");
+				kabing.setParent(null);
+				submatrix_caption.setValue("Lookup-Items");
+				global_selected_matrixclass = "";
+				global_matrixclass_disptext = "";
+			}
+			break;
+
+		case 2:
+			submatrix_caption.setValue("LU: " + parentdisptext);
+			break;
+	}
+
+	Listbox newlb = lbhandler.makeVWListbox(iholder, ((itype == 2) ? submatrixclass_lb_headers : matrixclass_lb_headers) ,
+		((itype == 2) ? "submatrix_lb" : "matrixclass_lb"), 10);
+
+	expstring = " and expired=0";
+	// Admin can see deleted/expired item
+	if(useraccessobj.accesslevel == 9) expstring = "";
+
+	sqlstm = "select idlookups,name,disptext,expired from Lookups ";
+	parstr = "where myparent='" + theparent + "'";
+
+	if(param_notstandalone != null) parstr = "where myparent in (" + theparent + ") ";
+
+	sqlstm += parstr + expstring + " order by disptext";
+	mcrecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(mcrecs.size() == 0) return;
+	newlb.setRows((itype == 1) ? 22 : 20);
+	newlb.setMold("paging");
+	if(itype == 1) newlb.addEventListener("onSelect", new lookupOnSelect());
+
+	for(dpi : mcrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("idlookups").toString());
+		kabom.add(dpi.get("name"));
+		expkk = (dpi.get("expired") == 0) ? "" : "[DEL] ";
+		kabom.add(expkk + dpi.get("disptext"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhandler.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+// itype: 1=lookup, 2=lookup.items
+void addLookup_Items(int itype)
+{
+	if(itype == 1) matrix_add_popup.close();
+	else submatrix_add_popup.close();
+
+	rmstr = kiboo.replaceSingleQuotes((itype == 1) ? addm_code_tb.getValue() : addsm_code_tb.getValue());
+	tmstr = kiboo.replaceSingleQuotes((itype == 1) ? addm_name_tb.getValue() : addsm_name_tb.getValue());
+
+	if(rmstr.equals("") || tmstr.equals("")) return;
+
+/*
+	if(luhand.isUniqueCode(rmstr) == false)
+	{
+		showMessageBox("Ref.code already used..");
+		return;
+	}
+*/
+	// 06/04/2012: if inserting lookups, use general-lookup as parent instead of MATRIX_LOOKUP_ID
+	lu_mainparent = MATRIX_LOOKUP_ID;
+	if(itype == 1)
+	{
+		// if str contains ',' - uses general-lookup as parent, subcon-tests can be handled in standalone mode
+		if(MATRIX_LOOKUP_ID.indexOf(",") != -1) lu_mainparent = "112";
+	}
+
+	// remove quotes for lookup-items insert
+	lui_myparent = global_selected_matrixclass;
+	if(param_notstandalone != null) lui_myparent = global_selected_matrixclass.replaceAll("'","");
+
+	luhand.insertLookups_Rec(rmstr,tmstr,(itype == 1) ? lu_mainparent : lui_myparent); // lookupfuncs.java
+	if(itype == 1) showLookups(1,matrixclass_div,MATRIX_LOOKUP_ID,""); // refresh
+	else showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext);
+}
+
+void showFieldsDefLabels(String imyparent)
+{
+	trec = luhand.getLookupRec_ByID(imyparent);
+	if(trec == null) return;
+	fldef = (trec.get("fieldslabel_def") == null) ? "" : trec.get("fieldslabel_def");
+	if(fldef.equals("")) return;
+	tdefs = luhand.getFieldsDef_Rec(fldef);
+	if(tdefs == null) return;
+
+	for(i=1; i<9; i++)
+	{
+		lidx = "val" + i.toString() + "_label";
+		cidx = "es_lbl_" + i.toString();
+		tltx = "Value" + i.toString();
+		toshow = (tdefs.get(lidx).equals("")) ? tltx : tdefs.get(lidx);
+		lblcomp = submatrix_edit_popup.getFellowIfAny(cidx);
+		if(lblcomp != null) lblcomp.setValue(toshow);
+	}
+}
+
+// reset the lookup-items metadata fields label
+void resetFieldsLabels()
+{
+	for(i=1; i<9; i++)
+	{
+		cidx = "es_lbl_" + i.toString();
+		tltx = "Value" + i.toString();
+		lblcomp = submatrix_edit_popup.getFellowIfAny(cidx);
+		if(lblcomp != null) lblcomp.setValue(tltx);
+	}
+}
+
+// itype: 1=lookup, 2=lookup.items
+void editLookup_clicker(int itype)
+{
+	if(itype == 1 && !lbhandler.check_ListboxExist_SelectItem(matrixclass_div,"matrixclass_lb")) return;
+	if(itype == 2 && !lbhandler.check_ListboxExist_SelectItem(sub_matrix_div,"submatrix_lb")) return;
+
+	matid = (itype == 1) ? matrixclass_lb.getSelectedItem().getLabel() : submatrix_lb.getSelectedItem().getLabel();
+	matobj = luhand.getLookupRec_ByID(matid);
+	if(matobj == null) return;
+	
+	// 06/04/2012: update extra fields label if avail
+	if(itype == 2)
+	{
+		resetFieldsLabels();
+		showFieldsDefLabels(matobj.get("myparent"));
+	}
+
+	switch(itype)
+	{
+		case 1:
+			global_selected_matrixclass = matid;
+			editm_code_tb.setValue(matobj.get("name"));
+			editm_name_tb.setValue(matobj.get("disptext"));
+
+			editm_value1_tb.setValue(kiboo.checkNullString(matobj.get("value1")));
+			editm_value2_tb.setValue(kiboo.checkNullString(matobj.get("value2")));
+			editm_value3_tb.setValue(kiboo.checkNullString(matobj.get("value3")));
+			editm_value4_tb.setValue(kiboo.checkNullString(matobj.get("value4")));
+			editm_value5_tb.setValue(kiboo.checkNullString(matobj.get("value5")));
+			editm_value6_tb.setValue(kiboo.checkNullString(matobj.get("value6")));
+			editm_value7_tb.setValue(kiboo.checkNullString(matobj.get("value7")));
+			editm_value8_tb.setValue(kiboo.checkNullString(matobj.get("value8")));
+
+			matrix_edit_popup.open(editmatrixclass_btn);
+			break;
+
+		case 2:
+			global_selected_submatrix = matid;
+			editsm_code_tb.setValue(matobj.get("name"));
+			editsm_name_tb.setValue(matobj.get("disptext"));
+			
+			editsm_value1_tb.setValue(kiboo.checkNullString(matobj.get("value1")));
+			editsm_value2_tb.setValue(kiboo.checkNullString(matobj.get("value2")));
+			editsm_value3_tb.setValue(kiboo.checkNullString(matobj.get("value3")));
+			editsm_value4_tb.setValue(kiboo.checkNullString(matobj.get("value4")));
+			editsm_value5_tb.setValue(kiboo.checkNullString(matobj.get("value5")));
+			editsm_value6_tb.setValue(kiboo.checkNullString(matobj.get("value6")));
+			editsm_value7_tb.setValue(kiboo.checkNullString(matobj.get("value7")));
+			editsm_value8_tb.setValue(kiboo.checkNullString(matobj.get("value8")));
+
+			submatrix_edit_popup.open(edit_submatrix_btn);
+			break;
+	}
+}
+
+// itype: 1=lookup, 2=lookup.items
+void itemUpdate_cliker(int itype)
+{
+	if(itype == 1) matrix_edit_popup.close();
+	else submatrix_edit_popup.close();
+	
+	tmpdisptext = kiboo.replaceSingleQuotes((itype == 1) ? editm_name_tb.getValue() : editsm_name_tb.getValue() );
+	tmpname = kiboo.replaceSingleQuotes((itype == 1) ? editm_code_tb.getValue() : editsm_code_tb.getValue() );
+	
+	tmpval1 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value1_tb.getValue() : editsm_value1_tb.getValue() );
+	tmpval2 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value2_tb.getValue() : editsm_value2_tb.getValue() );
+	tmpval3 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value3_tb.getValue() : editsm_value3_tb.getValue() );
+	tmpval4 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value4_tb.getValue() : editsm_value4_tb.getValue() );
+	tmpval5 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value5_tb.getValue() : editsm_value5_tb.getValue() );
+	tmpval6 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value6_tb.getValue() : editsm_value6_tb.getValue() );
+	tmpval7 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value7_tb.getValue() : editsm_value7_tb.getValue() );
+	tmpval8 = kiboo.replaceSingleQuotes((itype == 1) ? editm_value8_tb.getValue() : editsm_value8_tb.getValue() );
+	
+	
+	if(tmpdisptext.equals("") || tmpname.equals(""))
+	{
+		guihand.showMessageBox("Fields cannot be blanks");
+		return;
+	}
+	
+	thorig = (itype == 1) ? global_selected_matrixclass : global_selected_submatrix;
+	
+	sqlstm = "update Lookups set disptext='" + tmpdisptext + "', name='" + tmpname + "', " +
+	"value1='" + tmpval1 + "',value2='" + tmpval2 + "',value3='" + tmpval3 + "',value4='" + tmpval4 + "'," +
+	"value5='" + tmpval5 + "',value6='" + tmpval6 + "',value7='" + tmpval7 + "',value8='" + tmpval8 + "' " +
+	"where idlookups=" + thorig;
+
+	sqlhand.gpSqlExecuter(sqlstm);
+
+	if(itype == 1) showLookups(1,matrixclass_div,MATRIX_LOOKUP_ID,""); // refresh
+	else showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext);
+}
+
+void addsubM_clicker()
+{
+	if(global_selected_matrixclass.equals("")) return;
+	submatrix_add_popup.open(add_submatrix_btn);
+}
+
+// itype : 1=Lookup, 2=lookup.items
+// deltype: 1=toggle, 2=hard delete
+void togdel_clicker(int itype, int deltype)
+{
+	if(itype == 1 && !lbhandler.check_ListboxExist_SelectItem(matrixclass_div,"matrixclass_lb")) return;
+	if(itype == 2 && !lbhandler.check_ListboxExist_SelectItem(sub_matrix_div,"submatrix_lb")) return;
+
+	matid = (itype == 1) ? matrixclass_lb.getSelectedItem().getLabel() : submatrix_lb.getSelectedItem().getLabel();
+	if(matid.equals("")) return;
+
+	if (Messagebox.show("Toggle/Hard-delete..", "Are you sure?",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	if(deltype == 1)
+	{
+		sqlstm = "select expired from Lookups where idlookups=" + matid;
+		kebing = sql.firstRow(sqlstm);
+		if(kebing != null)
+		{
+			expstring = (kebing.get("expired") == 0) ? "1" : "0";
+			sqlstm2 = "update Lookups set expired=" + expstring + " where idlookups=" + matid;
+			sql.execute(sqlstm2);
+		}
+	}
+	else
+	{
+		if(itype == 1 && deltype == 2) // hard-delete for lookup and its child-items
+		{
+			// delete lookup child-items
+			sqlstm1 = "delete from lookups where myparent='" + matid + "'";
+			sql.execute(sqlstm1);
+		}
+
+		// delete the lookup completely
+		sqlstm = "delete from lookups where idlookups=" + matid;
+		sql.execute(sqlstm);
+	}
+
+	sql.close();
+
+	if(itype == 1) showLookups(1,matrixclass_div,MATRIX_LOOKUP_ID,""); // refresh
+	else showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext);
+}
+
+// upload txt-file delimited by ~ , if lines w/o value1-value8, ignore and upload only name and disptext
+// itype: 1=append, 2=replace
+// will not check for dups when appending
+// NAME~DISPTEXT~VALUE1~VALUE2~VALUE3~...VALUE8
+void uploadLookups(int itype)
+{
+	// global_selected_matrixclass = lookups.myparent
+	if(global_selected_matrixclass.equals("")) return;
+
+	uploaded_txt = Fileupload.get(true);
+	if(uploaded_txt == null) return;
+	formatstr = uploaded_txt.getFormat();
+	bytearray = uploaded_txt.getByteData();
+
+	String mystring = new String(bytearray);
+	chopped_lines = mystring.split("\r\n");
+	if(chopped_lines.length == 1) chopped_lines = mystring.split("\n");
+	if(chopped_lines.length == 0) return;
+
+	uplsqlstm = "";
+
+	for(i=0; i<chopped_lines.length; i++)
+	{
+		kkb = chopped_lines[i];
+		splited = kkb.split("~");
+		
+		tname = splited[0];
+		tdisptext = splited[1];
+
+		j=0;
+		String[] tvals = new String[8];
+
+		try
+		{
+			while(j<8)
+			{
+				tvals[j] = splited[j+2];
+				j++;
+			}
+		}
+		catch (ArrayIndexOutOfBoundsException e) {}
+
+		sqlstm0 = "insert into Lookups (name,disptext,myparent,expired,value1,value2,value3,value4,value5,value6,value7,value8) values " + 
+		"('" + tname + "','" + tdisptext + "','" + global_selected_matrixclass + "',0," +
+		"'" + ((tvals[0]==null) ? "" : tvals[0]) + "','" + ((tvals[1]==null) ? "" : tvals[1]) + "','" + 
+		((tvals[2]==null) ? "" : tvals[2]) + "','" + ((tvals[3]==null) ? "" : tvals[3]) +
+		"','" + ((tvals[4]==null) ? "" : tvals[4]) + "','" + ((tvals[5]==null) ? "" : tvals[5]) + "','" + 
+		((tvals[6]==null) ? "" : tvals[6]) + "','" + ((tvals[7]==null) ? "" : tvals[7]) + "');";
+
+		uplsqlstm += sqlstm0 + "\n";
+	}
+
+	if(uplsqlstm.equals("")) return; // nothing to do .. return lor
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	// replacing them lookups.. remove previous ones
+	if(itype == 2)
+	{
+		sqlstm1 = "delete from lookups where myparent='" + global_selected_matrixclass + "'";
+		sql.execute(sqlstm1);
+	}
+
+	sql.execute(uplsqlstm);
+	sql.close();
+
+	showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext); // refresh
+}
+
+// knockoff from menueditor_v1.zul
+void listUsernames(Div idiv)
+{
+	Object[] sm_lb_headers = {
+	new dblb_HeaderObj("username",true,"username",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select distinct username from portaluser where locked=0 and deleted=0 order by username";
+	Listbox newlb = lbhandler.makeVWListbox_onDB(idiv,sm_lb_headers,"usernames_lb",12,sql,sqlstm);
+	sql.close();
+	newlb.setStyle("font-size:9px");
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+}
+
+void assignFromUserList()
+{
+	listUsernames(userlb_holder);
+	assuserpop.open(assuser_btn);
+}
+
+void addemusers()
+{
+	if(global_selected_matrixclass.equals("")) return;
+	prefstr = assuserprefix_tb.getValue();
+	startv = assuserstartv_tb.getValue();
+
+	if(usernames_lb.getSelectedCount() > 0 && !prefstr.equals(""))
+	{
+		kami = usernames_lb.getSelectedItems();
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+		knt = (startv.equals("")) ? 1 : Integer.parseInt(startv);
+		for(selitem : kami)
+		{
+			lucode = prefstr + "_" + knt.toString();
+			usern = selitem.getLabel();
+			sqlstm0 = "insert into Lookups (name,disptext,myparent,expired," +
+			"value1,value2,value3,value4,value5,value6,value7,value8) values " +
+			"('" + lucode + "','" + usern + "','" + global_selected_matrixclass + "',0," +
+			"'','','','','','','','')";
+
+			sql.execute(sqlstm0);
+			knt++;
+		}
+		sql.close();
+		showLookups(2,sub_matrix_div,global_selected_matrixclass,global_matrixclass_disptext); // refresh
+	}
+}
+
+]]>
+</zscript>
+
+<!-- assign from user-list popup -->
+<popup id="assuserpop">
+<groupbox mold="3d" width="350px">
+	<grid>
+		<rows>
+			<row>
+				<label value="prefix" style="font-size:9px" />
+				<textbox id="assuserprefix_tb" style="font-size:9px" width="50%" />
+				<label value="startv" style="font-size:9px" />
+				<textbox id="assuserstartv_tb" style="font-size:9px" width="50%" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="2px" />
+	<hbox>
+		<button label="add-em" style="font-size:9px" onClick="addemusers()" />
+		<button label="close" style="font-size:9px" onClick="assuserpop.close()" />
+	</hbox>
+	<separator height="2px" />
+	<div id="userlb_holder" />
+</groupbox>
+</popup>
+
+<!-- ENDOF assign from user-list popup -->
+
+<!-- Edit Matrix class-->
+<popup id="matrix_edit_popup">
+<groupbox>
+	<caption label="Edit lookup" />
+	<grid>
+	<rows>
+		<row>
+			<label value="Lookup.Code" style="font-size:9px" />
+			<textbox id="editm_code_tb" width="200px" style="font-size:9px" />
+			<label value="Disptext" style="font-size:9px" />
+			<textbox id="editm_name_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="em_lbl_1" value="Value1" style="font-size:9px" />
+			<textbox id="editm_value1_tb" width="200px" style="font-size:9px" />
+			<label id="em_lbl_2" value="Value2" style="font-size:9px" />
+			<textbox id="editm_value2_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="em_lbl_3" value="Value3" style="font-size:9px" />
+			<textbox id="editm_value3_tb" width="200px" style="font-size:9px" />
+			<label id="em_lbl_4" value="Value4" style="font-size:9px" />
+			<textbox id="editm_value4_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="em_lbl_5" value="Value5" style="font-size:9px" />
+			<textbox id="editm_value5_tb" width="200px" style="font-size:9px" />
+			<label id="em_lbl_6" value="Value6" style="font-size:9px" />
+			<textbox id="editm_value6_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="em_lbl_7" value="Value7" style="font-size:9px" />
+			<textbox id="editm_value7_tb" width="200px" style="font-size:9px" />
+			<label id="em_lbl_8" value="Value8" style="font-size:9px" />
+			<textbox id="editm_value8_tb" width="200px" style="font-size:9px" />
+		</row>
+
+	</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<button label="Update" style="font-size:9px" onClick="itemUpdate_cliker(1)" />
+<button label="Close" onClick="matrix_edit_popup.close()" style="font-size:9px" />
+</popup>
+<!-- End of Edit Matrix class -->
+
+<!-- Add Matrix class-->
+<popup id="matrix_add_popup">
+<groupbox>
+	<caption label="Add lookup" />
+	<grid>
+	<rows>
+		<row>
+			<label value="Lookup.Code" style="font-size:9px" />
+			<textbox id="addm_code_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Disptext" style="font-size:9px" />
+			<textbox id="addm_name_tb" width="200px" style="font-size:9px" />
+		</row>
+	</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<button label="Insert" style="font-size:9px" onClick="addLookup_Items(1)" />
+<button label="Close" onClick="matrix_add_popup.close()" style="font-size:9px" />
+</popup>
+<!-- End of Add Matrix class -->
+
+<!-- Add SubMatrix -->
+<popup id="submatrix_add_popup">
+<groupbox>
+	<caption label="Add lookup item" />
+	<grid>
+	<rows>
+		<row>
+			<label value="value.Code" style="font-size:9px" />
+			<textbox id="addsm_code_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Disptext" style="font-size:9px" />
+			<textbox id="addsm_name_tb" width="200px" style="font-size:9px" />
+		</row>
+	</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<button label="Insert" style="font-size:9px" onClick="addLookup_Items(2)" />
+<button label="Close" onClick="submatrix_add_popup.close()" style="font-size:9px" />
+</popup>
+<!-- End of Add SubMatrix -->
+
+<!-- Edit SubMatrix -->
+<popup id="submatrix_edit_popup">
+<groupbox>
+	<caption label="Edit lookup item" />
+	<grid>
+	<rows>
+		<row>
+			<label value="value.Code" style="font-size:9px" />
+			<textbox id="editsm_code_tb" width="200px" style="font-size:9px" />
+			<label value="Disptext" style="font-size:9px" />
+			<textbox id="editsm_name_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="es_lbl_1" value="Value1" style="font-size:9px" />
+			<textbox id="editsm_value1_tb" width="200px" style="font-size:9px" />
+			<label id="es_lbl_2" value="Value2" style="font-size:9px" />
+			<textbox id="editsm_value2_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="es_lbl_3" value="Value3" style="font-size:9px" />
+			<textbox id="editsm_value3_tb" width="200px" style="font-size:9px" />
+			<label id="es_lbl_4" value="Value4" style="font-size:9px" />
+			<textbox id="editsm_value4_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="es_lbl_5" value="Value5" style="font-size:9px" />
+			<textbox id="editsm_value5_tb" width="200px" style="font-size:9px" />
+			<label id="es_lbl_6" value="Value6" style="font-size:9px" />
+			<textbox id="editsm_value6_tb" width="200px" style="font-size:9px" />
+		</row>
+		<row>
+			<label id="es_lbl_7" value="Value7" style="font-size:9px" />
+			<textbox id="editsm_value7_tb" width="200px" style="font-size:9px" />
+			<label id="es_lbl_8" value="Value8" style="font-size:9px" />
+			<textbox id="editsm_value8_tb" width="200px" style="font-size:9px" />
+		</row>
+	</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<button label="Update" style="font-size:9px" onClick="itemUpdate_cliker(2)" />
+<button label="Close" onClick="submatrix_edit_popup.close()" style="font-size:9px" />
+</popup>
+<!-- End of Edit SubMatrix -->
+
+<!--
+onClose="guihand.globalCloseWindow(myincludeid)" onCancel="guihand.globalCloseWindow(myincludeid)" onOk="guihand.globalCloseWindow(myincludeid)">
+-->
+
+<window id="staticlookup_win" title="Lookups - Configurator ${MYVERSION}"
+position="center" mode="overlapped" border="normal" closable="true">
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<div>
+<label id="testolabel" />
+
+<div style="background:#ff0000;padding:2px" >
+<label style="color:#ffffff">
+(These lookups are used throughout the system, please do not DELETE anything if you're NOT SURE)
+</label>
+</div>
+
+<hbox>
+<groupbox width="500px" mold="3d">
+	<div id="tmp_matrixclass_div" />
+	<separator height="3px" />
+	<button id="addmatrixclass_btn" label="Add lookup" style="font-size:9px" onClick="matrix_add_popup.open(addmatrixclass_btn)" />
+	<button id="editmatrixclass_btn" label="Edit" style="font-size:9px" onClick="editLookup_clicker(1)" />
+	<button id="delmatrixclass_btn" label="Tog.Delete" style="font-size:9px" visible="false" onClick="togdel_clicker(1,1)" />
+	<button id="hdelmatrixclass_btn" label="Hard.Delete" style="font-size:9px" visible="false" onClick="togdel_clicker(1,2)" />
+</groupbox>
+
+<groupbox mold="3d" id="workarea" visible="false" >
+	<div style="background:#ffa500;padding:2px" >
+		<label id="tmp_submatrix_caption" />
+	</div>
+	<!-- <caption id="tmp_submatrix_caption" label="Lookup-Items"/> -->
+	<div id="tmp_sub_matrix_div" width="400px" />
+	<separator height="3px" />
+	<hbox>
+		<button id="add_submatrix_btn" label="Add item" style="font-size:9px" onClick="addsubM_clicker()" />
+		<button id="edit_submatrix_btn" label="Edit" style="font-size:9px" onClick="editLookup_clicker(2)" />
+		<button id="del_submatrix_btn" label="Tog.Delete" style="font-size:9px" visible="false" onClick="togdel_clicker(2,1)" />
+		<button id="harddel_item_btn" label="Hard.Delete" style="font-size:9px" visible="false" onClick="togdel_clicker(2,2)" />
+		<button id="assuser_btn" label="Asgn users" style="font-size:9px" onClick="assignFromUserList()" />
+	</hbox>
+	<hbox>
+		<button id="upload1_sub_btn" label="Upload+append" style="font-size:9px" onClick="uploadLookups(1)" />
+		<button id="upload2_sub_btn" label="Upload+replace" style="font-size:9px" onClick="uploadLookups(2)" />
+	</hbox>
+</groupbox>
+
+</hbox>
+</div>
+
+<zscript>
+<![CDATA[
+
+// show stuff only admin can see --
+if(useraccessobj.accesslevel == 9)
+{
+	delmatrixclass_btn.setVisible(true);
+	hdelmatrixclass_btn.setVisible(true);
+	del_submatrix_btn.setVisible(true);
+	harddel_item_btn.setVisible(true);
+}
+
+submatrix_caption = tmp_submatrix_caption;
+sub_matrix_div = tmp_sub_matrix_div;
+matrixclass_div = tmp_matrixclass_div;
+
+if(param_wintitle != null)
+{
+	staticlookup_win.setTitle("Lookups - Configurator " + MYVERSION + " : " + param_wintitle);
+}
+
+if(param_notstandalone != null)
+{
+	staticlookup_win.setMode("embedded");
+	staticlookup_win.setBorder("none");
+	staticlookup_win.setClosable(false);
+	staticlookup_win.setWidth("1198px");
+	staticlookup_win.setHeight("390px");
+	staticlookup_win.setTitle("");
+
+	wali = param_lookup.split(" ");
+
+	String wali2 = "";
+	for(int i=0; i<wali.length; i++)
+	{
+		wali2 += "'" + wali[i] + "',";
+	}
+
+	wali2 = wali2.substring(0,wali2.length()-1);
+	MATRIX_LOOKUP_ID = wali2;
+}
+
+if(param_lookup != null)
+{
+}
+
+showLookups(1,matrixclass_div,MATRIX_LOOKUP_ID,""); // refresh
+
+]]>
+</zscript>
+</window>
+</zk>

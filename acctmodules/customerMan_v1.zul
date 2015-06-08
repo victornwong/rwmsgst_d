@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="customermanager_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.1";
+/*
+Title		: Customer management
+Written by	: Victor Wong
+Dated		: 05/06/2012
+
+NOTES:
+
+E-LABMAN version of the customer management in MYSOFT - not every field will be processed
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+last_load_customers = 0;
+global_selected_client = "";
+global_selected_arcode = "";
+/*
+	c_arcode
+	c_customer_name
+	c_address1
+	c_address2
+	c_address3
+	c_address4
+	c_telephone_no
+	c_fax_no
+	c_e_mail
+	c_contact_person1
+	c_designation1
+	c_p_ph1
+	c_h_ph1
+	c_contact_person2
+	c_designation2
+	c_p_ph2
+	c_h_ph2
+*/
+
+void clearFields()
+{
+	c_arcode.setValue("");
+	c_customer_name.setValue("");
+	c_address1.setValue("");
+	c_address2.setValue("");
+	c_address3.setValue("");
+	c_address4.setValue("");
+	c_telephone_no.setValue("");
+	c_fax_no.setValue("");
+	c_e_mail.setValue("");
+	c_contact_person1.setValue("");
+	c_designation1.setValue("");
+	c_p_ph1.setValue("");
+	c_h_ph1.setValue("");
+	c_contact_person2.setValue("");
+	c_designation2.setValue("");
+	c_p_ph2.setValue("");
+	c_h_ph2.setValue("");
+
+	c_arcode.setDisabled(false);
+
+	global_selected_client = "";
+	global_selected_arcode = "";
+	newupdate_btn.setLabel("New customer");
+}
+
+
+void showCustomerMetadata(String iarcode)
+{
+	crec = sqlhand.getCompanyRecord(iarcode);
+	if(crec == null) { guihand.showMessageBox("ERR: Cannot access customer table!!"); return; }
+
+	c_arcode.setValue(kiboo.checkNullString(crec.get("ar_code")));
+	c_customer_name.setValue(kiboo.checkNullString(crec.get("customer_name")));
+	c_address1.setValue(kiboo.checkNullString(crec.get("address1")));
+	c_address2.setValue(kiboo.checkNullString(crec.get("address2")));
+	c_address3.setValue(kiboo.checkNullString(crec.get("address3")));
+	c_address4.setValue(kiboo.checkNullString(crec.get("Address4")));
+	c_telephone_no.setValue(kiboo.checkNullString(crec.get("telephone_no")));
+	c_fax_no.setValue(kiboo.checkNullString(crec.get("fax_no")));
+	c_e_mail.setValue(kiboo.checkNullString(crec.get("E_mail")));
+	c_contact_person1.setValue(kiboo.checkNullString(crec.get("contact_person1")));
+	c_designation1.setValue(kiboo.checkNullString(crec.get("Designation1")));
+	c_p_ph1.setValue(kiboo.checkNullString(crec.get("p_ph1")));
+	c_h_ph1.setValue(kiboo.checkNullString(crec.get("h_ph1")));
+	c_contact_person2.setValue(kiboo.checkNullString(crec.get("contact_person2")));
+	c_designation2.setValue(kiboo.checkNullString(crec.get("Designation2")));
+	c_p_ph2.setValue(kiboo.checkNullString(crec.get("p_ph2")));
+	c_h_ph2.setValue(kiboo.checkNullString(crec.get("h_ph2")));
+
+	c_arcode.setDisabled(true);
+
+	newupdate_btn.setLabel("Update..");
+}
+
+// onSelect for loadCustomers()
+class clb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = customers_lb.getSelectedItem();
+		global_selected_client = lbhand.getListcellItemLabel(isel,0);
+		global_selected_arcode = lbhand.getListcellItemLabel(isel,1);
+		showCustomerMetadata(global_selected_arcode);
+	}
+}
+
+Object[] custlb_headers = 
+{
+	new listboxHeaderWidthObj("N",false,"10px"),
+	new listboxHeaderWidthObj("AR_Code",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Contact1",true,""),
+	new listboxHeaderWidthObj("Added",true,""),
+};
+
+/*
+itype:
+kabom.add(kiboo.checkNullDate(dpi.get("datetimehappen"),"---"));
+abom.add(kiboo.checkNullString(dpi.get("incidenttype")));
+*/
+void loadCustomers(int itype)
+{
+	sestr = kiboo.replaceSingleQuotes(searchstring_tb.getValue());
+	if(sestr.equals("")) return;
+	last_load_customers = itype;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(customers_holder, custlb_headers, "customers_lb", 25);
+
+	sqlstm = "select top 100 id,ar_code,customer_name,entrydate,contact_person1 from customer " + 
+	"where ar_code like '%" + sestr + "%' or customer_name like '%" + sestr + "%' or " +
+	"address1 like '%" + sestr + "%' or address2 like '%" + sestr + "%' or address3 like '%" + sestr + "%' or " +
+	"contact_person1 like '%" + sestr + "%' or contact_person2 like '%" + sestr + "%' " +
+	"order by customer_name";
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.addEventListener("onSelect", new clb_onSelect());
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("id").toString());
+		kabom.add(dpi.get("ar_code"));
+		kabom.add(kiboo.checkNullString(dpi.get("customer_name")));
+		kabom.add(kiboo.checkNullString(dpi.get("contact_person1")));
+		kabom.add( kiboo.checkNullDate(dpi.get("entrydate"),"---") );
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void updateCustomerInfo()
+{
+	sqlstm = "";
+
+	tarc = kiboo.replaceSingleQuotes(c_arcode.getValue()).trim();
+	tcustn = kiboo.replaceSingleQuotes(c_customer_name.getValue()).trim();
+	tad1 = kiboo.replaceSingleQuotes(c_address1.getValue()).trim();
+	tad2 = kiboo.replaceSingleQuotes(c_address2.getValue()).trim();
+	tad3 = kiboo.replaceSingleQuotes(c_address3.getValue()).trim();
+	tad4 = kiboo.replaceSingleQuotes(c_address4.getValue()).trim();
+	ttel = kiboo.replaceSingleQuotes(c_telephone_no.getValue()).trim();
+	tfax = kiboo.replaceSingleQuotes(c_fax_no.getValue()).trim();
+	temil = kiboo.replaceSingleQuotes(c_e_mail.getValue()).trim();
+	tco1 = kiboo.replaceSingleQuotes(c_contact_person1.getValue()).trim();
+	tds1 = kiboo.replaceSingleQuotes(c_designation1.getValue()).trim();
+	ttl1 = kiboo.replaceSingleQuotes(c_p_ph1.getValue()).trim();
+	thp1 = kiboo.replaceSingleQuotes(c_h_ph1.getValue()).trim();
+	tco2 = kiboo.replaceSingleQuotes(c_contact_person2.getValue()).trim();
+	tds2 = kiboo.replaceSingleQuotes(c_designation2.getValue()).trim();
+	ttl2 = kiboo.replaceSingleQuotes(c_p_ph2.getValue()).trim();
+	thp2 = kiboo.replaceSingleQuotes(c_h_ph2.getValue()).trim();
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null ) return;
+
+	if(global_selected_arcode.equals("")) // new customer
+	{
+		if(tarc.equals("") || tcustn.equals(""))
+		{
+			guihand.showMessageBox("New customer require a valid ar_code and name..");
+			return;
+		}
+
+		// check if ar_code entered exist in customer-table
+		sqlstm2 = "select id from customer where ar_code='" + tarc + "'";
+		krc = sql.firstRow(sqlstm2);
+		if(krc != null)
+		{
+			guihand.showMessageBox("Customer AR_CODE exists.. sorry, no duplicates allowed!");
+		}
+		else // no dup, can insert customer rec.
+		{
+			todate = kiboo.getDateFromDatebox(hiddendatebox);
+			sqlstm = "insert into customer (ar_code,customer_name,address1,address2,address3,address4,telephone_no,fax_no,e_mail," +
+			"contact_person1,contact_person2,designation1,designation2,p_ph1,p_ph2,h_ph1,h_ph2,entrydate) values (" +
+			"'" + tarc + "','" + tcustn + "','" + tad1 + "','" + tad2 + "','" + tad3 + "','" + tad4 + "','" + ttel + "','" + tfax + "'," +
+			"'" + temil + "','" + tco1 + "','" + tco2 + "','" + tds1 + "','" + tds2 + "','" + ttl1 + "','" + ttl2 + "','" + thp1 + "','" + thp2 + 
+			"','" + todate + "')";
+		}
+	}
+	else // just update customer rec
+	{
+		if(tcustn.equals(""))
+		{
+			guihand.showMessageBox("Blank customer is not allowed..");
+		}
+		else
+		{
+			sqlstm = "update customer set customer_name='" + tcustn + "',address1='" + tad1 + "',address2='" + tad2 + "',address3='" + tad3 + "',address4='" + tad4 +
+			"',telephone_no='" + ttel + "',fax_no='" + tfax + "',e_mail='" + temil + "',contact_person1='" + tco1 + "',contact_person2='" + tco2 + "'," +
+			"designation1='" + tds1 + "',designation2='" + tds2 + "',p_ph1='" + ttl1 + "',p_ph2='" + ttl2 + "',h_ph1='" + thp1 + "',h_ph2='" + thp2 +"' " +
+			"where ar_code='" + global_selected_arcode + "'";
+		}
+	}
+	
+	if(!sqlstm.equals(""))
+	{
+		sql.execute(sqlstm);
+		clearFields();
+	}
+
+	sql.close();
+	loadCustomers(1);
+}
+
+// itype: 1=delete
+void adminFunc(int itype)
+{
+	if(global_selected_arcode.equals("")) return;
+	sqlstm = "";
+	switch(itype)
+	{
+		case 1 :
+			if(Messagebox.show("HARD DELETE!!", "Are you sure?",
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+			sqlstm = "delete from customer where ar_code='" + global_selected_arcode + "'";
+			break;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		clearFields();
+		loadCustomers(1);
+	}
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="custman_panel" title="Customer Management ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox>
+
+<div id="woparea" width="550px">
+<groupbox mold="3d">
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="searchstring_tb" width="250px" style="font-size:9px" />
+		<button label="Search" style="font-size:9px" onClick="loadCustomers(1)" />
+	</hbox>
+	<label style="font-size:8px">
+(Max. 100 records per click)
+	</label>
+</groupbox> <!-- ENDOF customers search -->
+
+<separator height="3px" />
+<div id="customers_holder" />
+
+</div> <!-- ENDOF woparea -->
+
+<div id="workarea">
+
+<tabbox mold="accordion">
+<tabs>
+	<tab id="tab1" label="Customer Details" />
+	<tab id="tab2" label="Default Settings" />
+</tabs>
+<tabpanels>
+
+<tabpanel> <!-- Customer details -->
+<grid width="600px">
+	<rows>
+		<row spans=",3">
+			<label value="AR_Code" style="font-size:9px" />
+			<textbox id="c_arcode" style="font-size:9px" width="20%" />
+		</row>
+		<row spans=",3">
+			<label value="Customer name" style="font-size:9px" />
+			<textbox id="c_customer_name" style="font-size:9px" width="99%" />
+		</row>
+		<row spans=",3">
+			<label value="Address1" style="font-size:9px" />
+			<textbox id="c_address1" style="font-size:9px" width="99%" />
+		</row>
+		<row spans=",3">
+			<label value="Address2" style="font-size:9px" />
+			<textbox id="c_address2" style="font-size:9px" width="99%" />
+		</row>
+		<row spans=",3">
+			<label value="Address3" style="font-size:9px" />
+			<textbox id="c_address3" style="font-size:9px" width="99%"/>
+		</row>
+		<row spans=",3">
+			<label value="Address4" style="font-size:9px" />
+			<textbox id="c_address4" style="font-size:9px" width="99%"/>
+		</row>
+		<row>
+			<label value="Phone" style="font-size:9px" />
+			<textbox id="c_telephone_no" style="font-size:9px" width="99%" />
+			<label value="Fax" style="font-size:9px" />
+			<textbox id="c_fax_no" style="font-size:9px" width="99%" />
+		</row>
+		<row spans=",3">
+			<label value="Email" style="font-size:9px" />
+			<textbox id="c_e_mail" style="font-size:9px" width="40%" />
+		</row>
+		<row spans="4" style="background:#000000" >
+			<label value="Contacts" style="color:#DDDDDD" />
+		</row>
+		<row>
+			<label value="Person" style="font-size:9px" />
+			<label value="Designation" style="font-size:9px" />
+			<label value="Tel" style="font-size:9px" />
+			<label value="Cel" style="font-size:9px" />
+		</row>
+		<row>
+			<textbox id="c_contact_person1" style="font-size:9px" width="99%" />
+			<textbox id="c_designation1" style="font-size:9px" width="99%"/>
+			<textbox id="c_p_ph1" style="font-size:9px" width="99%" />
+			<textbox id="c_h_ph1" style="font-size:9px" width="99%" />
+		</row>
+		<row>
+			<textbox id="c_contact_person2" style="font-size:9px" width="99%" />
+			<textbox id="c_designation2" style="font-size:9px" width="99%"/>
+			<textbox id="c_p_ph2" style="font-size:9px" width="99%" />
+			<textbox id="c_h_ph2" style="font-size:9px" width="99%" />
+		</row>
+
+	</rows>
+</grid>
+<separator height="2px" />
+<hbox>
+	<button id="newupdate_btn" label="New customer" style="font-size:9px" onClick="updateCustomerInfo()" />
+	<button label="Clear fields" style="font-size:9px" onClick="clearFields()" />
+</hbox>
+<separator height="2px" />
+<div id="adminstuff" visible="false" style="background:#a52a2a;padding:2px" >
+<hbox>
+	<button label="Delete" style="font-size:9px" onClick="adminFunc(1)" />
+</hbox>
+</div>
+
+</tabpanel> <!-- ENDOF Customer details -->
+
+<tabpanel> <!-- default settings -->
+NOT AVAILABLE
+</tabpanel> <!-- ENDOF default settings -->
+
+</tabpanels>
+</tabbox>
+
+
+
+</div> <!-- ENDOF workarea -->
+
+
+</hbox>
+
+
+<zscript>
+<![CDATA[
+
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminstuff.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

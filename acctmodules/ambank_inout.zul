@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="ambank_inout_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title: AMBANK input/output
+Written by: Victor Wong
+
+**NOTES**
+7/10/2010: first version based on Timberline output
+
+replace , to anything:
+theamount = theamount.replaceAll(",+","");
+
+*/
+
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.util.regex.*;
+import java.security.*;
+
+import javax.swing.text.*;
+import javax.swing.text.rtf.RTFEditorKit;
+
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.util.media.AMedia;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+/*
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+*/
+
+String md5_Hasher(String istring)
+{
+	String md5val = "";
+	MessageDigest algorithm = null;
+
+	algorithm = MessageDigest.getInstance("MD5");
+        
+	byte[] defaultBytes = istring.getBytes();
+	algorithm.reset();
+	algorithm.update(defaultBytes);
+	byte[] messageDigest = algorithm.digest();
+	StringBuffer hexString = new StringBuffer();
+
+	for (int i = 0; i < messageDigest.length; i++)
+	{
+		String hex = Integer.toHexString(0xFF & messageDigest[i]);
+		if (hex.length() == 1) hexString.append('0');
+
+		hexString.append(hex);
+	}
+
+	md5val = hexString.toString();
+	return md5val;
+}
+
+Object[] payme_lb_headers = {
+	new listboxHeaderObj("Chq.Date",true),
+	new listboxHeaderObj("Chq.##",true),
+	new listboxHeaderObj("Payee",true),
+	new listboxHeaderObj("Amount",true),
+	new listboxHeaderObj("Addr1",true),
+	new listboxHeaderObj("Addr2",true),
+	new listboxHeaderObj("Addr3",true),
+	new listboxHeaderObj("Addr4",true),
+	new listboxHeaderObj("Tel.Fax",true),
+	};
+
+void import_Timberline_ChqListing()
+{
+	uploaded_file = Fileupload.get();
+	if(uploaded_file == null) return;
+	
+	thefilename = uploaded_file.getName(); // get filename to be used in the header
+	
+	//bytearray = uploaded_file.getByteData();
+	String mystring = uploaded_file.getStringData();
+	chopped_file = mystring.split("\r\n");
+
+	if(chopped_file.length == 0) return;
+	
+	Listbox newlb = makeVWListbox(imported_holder, payme_lb_headers, "payme_lb", 35);
+
+	longstring = "";
+	linecounter = 0;
+	
+	for(i=7;i<chopped_file.length;i++)
+	{
+		wop = chopped_file[i];
+		woplen = wop.length();
+		
+		if(woplen < 23) continue;
+		
+		chqdate = wop.substring(11,22).trim();
+
+			if(chqdate.matches("[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]")) // if 1st field is a date, we can do more parsing
+			{
+				chqdate = chqdate.replace('-','/');
+
+				// grab the chq number
+				chqnum = "";
+				if(woplen > 32) chqnum = wop.substring(26,32).trim();
+				if(woplen > 25 && woplen < 32) chqnum = wop.substring(26).trim();
+
+				// grab the amount
+				theamount = "";
+				if(woplen > 50) theamount = wop.substring(35,50).trim();
+				if(woplen > 35 && woplen < 50) theamount = wop.substring(35).trim();
+				
+				beforevalcon = theamount;
+				theamount = theamount.replaceAll(",+","");
+				amtval = Float.valueOf(theamount);
+				if(amtval == 0.0) continue;
+
+				// grab the payee
+				payee = "";
+				if(woplen >= 84) payee = wop.substring(50,84).trim();
+				if(woplen > 50 && woplen < 83) payee = wop.substring(50).trim();
+				//if(payee.equals("")) continue;
+
+				// grab address if any
+				adrln1 = chopped_file[i];
+				adrln2 = chopped_file[i+1];
+				adrln3 = chopped_file[i+2];
+				adrln4 = chopped_file[i+3];
+				telln5 = chopped_file[i+4];
+
+				addr1 = (adrln1.length() > 113) ? adrln1.substring(112).trim() : "";
+				addr2 = (adrln2.length() > 113) ? adrln2.substring(112).trim() : "";
+				addr3 = (adrln3.length() > 113) ? adrln3.substring(112).trim() : "";
+				addr4 = (adrln4.length() > 113) ? adrln4.substring(112).trim() : "";
+				tel5 = (telln5.length() > 113) ? telln5.substring(112).trim() : "";
+
+				// try guess postcode from address lines
+				postcode = "40150";
+
+				Pattern numberPattern = Pattern.compile("[0-9]+");
+				Matcher m = numberPattern.matcher(addr3);
+
+				if(m.find()) postcode = m.group(0);
+
+				if(addr1.equals("")) addr1 = "No 9,Jalan Astaka U8/84,Bukit Jelutong,";
+				if(addr2.equals("")) addr2 = "40150 Shah Alam,Selangor";
+				
+				ArrayList kabom = new ArrayList();
+				kabom.add(chqdate);
+				kabom.add(chqnum);
+				kabom.add(payee);
+				kabom.add(beforevalcon);
+				kabom.add(addr1);
+				kabom.add(addr2);
+				kabom.add(addr3);
+				kabom.add(addr4);
+				kabom.add(tel5);
+
+				strarray = convertArrayListToStringArray(kabom);
+				insertListItems(newlb,strarray,JOBFOLDERS_PREFIX);
+
+				// lets make the longlong ambank string..
+				lopistring = "P~" + chqdate + "~PROPAY_BC~1234567890123~~" + payee + "~" + chqnum + "~" + theamount + "~LOC-WP-KL~~~~~";
+				lopistring += addr1 + "~" + addr2 + "~" + addr3 + "~" + addr4 + "~" + postcode + "~C~~CU~~No 9,Jalan Astaka U8/84,Bukit Jelutong,~40150 Shah Alam,Selangor~~~40150~~~R~~~~~~~~~~MYR~~~~~~~~~~~N~";
+				
+				/*
+				lopistring = wopi + "~" + chqnum + "~" + theamount + "~" + payee + "~" + addr1 + "~" + addr2 + "~" + 
+				addr3 + "~" + addr4 + "~" + tel5 + "~" + postcode + "~";
+				*/
+
+				longstring += lopistring + md5_Hasher(lopistring) + "\n";
+
+				linecounter++;
+
+			}
+	}
+
+	linecounter++;
+
+	headerstring = "H~" + thefilename + "~12345678P~" + linecounter.toString() + "~Y\n";
+	longstring = headerstring + longstring;
+
+	//dadabox.setValue(longstring);
+	numofrecs_lbl.setValue("Number of payee found: " + linecounter.toString());
+}
+
+void import_RTF()
+{
+	uploaded_file = Fileupload.get();
+	if(uploaded_file == null) return;
+
+	//FileInputStream stream = new FileInputStream("sample.rtf");
+	RTFEditorKit kit = new RTFEditorKit();
+	Document doc = kit.createDefaultDocument();
+	wopistream = uploaded_file.getStreamData();
+	kit.read(wopistream, doc, 0);
+	String plainText = doc.getText(0, doc.getLength());
+	rtfbox.setValue(plainText);
+
+}
+
+]]>
+</zscript>
+
+<div width="1200px" style="padding:2px">
+<panel id="ambank_inout_panel" title="AMBANK I/O v.1" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<hbox>
+<button label="Import file" style="font-size:9px" onClick="import_Timberline_ChqListing()" />
+<label id="numofrecs_lbl" style="font-size:9px" />
+<button label="Import RTF" style="font-size:9px" onClick="import_RTF()" />
+</hbox>
+
+<vbox>
+<textbox id="dadabox" multiline="true" width="1000px" height="500px" style="font-size:9px" visible="false" />
+<div id="imported_holder" />
+<textbox id="rtfbox" multiline="true" width="1000px" height="500px" style="font-size:9px"/>
+</vbox>
+
+<zscript>
+<![CDATA[
+setTodayDatebox(hiddendatebox);
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

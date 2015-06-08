@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="whsalesrepomod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "WH Sales Report";
+MYVERSION = "v0.2";
+MYPANEL = "whssapreppan";
+/*
+Title		: WH Sales extract invoices from mysql
+Written by	: Victor Wong
+Dated		: 28/05/2014
+
+Revisions:
+*/
+import java.util.*;
+import java.text.*;
+import java.sql.DriverManager;
+import java.sql.Connection;
+import java.sql.SQLException;
+import groovy.sql.*;
+import java.util.regex.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+Sql wfm_Sql()
+{
+	String dbstring = "jdbc:mysql://192.168.130.198:3306/billingwhs";
+	try { return Sql.newInstance(dbstring, "billingwhs", "123890", "com.mysql.jdbc.Driver"); } catch (Exception e) { return null; }
+}
+
+void gpWFM_execute(String isqlstm)
+{
+	Sql sql = wfm_Sql();
+	if(sql == null) return;
+	sql.execute(isqlstm);
+	sql.close();
+}
+
+ArrayList gpWFM_GetRows(String isqlstm)
+{
+	Sql sql = wfm_Sql();
+	if(sql == null) return null;
+	ArrayList retval = (ArrayList)sql.rows(isqlstm);
+	sql.close();
+	return retval;
+}
+
+GroovyRowResult gpWFM_FirstRow(String isqlstm)
+{
+	Sql sql = wfm_Sql();
+	if(sql == null) return null;
+	GroovyRowResult retval = (GroovyRowResult)sql.firstRow(isqlstm);
+	sql.close();
+	return retval;
+}
+
+Object[] whinhds =
+{
+	new listboxHeaderWidthObj("INV#",true,""),
+	new listboxHeaderWidthObj("Dated",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Tel",true,""),
+	new listboxHeaderWidthObj("Email",true,""),
+	new listboxHeaderWidthObj("Addr/Tel",true,""),
+	new listboxHeaderWidthObj("Team",true,""),
+	new listboxHeaderWidthObj("Items",true,""),
+	new listboxHeaderWidthObj("Amount",true,"70px"),
+	new listboxHeaderWidthObj("Csh/CC",true,""),
+};
+invposi = 0;
+itmposi = 7;
+amtposi = 8;
+paytyposi = 9;
+teamposi = 6;
+
+void showWHSinvoices()
+{
+	sdate = kiboo.getDateFromDatebox(startdate);
+
+	sqlstm = "select cm.id, cm.customer_name, cm.customer_email, cm.customer_identification, cm.number, cm.invoicing_address, cm.issue_date," +
+	"im.description, (im.unitary_cost * im.quantity) as subtot, cust.contact_person from common cm " +
+	"left join item im on im.common_id = cm.id " +
+	"left join customer cust on cust.id = cm.customer_id " +
+	"where cm.issue_date='" + sdate +"';";
+
+	r = gpWFM_GetRows(sqlstm);
+	if(r.size() == 0) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(whinvs_holder, whinhds, "whsalesinv_lb", 20);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "issue_date", "customer_name", "contact_person", "customer_email", "invoicing_address", "customer_identification", "description", "subtot" };
+	for(d : r)
+	{
+		kabom.add("WHSALES" + d.get("number").toString());
+		popuListitems_Data(kabom,fl,d);
+		kabom.add("");
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+
+	kh = new HashMap();
+	ml = newlb.getItems();
+	for(d : ml) // find invoices with "credit card" charge item
+	{
+		dt = lbhand.getListcellItemLabel(d,itmposi).toUpperCase();
+		if(dt.indexOf("CREDIT CARD") != -1)
+		{
+			kh.put( lbhand.getListcellItemLabel(d,0) , 1);
+		}
+		else
+		{
+			dt2 = lbhand.getListcellItemLabel(d,teamposi).toUpperCase();
+			if(dt2.indexOf("CARD") != -1)
+			{
+				kh.put( lbhand.getListcellItemLabel(d,0) , 1);
+			}
+		}
+	}
+
+	for(d : ml) // update list-rows whose invoice = kh
+	{
+		iv = lbhand.getListcellItemLabel(d,0).toUpperCase();
+		ks = "CASH";
+		if(kh.containsKey(iv)) ks = "CARD";
+		lbhand.setListcellItemLabel(d,paytyposi,ks);
+	}
+
+	castot = cardtot = 0.0;
+
+	for(d : ml) // sum up CASH and CARD invoices
+	{
+		pt = lbhand.getListcellItemLabel(d,paytyposi);
+		amt = lbhand.getListcellItemLabel(d,amtposi);
+		if(pt.equals("CASH"))
+		{
+			try { castot += Float.parseFloat(amt); } catch (Exception e) {}
+		}
+		if(pt.equals("CARD"))
+		{
+			try { cardtot += Float.parseFloat(amt); } catch (Exception e) {}
+		}
+	}
+
+	cashtot_lbl.setValue(nf2.format(castot));
+	cctot_lbl.setValue(nf2.format(cardtot));
+
+}
+
+/*
+	for(d : rcs)
+	{
+		popuListitems_Data(kabom,fl,d);
+
+		ass1 = pattern.matcher(d.get("do_item"));
+		if(ass1.find())
+		{
+			kabom.add( ass1.group(1) + ass1.group(2) );
+		}
+
+		ass2 = pattern.matcher(d.get("repremarks"));
+		if(ass2.find())
+		{
+			kabom.add( ass2.group(1) + ass2.group(2) );
+		}
+*/
+
+Object[] whsasseshds =
+{
+	new listboxHeaderWidthObj("AssTags",true,"80px"),
+	new listboxHeaderWidthObj("INV",true,"80px"),
+	new listboxHeaderWidthObj("Item",true,""),
+	new listboxHeaderWidthObj("S/Num",true,"80px"),
+	new listboxHeaderWidthObj("Grade",true,"80px"),
+	new listboxHeaderWidthObj("Team",true,"80px"),
+};
+
+void whsextractAssTags()
+{
+	if( whsalesinv_lb.getItemCount() == 0 ) return;
+	Pattern pattern = Pattern.compile("([NAMB]|ADP)([0-9][0-9][0-9][0-9][0-9][0-9]?[0-9])");
+	atgs = fdups = "";
+	katgs = new HashMap();
+	kinvs = new HashMap();
+	ktms = new HashMap();
+	ml = whsalesinv_lb.getItems();
+	for(d : ml)
+	{
+		dt = lbhand.getListcellItemLabel(d,itmposi).toUpperCase();
+		k = dt.split("\n");
+		for(i=0; i<k.length; i++)
+		{
+			tmg = pattern.matcher(k[i]);
+			if(tmg.find())
+			{
+				hh = tmg.group(1) + tmg.group(2);
+				atgs += "'" + hh + "',";
+				if(katgs.containsKey(hh)) fdups += hh + ", ";
+				katgs.put(hh,1);
+
+				kinvs.put(hh, lbhand.getListcellItemLabel(d,invposi));
+				ktms.put(hh, lbhand.getListcellItemLabel(d,teamposi) );
+			}
+		}
+		//if(dt.indexOf("CREDIT CARD") != -1) kh.put( lbhand.getListcellItemLabel(d,0) , 1);
+	}
+
+	if(!fdups.equals(""))
+	{
+		//guihand.showMessageBox("ERR!! Duplicate asset-tags FOUND.. " + fdups);
+		founddups_lbl.setValue("Dups: " + fdups);
+	}
+
+	try { atgs = atgs.substring(0,atgs.length()-1); } catch (Exception e) {}
+
+	if(atgs.trim().equals("")) return;
+
+	sqlstm = "select name,assettag,serial,grade from partsall_0 where assettag in (" + atgs + ") order by assettag;";
+	r = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+	kr = new HashMap();
+
+	for( d : r)
+	{
+		kr.put( d.get("assettag"), d);
+	}
+
+	Listbox newlb = lbhand.makeVWListbox_Width(kassettags, whsasseshds, "whsassets_lb", 20);
+	ArrayList kabom = new ArrayList();
+	//String[] fl = { "assettag", "name" , "serial" };
+
+	Iterator iterator = katgs.entrySet().iterator();
+	while (iterator.hasNext())
+	{
+		Map.Entry mapEntry = (Map.Entry) iterator.next();
+		mk = mapEntry.getKey();
+		kabom.add(mk);
+		styl = "";
+		if(kr.containsKey(mk))
+		{
+			dr = kr.get(mk);
+			if(dr != null)
+			{
+				kabom.add( kinvs.get(mk) );
+				kabom.add( dr.get("name") );
+				kabom.add( dr.get("serial") );
+				kabom.add( dr.get("grade") );
+				kabom.add( ktms.get(mk) );
+			}
+		}
+		else
+		{
+			kabom.add( kinvs.get(mk) );
+			for(j=0;j<4;j++) { kabom.add(""); }
+			styl = "background:#F533C4;font-size:9px";
+		}
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",styl);
+		kabom.clear();
+	}
+
+	//popuListitems_Data(kabom,fl,d);
+	//foundasses.setValue(atgs);
+}
+
+void exportWHSinvoices()
+{
+	exportExcelFromListbox(whsalesinv_lb, kasiexport, whinhds, "WHSALES_invoices.xls","WHSInvoices");
+}
+
+void exportWHSassTags()
+{
+	exportExcelFromListbox(whsassets_lb, kasiexport, whsasseshds, "WHSALES_asstags.xls","WHSassTags");	
+}
+
+void checkmysql()
+{
+	k = wfm_Sql();
+	alert(k);
+	k.close();
+}
+
+]]>
+</zscript>
+
+<popup id="exxAsses_pop">
+<div sclass="shadowbox" style="background:#2e3436;">
+<hbox>
+	<label sclass="subhead1" value="Found asset-tags" />
+	<button label="Export asset-tags" sclass="k9" onClick="exportWHSassTags()" />
+</hbox>
+<separator height="2px" />
+<label id="founddups_lbl" sclass="k9b" />
+<separator height="2px" />
+<div id="kassettags" width="700px" />
+</div>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#435F63">
+<hbox>
+	<datebox id="startdate" format="yyyy-MM-dd" class="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<button label="List warehouse-sale invoices" onClick="showWHSinvoices()" />
+	<button label="Export EXCEL" onClick="exportWHSinvoices()" />
+	<button label="Extract asset-tags" onClick="whsextractAssTags(); exxAsses_pop.open(self)" />
+</hbox>
+
+<separator height="3px" />
+<div id="whinvs_holder" />
+
+<separator height="3px" />
+<hbox>
+<label sclass="subhead1" value="CASH SALES:" />
+<separator width="10px" />
+<label id="cashtot_lbl" sclass="subhead2" style="color:#F5BB0C" />
+<separator width="30px" />
+<label sclass="subhead1" value="CREDITCARD SALES:" />
+<separator width="10px" />
+<label id="cctot_lbl" sclass="subhead2" style="color:#F5BB0C" />
+</hbox>
+
+<separator height="5px" bar="true" />
+
+<!--
+<label style="font-size:9px;color:#bbbbbb">(you've to go match yourself lor.. AAK)</label>
+<separator height="2px" />
+<textbox id="foundasses" multiline="true" width="300px" height="300px" />
+-->
+
+
+<!--
+<button label="cjcj" onClick="checkmysql()" />
+-->
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

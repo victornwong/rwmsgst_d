@@ -1,0 +1,750 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billinguploader" ?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title		: Billing uploader - to MySoft
+Version		: 2.0
+Written by	: Victor Wong
+
+**NOTES**
+26/03/2010: added box to allow search on company - instead of just start-date and end-date
+24/08/2010: add codes to inject courier-bill into DO as well - for billing
+12/05/2011: knockoff from samplereg/folderjobs_man.zul - doing some cleanup and recoding
+*/
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,ADMIN_BIRT_REPORTS_USERGROUP,3);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+documentLinkObj documentLinkProp = new documentLinkObj();
+
+String[] docustatus = { "ALL","Not send out","Invoice/documents sent out" };
+
+selected_folder_id = "";
+
+// Folder listbox onSelect listener - can do some updating and stuff here
+class folderlb_onselect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+		selected_folder_id = getListcellItemLabel(lbitem,12); // save for later
+
+		/* 12/05/2011: disable these for faster billing process
+		ibranch = getListcellItemLabel(lbitem, 8);
+		// if user's branch is not  equal to folder's, disable uploadtomysoft button
+		userbranch = useraccessobj.branch;
+		uploadmysoft_btn.setDisabled(false);
+
+		if(ibranch.equals(userbranch))
+			uploadmysoft_btn.setDisabled(false);
+		*/
+
+		// admin login, enable everything
+		if(useraccessobj.accesslevel == 9) uploadmysoft_btn.setDisabled(false);
+	}
+}
+
+/*
+Object[] folders_lb_headers = {
+
+	new listboxHeaderObj("FolderNo",true),
+	new listboxHeaderObj("RecvDate",true),
+	new listboxHeaderObj("TAT",true),
+	new listboxHeaderObj("DueDate",true),
+	new listboxHeaderObj("Customer",true),
+	new listboxHeaderObj("MySoft",true),
+	new listboxHeaderObj("Brnch",true),
+	new listboxHeaderObj("Delivery.Mode",true)
+};
+*/
+
+Object[] folders_lb_headers = {
+	new listboxHeaderObj("FolderNo",true),
+	new listboxHeaderObj("RecvDate",true),
+	new listboxHeaderObj("TAT",true),
+	new listboxHeaderObj("DueDate",true),
+	new listboxHeaderObj("Samples",true),
+	new listboxHeaderObj("Customer",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("CoA.Date",true),
+	new listboxHeaderObj("Brnch",true),
+	new listboxHeaderObj("arcode",false),
+	new listboxHeaderObj("PKD",true),
+	new listboxHeaderObj("Share",true),
+	new listboxHeaderObj("origid",false), // 12
+	};
+
+// Do the search and populate listbox
+// 25/10/2010: added pkd_samples flag display
+void startFolderJobsSearch(Datebox startd, Datebox endd, Textbox icustomer_tb, int itype)
+{
+	sdate = getDateFromDatebox(startd);
+    edate = getDateFromDatebox(endd);
+	cnm = icustomer_tb.getValue();
+	last_foldersearch_type = itype;
+	
+	if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+	
+	// 29/3/2010: check branch
+	branch_str = "";
+
+	ibranch = useraccessobj.branch;
+	// user with ALL or SA for branch can see evertything..
+	if(!ibranch.equals("ALL") && !ibranch.equals("SA"))
+	{
+		branch_str = "and branch='" + ibranch + "' ";
+	}
+
+	sqlstatem = "select top 200 origid,branch,datecreated,tat,duedate,ar_code,folderstatus," + 
+	"folderno_str,labfolderstatus,pkd_samples,share_sample,coadate from JobFolders " + 
+	"where datecreated between '" + sdate + "' and '" + edate + "'" + 
+	" and deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " + branch_str + " order by datecreated desc";
+	
+	// 25/3/2010: new select cmd to search based on s.date, e.date and customer-name - req by Zainab
+	if(!cnm.equals(""))
+	{
+		xcnm = replaceSingleQuotes(cnm); // play safe
+		sqlstatem = "select top 200 jobfolders.origid, jobfolders.ar_code, jobfolders.datecreated," + 
+			"jobfolders.folderstatus, jobfolders.branch," + 
+			"jobfolders.duedate, jobfolders.tat, jobfolders.folderno_str, jobfolders.labfolderstatus, " + 
+			"jobfolders.pkd_samples, jobfolders.share_sample, jobfolders.coadate, customer.ar_code,customer.customer_name " +
+			"from jobfolders left join customer " +
+			"on customer.ar_code = jobfolders.ar_code where " +
+			"jobfolders.datecreated between '" + sdate + "' and '" + edate + "'" + 
+			"and customer.customer_name like '%" + xcnm + "%' " +
+			"and deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " +
+			branch_str;
+	}
+	
+	// 30/9/2010: search by folder number
+	if(itype == 2)
+	{
+		flst = replaceSingleQuotes(byfolder_tb.getValue());
+		if(!flst.equals(""))
+		{
+			sqlstatem = "select top 200 origid,branch,datecreated,duedate,ar_code,folderstatus," + 
+				"folderno_str,tat,labfolderstatus,pkd_samples,share_sample,coadate from JobFolders " + 
+				"where deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " + branch_str + 
+				" and folderno_str like '%" + flst + "%' order by datecreated desc";
+		}
+	}
+
+	// 1/10/2010: by sample-ID - underscore in select = match any 1 char (9 in total, ALSM12345)
+	if(itype == 3)
+	{
+		smpid = replaceSingleQuotes(bysampleid_tb.getValue());
+		if(!smpid.equals(""))
+		{
+			sqlstatem = "select top 10 count(jobfolders.origid) as jobcount, jobfolders.origid," + 
+			"jobfolders.branch,jobfolders.datecreated,jobfolders.duedate," + 
+			"jobfolders.ar_code,jobfolders.folderstatus,jobfolders.folderno_str,jobfolders.tat," + 
+			"jobfolders.labfolderstatus,jobfolders.pkd_samples, jobfolders.share_sample, jobfolders.coadate from JobFolders " + 
+			"left join jobsamples on jobsamples.jobfolders_id = jobfolders.origid " +
+			"where jobfolders.deleted=0 and jobfolders.folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " + branch_str + 
+			" and jobsamples.sampleid_str like '_________%" + smpid + "%' " +
+			"group by jobfolders.origid,jobfolders.branch,jobfolders.datecreated,jobfolders.duedate," + 
+			"jobfolders.ar_code,jobfolders.folderstatus,jobfolders.folderno_str,jobfolders.tat," + 
+			"jobfolders.labfolderstatus,jobfolders.pkd_samples, jobfolders.share_sample " +
+			"order by jobfolders.datecreated desc";
+		}
+	}
+
+	// 29/11/2010: by share-sample thing
+	if(itype == 4)
+	{
+		shsmp = share_sample.getSelectedItem().getLabel();
+		sqlstatem = "select top 200 origid,branch,datecreated,duedate,ar_code,folderstatus," + 
+			"folderno_str,tat,labfolderstatus,pkd_samples,share_sample,coadate from JobFolders " + 
+			"where deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " + branch_str +
+			" and datecreated between '" + sdate + "' and '" + edate + "'" + 
+			" and share_sample='" + shsmp + "' order by datecreated desc";
+	}
+
+	// 29/11/2010: by PKD sample
+	if(itype == 5)
+	{
+		sqlstatem = "select top 200 origid,branch,datecreated,duedate,ar_code,folderstatus," + 
+			"folderno_str,tat,labfolderstatus,pkd_samples,share_sample,coadate from JobFolders " + 
+			"where deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " + branch_str +
+			" and datecreated between '" + sdate + "' and '" + edate + "'" + 
+			" and pkd_samples=1 order by datecreated desc";
+	}
+	
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+
+	reccount = tlist.size();
+	Listbox newlb = makeVWListboxWithFooter(folders_searchdiv, folders_lb_headers, "folderjobs_lb", 10, reccount.toString() + " folders");
+	newlb.addEventListener("onSelect", new folderlb_onselect());
+
+	if(tlist.size() == 0) return;
+
+	newlb.setRows(25);
+	total_numsamples = 0;
+
+	for(ilist : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+
+		ifolderno = ilist.get("origid");
+		db_folderno_str = ilist.get("folderno_str");
+
+		kabom.add(db_folderno_str);
+		kabom.add(ilist.get("datecreated").toString().substring(0,10));
+
+		kabom.add(ilist.get("tat") + " day(s)");
+		kabom.add(ilist.get("duedate").toString().substring(0,10));
+
+		// 27/2/2010: get number of samples for this folder
+		numsamples = getNumberOfSamples_InFolder(ifolderno);
+		kabom.add(numsamples.toString());
+
+		total_numsamples = total_numsamples + numsamples;
+
+		// get customer name from ar_code - will be slow if alot, scan 1 by 1
+		iar_code = ilist.get("ar_code");
+		iar_code = iar_code.toUpperCase().trim();
+		icompanyname = "Undefined";
+
+		if(!iar_code.equals(""))
+		{
+			// 11/6/2010: hardcode ar_code CASH and CASH USD in mysoft. Load customer info from table CashSales_CustomerInfo
+			if(iar_code.equals("CASH") || iar_code.equals("CASH USD"))
+			{
+				csrec = getCashSalesCustomerInfo_Rec(db_folderno_str); // get rec based on folder no
+				icompanyname = "CshAct: Undefined";
+				if(csrec != null) icompanyname = "CshAct: " + csrec.get("customer_name");
+			}
+			else
+				icompanyname = getCompanyName(iar_code);
+		}
+
+		kabom.add(trimListitemLabel(icompanyname,45));
+		kabom.add(ilist.get("folderstatus"));
+
+		coadate = ilist.get("coadate");
+		coadatestr = "---";
+		if(coadate != null) coadatestr = coadate.toString().substring(0,10);
+		if(coadatestr.equals("1900-01-01")) coadatestr = "---";
+		kabom.add(coadatestr);
+
+		kabom.add(ilist.get("branch"));
+		kabom.add(iar_code);
+
+		pkdwop = "---";
+		if(ilist.get("pkd_samples") != null) pkdwop = (ilist.get("pkd_samples") == 0) ? "---" : "-Y-";
+
+		kabom.add(pkdwop);
+
+		sharesmp = checkNullString_RetWat(ilist.get("share_sample"),"---");
+		if(sharesmp.equals("")) sharesmp = "---";
+		kabom.add(sharesmp);
+		kabom.add(ifolderno.toString());
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,JOBFOLDERS_PREFIX);
+	}
+
+	// 8/3/2010: hardcoded numofsamples_lbl def in UI section. To show total number of samples collected
+	//numofsamples_lbl.setValue("Total samples : " + total_numsamples.toString());
+
+} // end of startFolderJobsSearch()
+
+// Actual func to inject a rec into DeliveryOrderMaster
+// 10/2/2010: version 1
+void injectDeliveryOrderMaster(String ifoldno, Object ifolderRec, Object icompanyRec)
+{
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	todaysdate = getDateFromDatebox(hiddendatebox);
+	thearcode = ifolderRec.get("ar_code");
+
+	compname = icompanyRec.get("customer_name");
+	attention = icompanyRec.get("contact_person1");
+	addr1 = icompanyRec.get("address1");
+	addr2 = icompanyRec.get("address2");
+	addr3 = icompanyRec.get("address3");
+	currcode = icompanyRec.get("CurCode");
+	cterms = icompanyRec.get("credit_period");
+	salesmancode = icompanyRec.get("Salesman_code");
+
+	sqlstatem = "insert into DeliveryOrderMaster (VoucherNo,DONo,DeliveryDate,Code,Name,Attention,Address1,Address2,Address3," +
+	"PurchaseOrder,SalesOrderNo,InvoiceNo,IssuedInvoice,ReferenceNo,SalesMan,Terms,Remark,DiscountRate,Discount,Printed,Status," +
+	"EntryDate,User1,Imported,Warehouse,GrossAmount,NetAmount,CurCode,ExchangeRate,BaseRate,ForeignRate,ReturnStatus,TransType," +
+	"LoanWarehouse,Cancel,DocumentType,NewField1,NewField2,NewField3,NewField4,NewField5,NewField6,NewField7,NewField8,NewField9,NewField10," +
+	"ShippingPhone,ShippingContact,ShipName,ShipAddress1,ShipAddress2,ShipAddress3,Notes) " +
+	"values " +
+	"('" + ifoldno + "','" + ifoldno + "','" + todaysdate + "','" + thearcode + "','" + compname + "','" + attention + "','" + 
+	addr1 + "','" + addr2 + "','" + addr3 + "'," +
+	"'','','',0,'','" + salesmancode + "','" + cterms +"','',0,0,0,''," +
+	"'" + todaysdate +"','Manager',0,'None',0,0,'" + currcode + "',1,1,1,0,'DO'," +
+	"'',0,'DO','','','','','','','','','',''," +
+	"'','','','','','','')";
+
+	sql.execute(sqlstatem);
+	sql.close();
+
+} // end of injectDeliveryOrderMaster(ilbfold,companyRec)
+
+// Inject entries into delivery order based on folderno which is the DONo
+// isampquant = samples quantity rec, refer uploadToMySoft() for select command
+// 10/02/2010: version 1
+// 18/03/2011: inject more fields into the DO - deptcode , salesmancode
+void injectDeliveryOrder(String ifoldno, Object isampquant, Object icompanyRec)
+{
+	mysoftcode = isampquant.get("mysoftcode").toString();
+	quantity = isampquant.get("samplesquantity").toString();
+
+	// get stockmasterdetails.nominal_code to be used for deliveryorder.salescode
+	stockmasterRec = getStockMasterDetails(mysoftcode);
+
+	if(stockmasterRec == null) return;
+
+	salescode = stockmasterRec.get("Nominal_Code");
+	stockcode = stockmasterRec.get("Stock_Code");
+	stockdesc = stockmasterRec.get("Description");
+	sellprice = stockmasterRec.get("Selling_Price").toString();
+	salesmancode = icompanyRec.get("Salesman_code");
+	deptcode = icompanyRec.get("DeptCode");
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	sqlstatem = "insert into deliveryorder (DONo,stockcode,Description,unitprice,quantity,salescode,TransType,DeptCode,SalesPerson) " +
+	"values ('" + ifoldno + "','" + stockcode + "','" + stockdesc + "'," + 
+	sellprice + "," + quantity + ",'" + salescode + "','DO','" + deptcode + "','" + salesmancode + "')" ;
+
+	sql.execute(sqlstatem);
+	sql.close();
+
+} // end of injectDeliveryOrder()
+	
+// Remove existing DO from DeliveryOrderMaster and DeliveryOrder
+void removeExistingDO(String ifullfolderno, String ifoldno)
+{
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	// see if it really exsit
+	sqlst = "select DONo from DeliveryOrderMaster where DONo='" + ifullfolderno + "'";
+	ifounde = sql.firstRow(sqlst);
+	
+	// found a rec .. do the stuff
+	if(ifounde != null)
+	{
+		// remove samples entry in DeliveryOrder
+		sqlst2 = "delete from DeliveryOrder where DONo='" + ifullfolderno + "'";
+		sql.execute(sqlst2);
+
+		// remove DO rec from DeliveryOrderMaster
+		sqlst3 = "delete from DeliveryOrderMaster where DONo='" + ifullfolderno + "'";
+		sql.execute(sqlst3);
+
+		// change jobfolders.uploadtomysoft flag
+		sqlst4 = "update JobFolders set uploadToMYSOFT=0 where origid=" + ifoldno;
+		sql.execute(sqlst4);
+	}
+	
+	sql.close();
+}
+
+// 24/8/2010: inject courier-bill into DO
+// use 311 = StockMasterDetails.ID - stockcode = FREIGHT CHARGES - hardcoded for ALS
+// salescode = stockmasterdetails.nominal_code = 51100.740
+void injectCourierBill(String ifolderno)
+{
+	// lookup any folder_link and not billed in Courier_Tracking first
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	sqlstm = "select origid,delivery_method,tracking_number,amount from Courier_Tracking where folder_link='" + ifolderno + "'";
+	cobills = sql.rows(sqlstm);
+
+	// some courier_tracking recs linking to folder and not billed
+	if(cobills.size() != 0)
+	{
+		stockcode = "FREIGHT CHARGES";
+		salescode = "51100.740";
+
+		billdate = getDateFromDatebox(hiddendatebox);
+
+		for(dpi : cobills)
+		{
+			stockdesc = "FREIGHT CHARGES: " + dpi.get("delivery_method") + " Tracking#: " + dpi.get("tracking_number");
+
+			DecimalFormat df = new DecimalFormat("#.##");
+			sellprice = df.format(dpi.get("amount"));
+
+			sqlstatem = "insert into deliveryorder (DONo,stockcode,Description,unitprice,quantity,salescode,TransType) " +
+			"values ('" + ifolderno + "','" + stockcode + "','" + stockdesc + "'," + sellprice + ",1,'" + salescode + "','DO')" ;
+
+			sql.execute(sqlstatem);
+			
+			// update courier_tracking billing fields
+			sqlstm = "update Courier_Tracking set billed=1, billed_date='" + billdate + "' where origid=" + dpi.get("origid").toString();
+			sql.execute(sqlstm);
+		}
+	}
+
+	sql.close();
+
+} // end of injectCourierBill()
+	
+// Collect samples/tests for selected folder to be uploaded to mysoft delivery-order table
+// 24/8/2010: upload also courier-bill if any linked to this folder
+void uploadToMysoft()
+{
+	// 10/2/2010: folderjobs_lb doesn't exsit, return. folders_searchdiv is hardcoded below
+	Listbox oldlb = folders_searchdiv.getFellowIfAny("folderjobs_lb");
+	if(oldlb == null) return;
+	
+	// see if any folder selected - folderjobs_lb hardcoded
+	ilb = folderjobs_lb.getSelectedIndex();
+	if(ilb == -1) return;
+	
+	ilbfold = folderjobs_lb.getItemAtIndex(ilb).getLabel();
+	foldno = Integer.parseInt(extractFolderNo(ilbfold)).toString();
+	
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	
+	// get jobfolder rec
+	folderRec = getFolderJobRec(foldno); // samplereg_funcs.zs
+	the_arcode = folderRec.get("ar_code");
+
+	// if already uploaded.. prompt for reupload
+	if(folderRec.get("uploadToMYSOFT") == 1)
+	{
+		if (Messagebox.show(ilbfold + " is already uploaded to MySoft. Do you want to upload again?", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO)
+			return;
+	}
+	
+	// delete existing DO with same folderno(DeliveryOrderMaster) and DO-items-entry(DeliveryOrder) first
+	removeExistingDO(ilbfold,foldno);
+
+	// collect samples origid
+	sqlstatem = "select origid from jobsamples where deleted=0 and jobfolders_id=" + foldno;
+	samprecs = sql.rows(sqlstatem);
+
+	if(samprecs != null)
+	{
+		// extract and made samples origid string
+		sampstr = "(";
+		for(kki : samprecs)
+		{
+			sampstr = sampstr + kki.get("origid") + ",";
+		}
+		// chop off extra , at the end
+		ism = sampstr.substring(0,sampstr.length()-1);
+		sampstr = ism + ")";
+
+		// get mysoftcode * samples-quantity
+		sqlstatem2 = "select distinct mysoftcode, count(origid) as samplesquantity from jobtestparameters where jobsamples_id in " + 
+			sampstr + " group by mysoftcode";
+
+		sampquant = sql.rows(sqlstatem2);
+		
+		// get customer rec from ar_code in jobfolders -> customer table
+		companyRec = getCompanyRecord(the_arcode); // alsglobal_sqlfuncs.zs
+
+		// create entry in DeliveryOrderMaster - samples markings will be placed into DeliveryOrderMaster->Notes ..
+		// hmmm. but mysoft will not transfer notes here to invoice.
+		injectDeliveryOrderMaster(ilbfold,folderRec,companyRec);
+			
+		// cycle through sampquant (samples x mysoftcode) to insert
+		for(llo : sampquant)
+		{
+			injectDeliveryOrder(ilbfold,llo,companyRec);
+		}
+
+		// update jobfolders->uploadtomysoft field
+		sqlstatem4 = "update JobFolders set uploadToMYSOFT=1 where origid=" + foldno;
+		sql.execute(sqlstatem4);
+		
+		// 24/8/2010: inject courier-bill
+		injectCourierBill(ilbfold);
+		
+		// refresh folder/jobs listbox
+		startFolderJobsSearch(startdate,enddate,customer_tb);
+		showMessageBox(ilbfold + " has been uploaded to MySoft now");
+		
+		// 17/9/2010: audit-trail
+		todaydate = getDateFromDatebox(hiddendatebox);
+		addAuditTrail(ilbfold,"Billing: Upload to MySoft", useraccessobj.username, todaydate);
+	}
+	
+	sql.close();
+	
+} // end of uploadToMysoft()
+
+void uploadToStarlims()
+{
+	showMessageBox("Work in progress...");
+}
+
+void doViewDoculinkPopup()
+{
+	// make sure we've some sampleid selected before showing the worksheet list
+	if(folderjobs_lb.getSelectedIndex() == -1) return;
+	
+	foldern = folderjobs_lb.getSelectedItem().getLabel();
+	
+	//alert(foldern);
+
+	documentLinkProp.global_eq_origid = foldern;
+	documentLinkProp.refreshListbox.populateDocumentLinks(documentLinkProp.global_eq_origid, documentLinkProp.document_idprefix);
+
+	// show CRUD buttons for admin
+	if(useraccessobj.accesslevel == 9)
+	{
+		documentLinkProp.refreshListbox.showCrudButtons();
+		documentLinkProp.refreshListbox.showAdminButtons();
+	}
+
+	doculink_popup.open(viewdoculinks_btn);
+}
+
+// 11/8/2010: to show cash-account details, stored in a diff table mah..
+void showCashAccountDetails_clicker()
+{
+	if(folderjobs_lb.getSelectedIndex() == -1) return;
+	foldern = folderjobs_lb.getSelectedItem().getLabel();
+
+	csrec = getCashSalesCustomerInfo_Rec(foldern);
+	if(csrec == null)
+	{
+		showMessageBox("Sorry.. cannot find cash-account customer details");
+		return;
+	}
+
+	ca_customer_name_tb.setValue(csrec.get("customer_name"));
+	ca_contact_person1_tb.setValue(csrec.get("contact_person1"));
+	ca_address1_tb.setValue(csrec.get("address1"));
+	ca_address2_tb.setValue(csrec.get("address2"));
+	ca_city_tb.setValue(csrec.get("city"));
+	ca_zipcode_tb.setValue(csrec.get("zipcode"));
+	ca_state_tb.setValue(csrec.get("state"));
+	ca_country_tb.setValue(csrec.get("country"));
+	ca_telephone_tb.setValue(csrec.get("telephone"));
+	ca_fax_tb.setValue(csrec.get("fax"));
+	ca_email_tb.setValue(csrec.get("email"));
+
+	cashaccount_details_Popup.open(showcashacct_btn);
+}
+
+void localPlayDriller()
+{
+	if(folderjobs_lb.getSelectedIndex() == -1) return;
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+
+	theparam = "folderno=" + ifolderno;
+	uniqwindowid = makeRandomId("xxfoldxx");
+	globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+]]>
+</zscript>
+
+<!-- cash account customer details popup -->
+<popup id="cashaccount_details_Popup">
+<groupbox width="300px">
+<caption id="cashacctdetail_lbl" label="Cash account - customer details" />
+	<vbox>
+		<hbox>
+			<label value="Cust.Name" style="font-size:9px" />
+			<separator width="10px" />
+			<textbox id="ca_customer_name_tb" width="200px" style="font-size:9px" />
+		</hbox>
+		
+		<hbox>
+			<label value="Cont.Person" style="font-size:9px" />
+			<separator width="4px" />
+			<textbox id="ca_contact_person1_tb" width="200px" style="font-size:9px" />
+		</hbox>
+		
+		<hbox>
+			<label value="Address1" style="font-size:9px" />
+			<separator width="17px" />
+			<textbox id="ca_address1_tb" width="200px" style="font-size:9px" />
+		</hbox>
+		
+		<hbox>
+			<label value="Address2" style="font-size:9px" />
+			<separator width="17px" />
+			<textbox id="ca_address2_tb" width="200px" style="font-size:9px" />
+		</hbox>
+		
+		<hbox>
+			<label value="City" style="font-size:9px" />
+			<separator width="45px" />
+			<textbox id="ca_city_tb" width="70px" style="font-size:9px" />
+			
+			<label value="Zipcode" style="font-size:9px" />
+			<textbox id="ca_zipcode_tb" width="70px" style="font-size:9px" />
+		</hbox>
+
+		<hbox>
+			<label value="State" style="font-size:9px" />
+			<separator width="39px" />
+			<textbox id="ca_state_tb" width="70px" style="font-size:9px" />
+			
+			<label value="Country" style="font-size:9px" />
+			<textbox id="ca_country_tb" width="70px" style="font-size:9px" />
+		</hbox>
+		
+		<hbox>
+			<label value="Telephone" style="font-size:9px" />
+			<separator width="14px" />
+			<textbox id="ca_telephone_tb" width="70px" style="font-size:9px" />
+			
+			<label value="Fax" style="font-size:9px" />
+			<separator width="18px" />
+			<textbox id="ca_fax_tb" width="70px" style="font-size:9px" />
+		</hbox>
+		<hbox>
+			<label value="Email" style="font-size:9px" />
+			<separator width="38px" />
+			<textbox id="ca_email_tb" width="100px" style="font-size:9px" />
+		</hbox>
+		<separator height="3px" />
+		<hbox>
+			<!-- <button label="Save" style="font-size:9px" onClick="ca_save_Clicker()" /> -->
+			<button label="Close" style="font-size:9px" onClick="cashaccount_details_Popup.close()" />
+		</hbox>
+	</vbox>
+</groupbox>
+</popup>
+<!-- end of popup -->
+
+<popup id="doculink_popup">
+<groupbox width="400px">
+	<include id="linkingdoc_include" src="alsglobal/doculink.zul"/>
+	<separator height="5px" />
+	<hbox>
+		<button label="Close" onClick="doculink_popup.close()" style="font-size:9px" />
+	</hbox>
+</groupbox>
+</popup>
+
+<div width="1200px">
+<panel id="folderjobspanel" title="Folders/Jobs Billing Uploader v.2" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<groupbox mold="3d" style="padding:3px" >
+<hbox>
+<grid>
+	<columns>
+		<column label="" />
+		<column label="" />
+		<column label="" />
+		<column label="" />
+	</columns>
+	<rows>
+		<row>
+		<label value="Start date" style="font-size:9px" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+		<label value="End date" style="font-size:9px" />
+		<hbox>
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+		<button label="Search/Refresh" style="font-size:9px" onClick="startFolderJobsSearch(startdate,enddate,customer_tb,1)" />
+		</hbox>
+		</row>
+		<row spans=",3">
+		<label value="Customer" style="font-size:9px" />
+		<textbox id="customer_tb" width="220px" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+
+<grid>
+	<columns>
+		<column label="" />
+		<column label="" />
+	</columns>
+	<rows>
+		<row>
+			<label value="By folder" style="font-size:9px" />
+			<hbox>
+				<textbox id="byfolder_tb" style="font-size:9px" />
+				<button label="Dig" onClick="startFolderJobsSearch(startdate,enddate,customer_tb,2)" style="font-size:9px" />
+			</hbox>
+		</row>
+		<row>
+			<label value="By sample.ID" style="font-size:9px" />
+			<hbox>
+				<textbox id="bysampleid_tb" style="font-size:9px" />
+				<button label="Dig" onClick="startFolderJobsSearch(startdate,enddate,customer_tb,3)" style="font-size:9px" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+
+</hbox>
+
+</groupbox>
+
+<groupbox mold="3d" style="padding:3px">
+<hbox>
+	<button id="uploadmysoft_btn" label="Upload to MySoft" onClick="uploadToMysoft()" style="font-size:9px" />
+	<button id="showcashacct_btn" label="CashAcct Details" style="font-size:9px" onClick="showCashAccountDetails_clicker()" />
+	<button id="viewdoculinks_btn" label="View COC/PO/Documents" style="font-size:9px" onClick="doViewDoculinkPopup()" />
+	<button label="Folder details" style="font-size:9px" onClick="localPlayDriller()" />
+	<!-- <button id="uploadstarlims_btn" label="Upload to STARLiMS" onClick="uploadToStarlims()" style="font-size:9px" /> -->
+</hbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" style="padding:3px">
+<div id="folders_searchdiv" />
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+setTodayDatebox(hiddendatebox);
+
+//startFolderJobsSearch(startdate,enddate,customer_tb);
+
+documentLinkProp.document_idprefix = "DOCS";
+setDocumentLink_DynamicProperty(linkingdoc_include, documentLinkProp, useraccessobj);
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

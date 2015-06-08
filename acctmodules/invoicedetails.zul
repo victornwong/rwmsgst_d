@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="invoiceDetailsWind"?>
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript>
+// Some security checking codes here
+// useraccessobj = getUserAccessObject();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+void closeInvoiceDetailsWindow()
+{
+	// refering back to main page, hardcoded for now.
+	Div contdiv = Path.getComponent("//als_portal_main/worksandbox");
+	Include thiswin = contdiv.getFellow(myincludeid);
+
+	// just set the include source to empty, should remove this window
+	thiswin.setSrc("");
+    contdiv.removeChild(thiswin);
+
+}
+</zscript>
+
+<window id="invoicedetailswin" title="Invoice details" width="700px" height="600px" position="center"
+ mode="overlapped" border="normal" closable="true"
+ onCancel="closeInvoiceDetailsWindow()" onClose="closeInvoiceDetailsWindow()"
+>
+<div>
+
+<label id="adf" />
+
+<zscript>
+adf.value = "myincludeid = " + myincludeid;
+</zscript>
+
+<hbox>
+<button label="Close" onClick="closeInvoiceDetailsWindow()" />
+</hbox>
+
+</div>
+
+</window>
+
+</zk>

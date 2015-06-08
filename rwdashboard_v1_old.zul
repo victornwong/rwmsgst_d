@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="checklist_mod"?>
+<zk>
+<zscript src="rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "RENTWISE DASHBOARD";
+MYVERSION = "v0.1";
+MYPANEL = "rwdashv1";
+/*
+Title		: Rentwise dashboard showing stocks and jobs and etc
+Written by	: Victor Wong
+Dated		: 21/08/2013
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+
+Object getstockMovements(String stkcat)
+{
+	sqlstm = "select count(id) as parts, " +
+	"(select count(id) from stockmasterdetails where stock_cat='" + stkcat + "' and rma_id is not null) as rma_count, " +
+	"(select count(id) from stockmasterdetails where stock_cat='" + stkcat + "' and bom_id is not null) as bom_count, " +
+	"(select count(id) from stockmasterdetails where stock_cat='" + stkcat + "' and pick_id is not null) as pick_count " +
+	"from stockmasterdetails where stock_cat = '" + stkcat + "'";
+
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
+void populateStockMovements()
+{
+	String[] stkcts = { "HDD","RAM","DESKTOP","NOTEBOOK","MONITOR","GFXCARD","BATTERY" };
+
+	trow = gridhand.gridMakeRow("","background-color:#333333","",stkrows);
+	gridhand.makeLabelToParent("Category","color:#ffffff",trow);
+	gridhand.makeLabelToParent("Total","color:#ffffff",trow);
+	gridhand.makeLabelToParent("BOM","color:#ffffff",trow);
+	gridhand.makeLabelToParent("RMA","color:#ffffff",trow);
+	gridhand.makeLabelToParent("PCK","color:#ffffff",trow);
+
+	for(i=0;i<stkcts.length;i++)
+	{
+		skt = stkcts[i];
+		kj = getstockMovements(skt);
+		if(kj != null)
+		{
+			trow = gridhand.gridMakeRow("","","",stkrows);
+			gridhand.makeLabelToParent(skt,"font-weigth:bold",trow);
+			gridhand.makeLabelToParent(kj.get("parts").toString(),"font-weigth:bold",trow);
+			gridhand.makeLabelToParent(kj.get("bom_count").toString(),"font-weigth:bold",trow);
+			gridhand.makeLabelToParent(kj.get("rma_count").toString(),"font-weigth:bold",trow);
+			gridhand.makeLabelToParent(kj.get("pick_count").toString(),"font-weigth:bold",trow);
+		}
+	}
+}
+
+void populateTickets()
+{
+	sqlstm = "select count(origid) as ticks, " +
+	"(select count(origid) from rw_helptickets where tstatus='OPEN') as ticks_open, " +
+	"(select count(origid) from rw_helptickets where tstatus='CLOSE') as ticks_close, " +
+	"(select count(origid) from rw_helptickets where os_id <> 'HQ' and os_id<>'SELF' and os_id is not null) as ticks_outs " +
+	"from rw_helptickets where tstatus <> 'NEW' and tstatus is not null";
+
+	tks = sqlhand.gpSqlFirstRow(sqlstm);
+
+	trow = gridhand.gridMakeRow("","background-color:#333333","",tickrows);
+	gridhand.makeLabelToParent("Total","color:#ffffff",trow);
+	gridhand.makeLabelToParent("OPEN","color:#ffffff",trow);
+	gridhand.makeLabelToParent("CLOSE","color:#ffffff",trow);
+	gridhand.makeLabelToParent("OUTS","color:#ffffff",trow);
+
+
+	if(tks == null) return;
+
+	trow = gridhand.gridMakeRow("","","",tickrows);
+	gridhand.makeLabelToParent(tks.get("ticks").toString(),"font-weigth:bold",trow);
+	gridhand.makeLabelToParent(tks.get("ticks_open").toString(),"font-weigth:bold",trow);
+	gridhand.makeLabelToParent(tks.get("ticks_close").toString(),"font-weigth:bold",trow);
+	gridhand.makeLabelToParent(tks.get("ticks_outs").toString(),"font-weigth:bold",trow);
+
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<hbox>
+
+<div style="background:#a8f826; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="350px" >
+
+<label style="font-size:16px;font-weight:bold">Stock Status</label>
+
+<grid>
+	<rows id="stkrows">
+	</rows>
+</grid>
+
+</div>
+
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="350px" >
+
+<label style="font-size:16px;font-weight:bold">Customer Service Tickets Stats</label>
+
+<grid>
+	<rows id="tickrows">
+	</rows>
+</grid>
+
+</div>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+populateStockMovements();
+populateTickets();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rndstuff_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+/*
+Version		: 1.0
+Title		: R&D testbed
+Written by	: Victor Wong
+
+Revisions:
+
+09/03/2012: started
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+
+import org.victor.*;
+
+/*
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+*/
+
+//kamip = new aliOp();
+
+TestsPanel metestpanel;
+
+manis = "111111jajajaja";
+
+]]>
+</zscript>
+
+<div id="rooter" width="1200px">
+<panel id="rndstuff_panel" title="Victor R-D Stuff" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<button id="wikep" label="try me" />
+<label id="debuglabel" multiline="true" />
+
+<hbox>
+	<div id="divi_holder" width="200px" />
+	<div id="sect_holder" width="200px" />
+	<div id="tests_holder" />
+</hbox>
+
+<zscript>
+<![CDATA[
+
+class rndonclicker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		iwhat = tests_lbid.getSelectedItem().getLabel();
+		alert(iwhat);
+	}
+}
+
+
+metestpanel = new TestsPanel(divi_holder,"div_lbid",sect_holder,"sec_lbid",tests_holder,"tests_lbid");
+metestpanel.populateDivisionColumn();
+metestpanel.testOnClicker = new rndonclicker();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

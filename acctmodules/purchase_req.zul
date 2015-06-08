@@ -1,0 +1,1704 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="purchase_requ_fun"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript src="../alsglobal/purchasereq_sqlfuncs.zs" />
+<zscript src="../alsglobal/bpm_funcs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+
+<zscript>
+<![CDATA[
+/*
+Title				: Purchase Requisition
+Coding began date	: 13/6/2010
+Developer			: Victor Wong
+
+**NOTES**
+Let users create PR and approval/tracking will be programmed
+
+Design notes:
+
+DecimalFormat nf = new DecimalFormat("##.00");
+
+*/
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+DEBUG = 0;
+
+THIS_MODULE_VERSION = "v.1";
+LISTBOX_LIMIT = 200;
+
+global_selected_preq = "";
+global_selected_preqitem = "";
+global_pr_viewfilter = 0;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+/*
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+*/
+
+String[] currencycode = { "MYR","USD","AUD","NZD","SGD","JPY","HKD","IDR" };
+
+selected_pritem_origid = "";
+selected_pritem_mysoftcode = "";
+selected_pritem_unitprice = "";
+selected_pritem_qty = "";
+
+// From supplier's listbox- return the selected item and which column (icol, zero-start)
+// make use of: supplier_picker_div and suppliers_lb
+String getSupplierListBoxItem(int icol)
+{
+	retval = "";
+	if(!check_ListboxExist_SelectItem(supplier_picker_div,"suppliers_lb")) return;
+	supprec = suppliers_lb.getSelectedItem();
+	retval = getListcellItemLabel(supprec,icol);
+	return retval;
+}
+
+class supplierLBDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		// customize this for other mods
+		pickSupplierDi(); // use back the pop-up-button clicker
+	}
+}
+
+// Populate supplier listbox
+// supplier_picker_div
+void populateSupplierPicker(String isupname)
+{
+Object[] supplierpicker_lb_headers = {
+
+	new listboxHeaderObj("id",false),
+	new listboxHeaderObj("APCode",true),
+	new listboxHeaderObj("Supplier.Name",true),
+	new listboxHeaderObj("Cont.person",true),
+	new listboxHeaderObj("Phone",true),
+	new listboxHeaderObj("Fax",true),
+};
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select top 50 ID,APCode,SupplierName,Phone,Fax,CPerson1 from SupplierDetail where SupplierName like '%" + isupname + "%' order by SupplierName";
+	supprecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(supprecs.size() == 0)
+	{
+		showMessageBox("Cannot find supplier.. please try again");
+		return;
+	}
+
+	Listbox newlb = makeVWListbox(supplier_picker_div, supplierpicker_lb_headers, "suppliers_lb", 12);
+
+	for(supplier : supprecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(supplier.get("ID").toString());
+		kabom.add(supplier.get("APCode"));
+		kabom.add(supplier.get("SupplierName"));
+
+		cperson1 = (supplier.get("CPerson1") == null) ? "-----" : supplier.get("CPerson1");
+		cperson1 = trimListitemLabel(cperson1,20);
+		kabom.add(cperson1);
+
+		phone = (supplier.get("Phone") == null) ? "-----" : supplier.get("Phone");
+		phone = trimListitemLabel(phone,15);
+		kabom.add(phone);
+
+		fax = (supplier.get("Fax") == null) ? "-----" : supplier.get("Fax");
+		fax = trimListitemLabel(fax,15);
+		kabom.add(fax);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+
+	dc_obj = new supplierLBDoubleClick_Listener();
+	setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// returns pr.origid from listbox - cut-short funcs for repetitive checking
+String PR_Listbox_Checker()
+{
+	pr_origid = "";
+	if(!check_ListboxExist_SelectItem(all_pr_div, "purchasereqs_lb")) return;
+	pr_origid = purchasereqs_lb.getSelectedItem().getLabel(); // 1st col, purchaserequi.origid
+	return pr_origid;
+}
+
+void togglePR_Buttons(boolean iwhat)
+{
+	//if(DEBUG == 1) return;
+	//if(useraccessobj.accesslevel == 9) return;
+
+	prmaker_commit_btn.setDisabled(iwhat);
+	prmaker_delete_btn.setDisabled(iwhat);
+}
+
+void togglePR_Items_Buttons(boolean iwhat)
+{
+	// if(DEBUG == 1) return;
+	// if(useraccessobj.accesslevel == 9) return;
+
+	save_PR_btn.setDisabled(iwhat);
+	pick_jobcode_btn.setDisabled(iwhat);
+
+	// input fields
+	prf_duedate_tb.setDisabled(iwhat);
+	prf_priority_lb.setDisabled(iwhat);
+
+	prf_curcode.setDisabled(iwhat);
+	prf_parent_jobcode.setDisabled(iwhat);
+
+	// PR justification notes
+	prf_notes_tb.setDisabled(iwhat);
+
+	// PR items buttons
+	prf_picktable_btn.setDisabled(iwhat);
+	prf_newupdate_btn.setDisabled(iwhat);
+	prf_delete_btn.setDisabled(iwhat);
+
+	// PR documents buttons
+	sjd_new_btn.setDisabled(iwhat);
+	sjb_delete_btn.setDisabled(iwhat);
+
+	prf_savenotes_btn.setDisabled(iwhat);
+
+	// Approver add/del buttons
+	appr_add_btn.setDisabled(iwhat);
+	appr_del_btn.setDisabled(iwhat);
+}
+
+// onSelect event for populatePurchaseReq_Listbox()->purchasereqs_lb
+class PRListbox_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		prstat = getListcellItemLabel(selitem,5);
+		prusername = getListcellItemLabel(selitem,7);
+
+		disbutt = false;
+		if(!prstat.equals(PR_STATUS_PENDING) || !prusername.equals(useraccessobj.username)) // if purchase-req stat not pending, just disable all buttons
+			disbutt = false;
+
+		togglePR_Buttons(disbutt);
+		loadPurchaseReq_Clicker();
+
+		prmaker_convertpo_btn.setVisible(false);
+
+		// if purchase-req is APPROVED, show convert to PO button
+		if(prstat.equals(PR_STATUS_APPROVED) && prusername.equals(useraccessobj.username))
+			prmaker_convertpo_btn.setVisible(true);
+
+		// admin sees all
+		if(useraccessobj.accesslevel == 9)
+		{
+			togglePR_Buttons(false);
+			prmaker_convertpo_btn.setVisible(true);
+		}
+	}
+}
+
+Object[] purchasereq_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("PRQ#",true),
+	new listboxHeaderObj("Supplier.Name",true),
+	new listboxHeaderObj("Crt.Date",true),
+	new listboxHeaderObj("Due.Date",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Priority",true),
+	new listboxHeaderObj("Owner",true),
+};
+
+// Show all purchase-requests for pr_status=pending
+// whatview = some sorta filter thing,0 = show everything, 1 show only pending
+void populatePurchaseReq_Listbox(int whatview)
+{
+	sql = als_mysoftsql();
+	if(sql == null) return;
+
+	statstr = "";
+
+	switch(whatview)
+	{
+		case 1: // pending & disapprove status
+			statstr = "and pr_status in ('" + PR_STATUS_PENDING + "','" + PR_STATUS_DISAPPROVED + "') ";
+			break;
+		
+		case 2: // approved status only
+			statstr = "and pr_status='" + PR_STATUS_APPROVED + "' ";
+			break;
+	}
+
+	sqlstm = "select origid,SupplierName,datecreated,duedate,priority,username,deleted,pr_status from PurchaseRequisition " +
+	"where deleted=0 " + statstr + " order by datecreated";
+
+	// Admin can see all..
+	if(useraccessobj.accesslevel == 9)
+		sqlstm = "select origid,SupplierName,datecreated,duedate,priority,username,deleted,pr_status from PurchaseRequisition order by datecreated";
+
+	preqrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(preqrecs.size() == 0) return;
+
+	Listbox newlb = makeVWListbox(all_pr_div, purchasereq_lb_headers, "purchasereqs_lb", 20);
+	newlb.addEventListener("onSelect", new PRListbox_Listener());
+
+	for(pr_rec : preqrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		theorigid = pr_rec.get("origid").toString();
+		prqstr = makePurchaseReq_ID(theorigid);
+
+		kabom.add(theorigid);
+		kabom.add(prqstr);
+
+		// 29/7/2010: added more info about PR for admin
+		suppname = trimListitemLabel(pr_rec.get("SupplierName"),28);
+		if(useraccessobj.accesslevel == 9)
+		{
+			delstr = (pr_rec.get("deleted") == 0) ? "" : " [DEL]";
+			suppname += delstr;
+		}
+
+		kabom.add(suppname);
+
+		kabom.add(pr_rec.get("datecreated").toString().substring(0,10));
+		duedstr = pr_rec.get("duedate").toString().substring(0,10);
+		if(duedstr.equals("1900-01-01")) duedstr = "-----";
+		kabom.add(duedstr);
+		kabom.add(pr_rec.get("pr_status"));
+		kabom.add(pr_rec.get("priority"));
+		kabom.add(pr_rec.get("username"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// Just populate the supplier-info popup with whatever supplier picked
+void populateViewSupplierInfo(String isuppid)
+{
+	supprec = getSupplier_Rec(isuppid);
+	if(supprec == null) return;
+	
+	//suppinfo_holder_lbl
+	
+	cperson1 = (supprec.get("CPerson1") == null) ? "-----" : supprec.get("CPerson1");
+	phone = (supprec.get("Phone") == null) ? "-----" : supprec.get("Phone");
+	fax = (supprec.get("Fax") == null) ? "-----" : supprec.get("Fax");
+	email = (supprec.get("Email") == null) ? "-----" : supprec.get("Email");
+	
+	
+	suppinfo = 	supprec.get("SupplierName") + "\n" +
+		supprec.get("Supadd1") + "\n" +
+		supprec.get("Supadd2") + "\n" +
+		supprec.get("SupAdd3");
+		
+	suppcontact = "Tel: " + phone + "\n" +
+		"Fax: " + fax + "\n" +
+		"Email: " + email + "\n" +
+		"Contact: " + cperson1;
+		
+	suppinfo_apcode_lbl.setValue("AP Code: " +  supprec.get("APCode"));
+	suppinfo_fulladdr_lbl.setValue(suppinfo);
+	suppinfo_contact_lbl.setValue(suppcontact);
+}
+
+// from popup clicker, show supplier info only
+void viewSupplierInfo_Clicker()
+{
+	suppid = getSupplierListBoxItem(0);
+	if(suppid.equals("")) return;
+	populateViewSupplierInfo(suppid);
+	supplierinfo_popup.open(suppsearch_btn);
+}
+
+// Search supplier clicker for popup
+void searchSupplier_Clicker()
+{
+	supnameinp = sp_name_tb.getValue();
+	if(supnameinp.equals("")) return;
+	populateSupplierPicker(supnameinp);
+}
+
+// User pick supplier di.. in popup - show insert a new PR based on the supplier picked
+//suppliers_lb
+void pickSupplierDi()
+{
+	suppid = getSupplierListBoxItem(0);
+	suppapcode = getSupplierListBoxItem(1);
+	suppliers_lb.clearSelection();
+	
+	supprec = getSupplier_Rec(suppid); // get supplier's rec
+	if(supprec == null) return;
+	
+	todaydate = getDateFromDatebox(hiddendatebox);
+	
+	insertPurchaseReq(supprec.get("APCode"),supprec.get("SupplierName"),todaydate,useraccessobj.username); // purchasereq_sqlfuncs.zs
+	populatePurchaseReq_Listbox(global_pr_viewfilter);
+	supplierpickerPopup.close();
+}
+
+// Show PR-item details..
+void showPRItem_Details()
+{
+	if(selected_pritem_origid.equals("")) return;
+	prir = getPurchaseReqItem_Rec(selected_pritem_origid);
+	if(prir == null) return;
+	
+	itm_description_tb.setValue(prir.get("description"));
+	itm_unitprice_tb.setValue(selected_pritem_unitprice);
+	itm_quantity_tb.setValue(selected_pritem_qty);
+}
+
+// onSelect for populatePReq_Items()
+class prItemsListbox_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_pritem_origid = getListcellItemLabel(selitem,0);
+		selected_pritem_mysoftcode = getListcellItemLabel(selitem,1);
+		selected_pritem_unitprice = getListcellItemLabel(selitem,5);
+		selected_pritem_qty = getListcellItemLabel(selitem,6);
+		
+		// 27/10/2010: added to use only 1 input form to edit/create pr items
+		showPRItem_Details();
+		prf_newupdate_btn.setLabel("Update..");
+	}
+}
+
+// Show purchase-request items - iprorigid = purchase-req id, to be used for pr_parent_id checking
+void populatePReq_Items(String iprorigid)
+{
+Object[] preq_items_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("mysoftcode",false),
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("Item.Name/Description",true),
+	new listboxHeaderObj("Stk",true),
+	new listboxHeaderObj("Unit.Price",true),
+	new listboxHeaderObj("Qty",true),
+	new listboxHeaderObj("S.Total",true),
+};
+
+	Listbox newlb = makeVWListbox(prf_purchaseitems_div, preq_items_lb_headers, "preq_items_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,mysoftcode,description,unitprice,quantity from PurchaseReq_Items where pr_parent_id=" + iprorigid;
+	reqitemrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(reqitemrecs.size() == 0) return;
+	if(reqitemrecs.size() > 5) newlb.setRows(15);
+
+	itemcount = 1;
+	grandtotal = 0;
+	
+	newlb.addEventListener("onSelect", new prItemsListbox_Listener());
+	//NumberFormat nf = NumberFormat.getCurrencyInstance();
+	DecimalFormat nf = new DecimalFormat("##.00");
+	
+	for(reqitem : reqitemrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+
+		mmcode = reqitem.get("mysoftcode");
+		kabom.add(mmcode);
+		kabom.add(itemcount.toString() + ".");
+
+		desc = reqitem.get("description");
+		if(desc.length() > 43) desc = trimListitemLabel(desc,43) + "...";
+
+		kabom.add(desc);
+
+		duma = (mmcode.equals("")) ? "---" : "-Y-";
+		kabom.add(duma);
+
+		unitprice = reqitem.get("unitprice");
+		kabom.add(nf.format(unitprice));
+
+		quantity = reqitem.get("quantity");
+		kabom.add(quantity.toString());
+
+		subtotal = unitprice * quantity;
+		grandtotal += subtotal;
+		kabom.add(nf.format(subtotal));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+
+		itemcount++;
+	}
+
+	prf_totalvalue_lbl.setValue("Total: " + nf.format(grandtotal));
+}
+
+Object[] username_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Fullname",true),
+};
+
+// List out all users from PortalUser, assume user with access level more than 3 capable to approve stuff
+void show_Usernames(Div mDiv)
+{
+	Listbox newlb = makeVWListbox(mDiv, username_lb_headers, "username_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,username,fullname from PortalUser where deleted=0 and locked=0 " + 
+	"and accesslevel > 3 order by username";
+
+	userrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(userrecs.size() == 0) return;
+	newlb.setRows(10);
+
+	for(reqitem : userrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		kabom.add(reqitem.get("username"));
+		kabom.add(reqitem.get("fullname"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// Show approver's notes if any from bpm table
+void showApproverNotes(Component icomp, String iassignee, String iactionstatus, String inotes)
+{
+	if(inotes.equals("")) return;
+
+	Label assnamelbl = new Label();
+	assnamelbl.setValue(iassignee + " decision: " + iactionstatus);
+	assnamelbl.setStyle("background:#889977;color:#ffffff;padding:3px");
+	
+	Label assnotes = new Label();
+	assnotes.setValue(inotes);
+	assnotes.setStyle("background:#556677;color:#ffffff;padding:3px");
+	
+	Separator sepme = new Separator();
+	sepme.setHeight("3px");
+	
+	assnamelbl.setParent(icomp);
+	assnotes.setParent(icomp);
+	sepme.setParent(icomp);
+}
+
+void show_AssignedApprover(Div mDiv, String iprorigid)
+{
+Object[] approvers_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Approvers",true),
+	new listboxHeaderObj("App.Stat",true),
+	new listboxHeaderObj("Stat.Date",true),
+};
+
+	Listbox newlb = makeVWListbox(mDiv, approvers_lb_headers, "approvers_lb", 5);
+	if(approvernotes_div.getFellowIfAny("notes_subsub") != null) notes_subsub.setParent(null);
+
+	assigner = makePurchaseReq_ID(iprorigid);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,assignee,notes,actionstatus,actiondate from BPM_Actions where " + 
+	"(deleted is null or deleted=0) and assigner='" + assigner + "' order by assignee";
+	userrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(userrecs.size() == 0) return;
+	newlb.setRows(10);
+
+	Div subsub = new Div();
+	subsub.setId("notes_subsub");
+	Vbox vsub = new Vbox();
+
+	for(reqitem : userrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		kabom.add(reqitem.get("assignee"));
+		
+		acnotes = reqitem.get("notes");
+		acnotes = (acnotes == null) ? "" : acnotes;
+		
+		acstat = reqitem.get("actionstatus");
+		acstat = (acstat == null) ? PR_STATUS_PENDING : acstat;
+		
+		kabom.add(acstat);
+		
+		acdate = reqitem.get("actiondate");
+		acdate = (acdate == null) ? "-----" : acdate.toString().substring(0,10);
+		kabom.add(acdate);
+		
+		// show any approver's notes from bpmaction table
+		showApproverNotes(vsub,reqitem.get("assignee"),acstat,acnotes);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+
+	vsub.setParent(subsub);	
+	subsub.setParent(approvernotes_div);
+}
+
+// Assign approval clicker
+void assignApprover_Clicker()
+{
+	if(!check_ListboxExist_SelectItem(approver_users_div,"username_lb")) return;
+	selitem = username_lb.getSelectedItem();
+	username = getListcellItemLabel(selitem,1);
+	assigner = makePurchaseReq_ID(global_selected_preq);
+	// check if username exist for this purchase-req in BPM_Actions table
+	if(assigneeExist_BPMActions(username,assigner))
+	{
+		showMessageBox("'" + username + "' already in approver list");
+		return;
+	}
+	// now add the username into BPM_Actions
+	todaydate = getDateFromDatebox(hiddendatebox);
+	insertRec_BPM_Actions(assigner,username,todaydate,"APPROVAL");
+	show_AssignedApprover(assigned_approver_div, global_selected_preq); // refresh the approver lb
+}
+
+void deleteApprover_Clicker()
+{
+	if(!check_ListboxExist_SelectItem(assigned_approver_div,"approvers_lb")) return;
+	selitem = approvers_lb.getSelectedItem();
+	origid = getListcellItemLabel(selitem,0);
+	// assignee = getListcellItemLabel(selitem,1);
+
+	deleteRec_BPM_Actions(origid);
+	// refresh the approver lb
+	show_AssignedApprover(assigned_approver_div, global_selected_preq);
+
+	/* if need confirmation
+	if (Messagebox.show("Remove this approver: " + assignee, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		
+	}
+	*/
+}
+
+// Show approvers assignment and so on - can be used for other modules too - make it so
+// users_lb approver_users_div assigned_approver_div approvers_lb
+void populate_Approver(String iprorigid)
+{
+	show_Usernames(approver_users_div);
+	show_AssignedApprover(assigned_approver_div, iprorigid);
+}
+
+// Load selected purchase-req - populate the accordian motherload
+// prf_suppliername_lbl prf_datecreated_tb prf_duedate_tb prf_priority_lb prf_username_lbl
+// prf_purchaseitems_div
+void loadPurchaseReq_Clicker()
+{
+	prorigid = PR_Listbox_Checker();
+	if(prorigid.equals("")) return;
+
+	pr_rec = getPurchaseReq_Rec(prorigid);
+	if(pr_rec == null) return;
+
+	global_selected_preq = pr_rec.get("origid").toString();
+
+	pridstr = makePurchaseReq_ID(global_selected_preq);
+	prf_tab_lbl.setLabel("1. Purchase requisition : " + pridstr);
+
+	prsuppnameapcode = pr_rec.get("SupplierName") + " [" + pr_rec.get("APCode") + "]" + " [" + pr_rec.get("pr_status") + "]";
+	prf_suppliername_lbl.setValue(prsuppnameapcode);
+
+	datecret = pr_rec.get("datecreated");
+	prf_datecreated_tb.setValue(datecret);
+
+	duedate = pr_rec.get("duedate").toString().substring(0,10);
+	duedatesetter = (duedate.equals("1900-01-01")) ? datecret : pr_rec.get("duedate");
+
+	prf_duedate_tb.setValue(duedatesetter);
+
+	priority = pr_rec.get("priority");
+	matchListboxItems(prf_priority_lb, priority);
+
+	prf_username_lbl.setValue(pr_rec.get("username"));
+	prf_notes_tb.setValue(pr_rec.get("notes")); // the justification notes!!!
+
+	// 27/10/2010: added 2 more fields
+	curcode = pr_rec.get("curcode");
+	matchListboxItems(prf_curcode,curcode);
+	prf_parent_jobcode.setValue(pr_rec.get("parent_jobcode"));
+
+	// now, populate the purchase-req items , supporting documents
+	populatePReq_Items(global_selected_preq);
+	populateSupportingDocuments(global_selected_preq);
+
+	prusername = pr_rec.get("username");
+	prstat = pr_rec.get("pr_status");
+	disbutt = false;
+	if(!prstat.equals(PR_STATUS_PENDING) || !prusername.equals(useraccessobj.username))
+		disbutt = true;
+
+	togglePR_Items_Buttons(disbutt);
+
+	// admin can do everything..
+	//if(useraccessobj.accesslevel == 9) togglePR_Items_Buttons(false);
+
+	// populate the approver panel
+	populate_Approver(global_selected_preq);
+}
+
+// 27/10/2010: streamline this function to perform both create and update pr items details
+// Add new request-item or update clicker - some checking here
+void newUpdateReqItem_Clicker()
+{
+	if(global_selected_preq.equals("")) return;
+
+	ni_description = replaceSingleQuotes(itm_description_tb.getValue());
+	ni_unitprice = replaceSingleQuotes(itm_unitprice_tb.getValue());
+	ni_quantity = replaceSingleQuotes(itm_quantity_tb.getValue());
+	
+	// All input must be filled
+	if(ni_description.equals("") || ni_unitprice.equals("") || ni_quantity.equals(""))
+	{
+		showMessageBox("Please fill-up all fields");
+		return;
+	}
+
+	NumberFormat nf = NumberFormat.getInstance();
+	kkb = nf.parse(ni_unitprice).toString();
+	worked = false;
+	
+	if(selected_pritem_origid.equals("")) // do insert
+	{
+		insertPurchaseReqItems(global_selected_preq, ni_description, kkb, ni_quantity, selected_pritem_mysoftcode);
+		worked = true;
+	}
+	else // do update
+	{
+		sql = als_mysoftsql();
+		if(sql == null) return null;
+		sqlstm = "update PurchaseReq_Items set description='" + ni_description + "', unitprice=" + kkb + 
+			", quantity=" + ni_quantity + " where origid=" + selected_pritem_origid;
+		sql.execute(sqlstm);
+		sql.close();
+		worked = true;
+	}
+
+	if(worked)
+	{
+		populatePReq_Items(global_selected_preq); // refresh purchase-req items
+		clearReqItemFields_clicker(); // clear pr item input boxes + global vars
+	}
+}
+
+// Delete purchase-req item clicker
+void deleteReqItem_Clicker()
+{
+	if(selected_pritem_origid.equals("")) return;
+
+	selitem = preq_items_lb.getSelectedItem();
+	prnumbo = getListcellItemLabel(selitem,2);
+
+	if (Messagebox.show("Delete purchase-request item " + prnumbo, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		sql = als_mysoftsql();
+		if(sql == NULL) return;
+		sqlstatem = "delete from PurchaseReq_Items where origid=" + selected_pritem_origid;
+		sql.execute(sqlstatem);
+		sql.close();
+
+		populatePReq_Items(global_selected_preq); // refresh
+		clearReqItemFields_clicker(); // clear pr item input boxes + global vars
+	}
+}
+
+// Clicker to store purchase-req metadata - createdate and so on
+// prf_duedate_tb prf_priority_lb
+void savePurchaseReq_head_Clicker()
+{
+	if(global_selected_preq.equals("")) return;
+
+	duedate = getDateFromDatebox(prf_duedate_tb);
+	priority = prf_priority_lb.getSelectedItem().getLabel();
+	pr_id_str = makePurchaseReq_ID(global_selected_preq);
+	justnotes = replaceSingleQuotes(prf_notes_tb.getValue());
+
+	curcode = prf_curcode.getSelectedItem().getLabel();
+	parjobcode = replaceSingleQuotes(prf_parent_jobcode.getValue());
+
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	sqlstatem = "update PurchaseRequisition set pr_id_str='" + pr_id_str + "', duedate='" + duedate + "'," +
+	"priority='" + priority + "', notes='" + justnotes + "', curcode='" + curcode + "',parent_jobcode='" + parjobcode + "' " +
+	"where origid=" + global_selected_preq;
+
+	sql.execute(sqlstatem);
+	sql.close();
+
+	populatePurchaseReq_Listbox(global_pr_viewfilter); // refresh
+	showMessageBox("Purchase requisition saved..");
+}
+
+// Show the supporting documents - uses DocumentStorage - supportingdocs_div
+void populateSupportingDocuments(String iprorigid)
+{
+Object[] suppdocs_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("Title",true,"file_title",1),
+	new dblb_HeaderObj("Description",true,"file_description",1),
+	new dblb_HeaderObj("D.Created",true,"datecreated",3),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+	
+	pr_id_str = makePurchaseReq_ID(iprorigid);
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable where docu_link='" + pr_id_str + "' and deleted=0";
+
+	if(useraccessobj.accesslevel == 9) // admin can send everything..
+		sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable where docu_link='" + pr_id_str + "' ";
+
+	Listbox newlb = makeVWListbox_onDB(supportingdocs_div,suppdocs_lb_headers,"supportdocs_lb",5,ds_sql,sqlstm);
+
+	if(newlb.getItemCount() > 5) newlb.setRows(10);
+
+}
+
+void attachSupportingDoc_Clicker()
+{
+	if(global_selected_preq.equals("")) return;
+	
+	fileupl_file_title.setValue("");
+	fileupl_file_description.setValue("");
+	fileupl_docu_status.setSelectedIndex(0);
+	
+	uploadFileDetails_Popup.open(sjd_new_btn);
+}
+
+// popup button clicker
+void uploadLinkingDocument_clicker()
+{
+	if(global_selected_preq.equals("")) return;
+	
+	doculink_str = makePurchaseReq_ID(global_selected_preq);
+	
+	docustatus_str = fileupl_docu_status.getSelectedItem().getLabel();
+	ftitle = replaceSingleQuotes(fileupl_file_title.getValue());
+	fdesc = replaceSingleQuotes(fileupl_file_description.getValue());
+	
+	uploadLinkingDocument(useraccessobj.username, useraccessobj.branch, getDateFromDatebox(hiddendatebox), doculink_str, docustatus_str, ftitle, fdesc);
+	
+	populateSupportingDocuments(global_selected_preq); // refresh supporting docu LB
+}
+
+// let user view the supporting docu - copied from doculink.zul
+void viewLinkingDocument()
+{
+	if(global_selected_preq.equals("")) return;
+	if(!check_ListboxExist_SelectItem(supportingdocs_div,"supportdocs_lb")) return;
+	eorigid = supportdocs_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = makeRandomId("vdoc");
+	globalActivateWindow("miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+
+void deleteSupportingDocument()
+{
+	if(global_selected_preq.equals("")) return;
+	if(!check_ListboxExist_SelectItem(supportingdocs_div,"supportdocs_lb")) return;
+
+	eorigid = supportdocs_lb.getSelectedItem().getLabel();
+	docurec = getLinkingDocumentMetadataRec(eorigid);
+	docu_username = docurec.get("username");
+
+	// security: check if user is owner of document - admin can delete whateva
+	if(!docu_username.equals(useraccessobj.username))
+	{
+		if(useraccessobj.accesslevel < 9)
+		{
+			showMessageBox("Sorry.. not owner, cannot delete document");
+			return;
+		}
+	}
+
+	if (Messagebox.show("Delete this document: " + docurec.get("file_title"), "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		ds_sql = als_DocumentStorage();
+		if(ds_sql == NULL) return;
+		sqlstatem = "delete from DocumentTable where origid=" + eorigid;
+		ds_sql.execute(sqlstatem);
+		ds_sql.close();
+
+		populateSupportingDocuments(global_selected_preq); // refresh supporting docu LB
+	}
+}
+
+//--------- this part here can be used by other modules to listout recs from StockMasterDetails -----
+
+class stockItemDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		// customize this for other mods
+		pickStockItem_clicker(); // uses the popup pick-item clicker to insert stock-item into watever main listbox
+	}
+}
+
+// Look for "Stock Item" only in StockMasterDetails
+void findThoseStockItems_clicker()
+{
+Object[] stockitems_lb_headers = {
+	new listboxHeaderObj("mysoftcode",false),
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("Stock.Code",true),
+	new listboxHeaderObj("Item.name",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Cost.Price",true),
+	new listboxHeaderObj("Last.Price",true),
+};
+
+	itemname = itemname_tb.getValue();
+	if(itemname.equals("")) return;
+	itemname = replaceSingleQuotes(itemname);
+
+	Listbox newlb = makeVWListbox(predef_stockitems_div, stockitems_lb_headers, "stock_items_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select id,stock_code,description,description2,last_purchase_price,cost_price,nominal_code " +
+		"from stockmasterdetails where item_type='Stock Item' and groupcode<>'SUBCONTRACT' and " +
+		"description like '%" + itemname + "%' order by description";
+	stockitems = sql.rows(sqlstm);
+	sql.close();
+
+	if(stockitems.size() == 0) return;
+
+	lbrows = (stockitems.size() > 25) ? 20 : stockitems.size();
+	newlb.setRows(lbrows);
+
+	//newlb.addEventListener("onDoubleClick", new stockItemDoubleClick_Listener());
+
+	NumberFormat nf = NumberFormat.getCurrencyInstance();
+	rowcounter = 1;
+
+	for(dpi : stockitems)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(dpi.get("id").toString()); // <-- this is the mysoftcode
+		kabom.add(rowcounter.toString() + ".");
+		kabom.add(dpi.get("stock_code"));
+		kabom.add(dpi.get("description"));
+		desc2 = dpi.get("description2");
+		desc2 = (desc2.equals("")) ? "------" : desc2;
+		kabom.add(desc2);
+
+		kabom.add(nf.format(dpi.get("cost_price")));
+		kabom.add(nf.format(dpi.get("last_purchase_price")));
+
+		strarray = convertArrayListToStringArray(kabom);
+		//dc_obj = new stockItemDoubleClick_Listener();
+		insertListItems(newlb,strarray,"false");
+		rowcounter++;
+	}
+	
+	dc_obj = new stockItemDoubleClick_Listener();
+	setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// Pick stock-item from stock-master table
+void pickFromStockMaster_clicker()
+{
+	if(global_selected_preq.equals("")) return;
+	if(predef_stockitems_div.getFellowIfAny("stock_items_lb") != null) stock_items_lb.setParent(null);
+	pickStockItem_popup.open(prf_picktable_btn);
+}
+
+// Popup button clicker--
+void pickStockItem_clicker()
+{
+	if(!check_ListboxExist_SelectItem(predef_stockitems_div,"stock_items_lb")) return;
+
+	selitem = stock_items_lb.getSelectedItem();
+	mysoftcode = getListcellItemLabel(selitem, 0);
+	desc = getListcellItemLabel(selitem,3);
+	costprice = getListcellItemLabel(selitem,5).substring(1);
+	lastprice = getListcellItemLabel(selitem,6).substring(1);
+	if(costprice.equals("0.00")) costprice = lastprice;
+
+	clearReqItemFields_clicker(); // clear prev watever selected..
+
+	itm_description_tb.setValue(desc);
+	itm_unitprice_tb.setValue(costprice);
+	itm_quantity_tb.setValue("1");
+
+	// these 2 lines must be customized for another module
+	selected_pritem_mysoftcode = mysoftcode; // place selected stock mysoft code to global var - to be used below
+	newUpdateReqItem_Clicker();
+
+	pickStockItem_popup.close();
+}
+//--------- ENDOF: this part here can be used by other modules to listout recs from StockMasterDetails -----
+
+// Commit a PR, change flag, disallow changes to PR except by admin
+// all_pr_div, purchasereq_lb_headers, "purchasereqs_lb"
+void commitPurchaseReq_clicker()
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+
+	pr_rec = getPurchaseReq_Rec(pr_origid);
+
+	pr_status = pr_rec.get("pr_status");
+	if(!pr_status.equals(PR_STATUS_PENDING)) // not PENDING, return lor
+	{
+		showMessageBox("This is not a pending Purchase-Req, cannot commit");
+		return;
+	}
+
+	prusername = pr_rec.get("username");
+	if(!prusername.equals(useraccessobj.username))
+	{
+		showMessageBox("You're not the owner of this Purchase-Req, cannot commit");
+		return;
+	}
+
+	// if no approvers assigned, cannot commit
+	if(approvers_lb.getItemCount() == 0)
+	{
+		showMessageBox("Must assign at least 1 approver to commit purchase-req");
+		return;
+	}
+
+	if (Messagebox.show("Changes unavailable once Purchase-Req is committed", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	setPR_Status(pr_origid,PR_STATUS_COMMITED); // set pr_status
+	togglePR_Items_Buttons(true);
+
+	selitem = purchasereqs_lb.getSelectedItem(); // get selitem before refresh..
+
+	populatePurchaseReq_Listbox(global_pr_viewfilter); // refresh the PR listbox
+
+	// email committed purchase-req to assigned approvers.. fun.
+	prnum = getListcellItemLabel(selitem,1);
+	prusername = getListcellItemLabel(selitem,7);
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select portaluser.email from portaluser left join bpm_actions " +
+	"on bpm_actions.assignee=portaluser.username where bpm_actions.assigner='" + prnum + "'";
+	semua = sql.rows(sqlstm);
+	sql.close();
+
+	if(semua.size() > 0)
+	{
+		tostr = "";
+		for(dpi : semua)
+		{
+			tostr += dpi.get("email") + ",";
+		}
+
+		if(!tostr.equals(""))
+		{
+			subjstr = "IMPORTANT: Purchase-requisition [ " + prnum + " ] requires your attention";
+
+			msgtext = "\n-- Notification --\n\n";
+			msgtext += prusername + " has submitted purchase-requisition " + prnum + ". You're assigned as an approver for this PR." +
+			" Please login to the system to view/approve it.";
+			msgtext += "\n\n------\nDO NOT print this notification - save some trees";
+
+			tostr = tostr.substring(0,tostr.length()-1); // remove trailing ,
+			simpleSendEmail(SMTP_SERVER,ELABMAN_EMAIL,tostr,subjstr,msgtext);
+		}
+	}
+} // end of commitPurchaseReq_clicker()
+
+void clearPRMetadata()
+{
+	prf_suppliername_lbl.setValue("-Supplier-");
+	prf_tab_lbl.setLabel("1. Purchase requisition");
+
+	// clear global vars
+	global_selected_preq = "";
+
+	setTodayDatebox(prf_datecreated_tb);
+	setTodayDatebox(prf_duedate_tb);
+	prf_priority_lb.setSelectedIndex(0);
+	prf_username_lbl.setValue("");
+	prf_notes_tb.setValue("");
+	prf_curcode.setSelectedIndex(0);
+	prf_parent_jobcode.setValue("");
+
+	togglePR_Items_Buttons(false);
+
+	if(prf_purchaseitems_div.getFellowIfAny("preq_items_lb") != null) preq_items_lb.setParent(null);
+	if(supportingdocs_div.getFellowIfAny("supportdocs_lb") != null) supportdocs_lb.setParent(null);
+
+	if(assigned_approver_div.getFellowIfAny("approvers_lb") != null) approvers_lb.setParent(null);
+	if(approvernotes_div.getFellowIfAny("notes_subsub") != null) notes_subsub.setParent(null);
+
+	clearReqItemFields_clicker(); // clear prev watever selected..
+}
+
+// Let user delete uncommited PR..
+void deletePurchaseReq_clicker()
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+	selitem = purchasereqs_lb.getSelectedItem();
+	prnum = getListcellItemLabel(selitem,1);
+	prusername = getListcellItemLabel(selitem,7);
+	prstat = getListcellItemLabel(selitem,5);
+	if(!prstat.equals(PR_STATUS_PENDING) && useraccessobj.accesslevel != 9)
+	{
+		showMessageBox("This is not a pending Purchase-Req, cannot delete");
+		return;
+	}
+	if(!prusername.equals(useraccessobj.username) && useraccessobj.accesslevel != 9)
+	{
+		showMessageBox("You're not the owner of this Purchase-Req, cannot delete");
+		return;
+	}
+
+	if (Messagebox.show("Delete this Purchase-Req: " + prnum , "Are you sure?", Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	// totally delete uncommited PR
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+
+	// delete pr-items first
+	sqlstm = "delete from purchasereq_items where pr_parent_id=" + pr_origid;
+	sql.execute(sqlstm);
+	// now delete the PR
+	sqlstm = "delete from purchaserequisition where origid=" + pr_origid;
+	sql.execute(sqlstm);
+	sql.close();
+
+	//togglePR_Deleted(pr_origid,"1"); // toggle deleted flag , 1 = deleted
+	populatePurchaseReq_Listbox(global_pr_viewfilter); // refresh the PR listbox
+	
+	// clear prev stuff in pr-items and etc
+	clearPRMetadata();
+
+} // end of deletePurchaseReq_clicker()
+
+void adminToggler(int iwhat)
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+	pr_rec = getPurchaseReq_Rec(pr_origid);
+
+	switch(iwhat)
+	{
+		case 1:	// toggle pr-status
+			prstat = pr_rec.get("pr_status");
+			// can toggle pending/committed status only.. others don't touch
+			if(!prstat.equals(PR_STATUS_PENDING) && !prstat.equals(PR_STATUS_COMMITED)) return;
+			newstat = (prstat.equals(PR_STATUS_PENDING)) ? PR_STATUS_COMMITED : PR_STATUS_PENDING;
+			setPR_Status(pr_origid, newstat);
+			break;
+		
+		case 2: // toggle deleted
+			deletedflag = (pr_rec.get("deleted") == 0) ? "1" : "0";
+			togglePR_Deleted(pr_origid,deletedflag);
+			break;
+	}
+	
+	populatePurchaseReq_Listbox(global_pr_viewfilter); // refresh the PR listbox
+} // end of adminToggler(int iwhat)
+
+//------------ this part here can be customized for other modules, take note of the popups used --
+// Allow admin to send notification email
+Object[] approver_contact_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("User",true),
+	new listboxHeaderObj("Full.Name",true),
+	new listboxHeaderObj("Email",true),
+	new listboxHeaderObj("Phone",true),
+};
+void adminSendNotification_clicker()
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+
+	selitem = purchasereqs_lb.getSelectedItem();
+	prnum = getListcellItemLabel(selitem,1);
+
+	// if no approver(s) assigned for this PR, just return
+	if(approvers_lb.getItemCount() == 0)
+	{
+		showMessageBox("no approvers assigned mah..");
+		return;
+	}
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+
+	sqlstm = "select portaluser.origid,portaluser.username, portaluser.fullname, portaluser.email, portaluser.handphone " +
+	"from portaluser left join bpm_actions " +
+	"on bpm_actions.assignee=portaluser.username " +
+	"where bpm_actions.assigner='" + prnum + "'";
+
+	semua = sql.rows(sqlstm);
+	sql.close();
+	
+	Listbox newlb = makeVWListbox(noti_person_div, approver_contact_lb_headers, "apprs_contact_lb", 5);
+
+	// show bpm-actions assignee
+	for(dpi : semua)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("username"));
+		kabom.add(dpi.get("fullname"));
+
+		iemail = checkEmptyString(dpi.get("email"));
+		kabom.add(iemail);
+
+		ihandphone = checkEmptyString(dpi.get("handphone"));
+		kabom.add(ihandphone);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+
+	noti_title.setValue("Approver for this purchase-requisition");
+	sendnotification_popup.open(admin_send_notification_btn);
+}
+
+// sendnotification_popup button clicker
+void sendNotificationEmail_clicker()
+{
+	if(apprs_contact_lb.getSelectedIndex() == -1) return;
+	selitem = apprs_contact_lb.getSelectedItem();
+
+	toemailaddr = getListcellItemLabel(selitem,3);
+
+	if(toemailaddr.equals(BLANK_REPLACER))
+	{
+		showMessageBox("No email address.. cannot send");
+		return;
+	}
+
+	// get this user's rec
+	thisuser = getPortalUser_Rec_username(useraccessobj.username);
+	if(thisuser == null) return;
+	thisuser_email = thisuser.get("email");
+	if(thisuser_email.equals(""))
+	{
+		showMessageBox("Your email address is not defined.. cannot send email");
+		return;
+	}
+
+	// get PRQ## from the listbox
+	telitem = purchasereqs_lb.getSelectedItem();
+	prnum = getListcellItemLabel(telitem,1);
+
+	sendemail_from_lbl.setValue(thisuser_email);
+	sendemail_to_lbl.setValue(toemailaddr);
+	sendemail_subject_lbl.setValue("Purchase-requisition [ " + prnum + " ] requires your attention");
+	sendemail_popup.open(selitem);
+}
+
+// popup real-sendout email clicker - compose the email and send..
+void sendemail_RealSend_clicker()
+{
+	// these labels are in sendemail_popup
+	fromstr = sendemail_from_lbl.getValue();
+	tostr = sendemail_to_lbl.getValue();
+	subjstr = sendemail_subject_lbl.getValue();
+	msgText = sendemail_body.getValue();
+
+	if(msgText.equals(""))
+	{
+		showMessageBox("Please enter something to say in the email..");
+		return;
+	}
+
+	sendemail_popup.close();
+
+	if(simpleSendEmail(SMTP_SERVER,fromstr,tostr,subjstr,msgText) == 1)
+		showMessageBox("Sorry.. send e-mail failed");
+	else
+		showMessageBox("E-mail sent..");
+}
+
+//-----EOF this part here can be customized for other modules, take note of the popups used --
+
+// Let user printout the purchase requisition..
+void printPurchaseReq_clicker()
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+
+	selitem = purchasereqs_lb.getSelectedItem();
+	prnum = getListcellItemLabel(selitem,0);
+
+	theparam = "prno=" + prnum;
+	uniqwindowid = makeRandomId("xpprx");
+	globalActivateWindow("miscwindows","acctmodules/birt_printpurchasereq.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+// 26/8/2010: convert PR to PO .. open a new window, this module getting too big di
+void prConvertToPO_clicker()
+{
+	pr_origid = PR_Listbox_Checker();
+	if(pr_origid.equals("")) return;
+
+	selitem = purchasereqs_lb.getSelectedItem();
+	prnum = getListcellItemLabel(selitem,0);
+	prusername = getListcellItemLabel(selitem,7);
+	prstat = getListcellItemLabel(selitem,5);
+
+	// If ain't admin, go through the usual security-constrains
+	/*
+	if(useraccessobj.accesslevel != 9)
+	{
+		if(!prusername.equals(useraccessobj.username))
+		{
+			showMessageBox("Purchase-requisition does not belong to you..");
+			return;
+		}
+
+		if(!prstat.equals(PR_STATUS_APPROVED))
+		{
+			showMessageBox("Purchase-requisition is not approved, cannot make PO");
+			return;
+		}
+	}
+	*/
+
+	wnid = makeRandomId("pr2po");
+	params = "prid=" + prnum;
+	globalActivateWindow("miscwindows","acctmodules/pr_to_po.zul", wnid, params, useraccessobj);
+}
+
+// 27/10/2010: to clear req-item input fields
+void clearReqItemFields_clicker()
+{
+	itm_description_tb.setValue("");
+	itm_unitprice_tb.setValue("");
+	itm_quantity_tb.setValue("");
+
+	// reset global vars
+	selected_pritem_origid = "";
+	selected_pritem_mysoftcode = "";
+	selected_pritem_unitprice = "";
+	selected_pritem_qty = "";
+	
+	prf_newupdate_btn.setLabel("New item");
+}
+
+]]>
+</zscript>
+<!-- popups used to send emails/sms, can be used by other modules -->
+<popup id="sendemail_popup">
+<groupbox width="400px">
+	<caption label="Send E-mail" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+		<row>
+			<label value="From" style="font-size:9px" />
+			<label id="sendemail_from_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="To" style="font-size:9px" />
+			<label id="sendemail_to_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Subject" style="font-size:9px" />
+			<label id="sendemail_subject_lbl" style="font-size:9px" />
+		</row>
+		<row spans="2" >
+			<textbox id="sendemail_body" multiline="true" width="390px" height="100px" />
+		</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="5px" />
+<hbox>
+	<button label="Send" style="font-size:9px" onClick="sendemail_RealSend_clicker()"/>
+	<button label="Close" style="font-size:9px" onClick="sendemail_popup.close()" />
+</hbox>
+</popup>
+
+<popup id="sendnotification_popup">
+<groupbox width="350px">
+	<caption label="Send notification email / SMS" />
+	<label id="noti_title" style="font-size:9px" />
+	<separator height="3px" />
+	<div id="noti_person_div" />
+</groupbox>
+<separator height="5px" />
+<hbox>
+	<button id="noti_sendemail_btn" label="Send E-mail" style="font-size:9px" onClick="sendNotificationEmail_clicker()" />
+	<button label="Send SMS" style="font-size:9px" onClick="alert('Bulum..')" />
+	<button label="Close" style="font-size:9px" onClick="sendnotification_popup.close()" />
+</hbox>
+</popup>
+<!-- EOF popups used to send emails/sms can, be used by other modules -->
+
+<popup id="pickStockItem_popup">
+<groupbox>
+<caption label="Predefined stock items" />
+	<hbox>
+		<label value="Item name" style="font-size:9px" />
+		<textbox id="itemname_tb" width="200px" style="font-size:9px" />
+		<separator width="10px" />
+		<button label="Search/Refresh" style="font-size:9px" onClick="findThoseStockItems_clicker()" />
+	</hbox>
+	<separator height="5px" />
+	<div id="predef_stockitems_div" />
+	<separator width="5px" />
+	<hbox>
+		<button label="Pick" style="font-size:9px" onClick="pickStockItem_clicker()" />
+		<button label="Close" style="font-size:9px" onClick="pickStockItem_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- to show input boxes to get details for uploaded file popup -->
+<popup id="uploadFileDetails_Popup">
+<groupbox>
+<caption label="Upload document" />
+	<vbox style="padding:2px">
+		<hbox>
+			<label value="Title" />
+			<separator width="1px" />
+			<textbox id="fileupl_file_title" width="200px" />
+		</hbox>
+		<hbox>
+			<label value="Desc" />
+			<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" />
+		</hbox>
+		<hbox>
+			<label value="Status" />
+			<listbox id="fileupl_docu_status" mold="select" rows="1" style="font-size:9px" />
+		</hbox>
+		<separator width="5px" />
+		<hbox>
+			<button label="Select file" style="font-size:9px" onClick="uploadLinkingDocument_clicker()" />
+			<button label="Close" style="font-size:9px" onClick="uploadFileDetails_Popup.close()" />
+		</hbox>
+	</vbox>
+</groupbox>
+</popup>
+<!-- end of popup -->
+
+<popup id="supplierinfo_popup">
+<groupbox>
+	<caption label="Supplier info" />
+	<vbox>
+		<label id="suppinfo_apcode_lbl" style="background:#909090" />
+		<label id="suppinfo_fulladdr_lbl" multiline="true" width="300px" height="100px" value="-address-" />
+		<label id="suppinfo_contact_lbl" multiline="true" width="300px" height="100px" style="background:#909090" value="-contact-" />
+		<separator height="3px" />
+		<button label="Close" style="font-size:9px" onClick="supplierinfo_popup.close()" />
+	</vbox>
+</groupbox>
+</popup>
+
+<!-- Supplier picker popup -->
+<popup id="supplierpickerPopup">
+<groupbox width="600px">
+<caption id="supplierpickerpopup_lbl" label="Pick a supplier" />
+	<vbox>
+		<hbox>
+			<label value="Supplier name" style="font-size:9px" />
+			<textbox id="sp_name_tb" style="font-size:9px" />
+			<button id="suppsearch_btn" label="Search" style="font-size:9px" onClick="searchSupplier_Clicker()" />
+		</hbox>
+
+		<div id="supplier_picker_div" />
+
+		<hbox>
+			<button label="Select" style="font-size:9px" onClick="pickSupplierDi()" />
+			<button id="viewsuppinfo_btn" label="View supplier info" style="font-size:9px" onClick="viewSupplierInfo_Clicker()" />
+			<button label="Close" style="font-size:9px" onClick="supplierpickerPopup.close()" />
+		</hbox>
+	</vbox>
+</groupbox>
+</popup>
+<!-- end of Supplier picker popup -->
+
+<div width="1200px">
+<panel id="purchase_req_panel" title="Purchase Requisition Maker" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<div>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<borderlayout height="700px">
+	<west title="PR List" width="55%" splittable="true" collapsible="true" >
+		<div style="padding:3px">
+			<hbox>
+				<button label="View all" style="font-size:9px" onClick="populatePurchaseReq_Listbox(0)" />
+				<button label="Pending/Disapprove" style="font-size:9px" onClick="populatePurchaseReq_Listbox(1)"/>
+				<button label="Approved" style="font-size:9px" onClick="populatePurchaseReq_Listbox(2)" />
+			</hbox>
+
+			<separator height="5px" />
+			<div id="all_pr_div" />
+			<separator height="5px" />
+
+			<hbox>
+				<button id="prmaker_picksupplier_btn" label="New Purchase-Req" style="font-size:9px" onClick="supplierpickerPopup.open(prmaker_picksupplier_btn)" />
+				<button id="prmaker_edit_btn" label="Load" style="font-size:9px" onClick="loadPurchaseReq_Clicker()" visible="false" />
+				<button id="prmaker_commit_btn" label="Commit P-R" style="font-size:9px" onClick="commitPurchaseReq_clicker()" />
+				<button id="prmaker_delete_btn" label="Delete" style="font-size:9px" onClick="deletePurchaseReq_clicker()" />
+				<button id="prmaker_printpo_btn" label="Print" style="font-size:9px" onClick="printPurchaseReq_clicker()"  />
+				<button id="prmaker_convertpo_btn" label="Convert to PurchaseOrder" style="font-size:9px" onClick="prConvertToPO_clicker()" />
+			</hbox>
+			<separator height="10px" />
+			<groupbox id="admin_buttons_gb" visible="false">
+				<caption label="Admin only" />
+				<button id="admin_toggle_stat_btn" label="Toggle status" style="font-size:9px" onClick="adminToggler(1)" />
+				<button id="admin_toggle_del_btn" label="Toggle delete" style="font-size:9px" onClick="adminToggler(2)"/>
+				<button id="admin_send_notification_btn" label="Send notification" style="font-size:9px" onClick="adminSendNotification_clicker()" />
+			</groupbox>
+		</div>
+	</west>
+	
+	<center>
+		<div>
+			<div id="purreq_tab_panel" >
+				<tabbox mold="accordion">
+					<tabs>
+						<tab id="prf_tab_lbl" label="1. Purchase requisition" />
+						<tab label="2. Justification/supporting documents" />
+						<tab label="3. Assign approver" />
+					</tabs>
+
+					<tabpanels>
+						<!-- purchase req + items panel -->
+						<tabpanel>
+							<div style="background:#778844;padding:3px" >
+								<label id="prf_suppliername_lbl" style="font-size:12px;font-weight:bold;color:#FFFFFF" value="-Supplier-" />
+							</div>
+							<separator height="3px" />
+							<groupbox style="padding:3px">
+								<grid>
+									<columns>
+										<column label="" />
+										<column label="" />
+										<column label="" />
+										<column label="" />
+									</columns>
+									<rows>
+									<row>
+										<label value="Date created" style="font-size:9px" />
+										<datebox id="prf_datecreated_tb" format="yyyy-MM-dd" style="font-size:9px" disabled="true" />
+										<label value="Due date" style="font-size:9px" />
+										<datebox id="prf_duedate_tb" format="yyyy-MM-dd" style="font-size:9px" disabled="true" />
+									</row>
+									<row>
+										<label value="Priority" style="font-size:9px" />
+										<listbox id="prf_priority_lb" mold="select" style="font-size:9px" disabled="true" />
+										<label value="Owner" style="font-size:9px" />
+										<label id="prf_username_lbl" style="font-size:9px" />
+									</row>
+									<row>
+										<label value="Currency" style="font-size:9px" />
+										<listbox id="prf_curcode" mold="select" style="font-size:9px" />
+										<label value="Job.Code" style="font-size:9px" />
+										<hbox>
+											<textbox id="prf_parent_jobcode" style="font-size:9px" />
+											<button id="pick_jobcode_btn" label="Pick" style="font-size:9px" />
+										</hbox>
+									</row>
+									</rows>
+								</grid>
+							</groupbox>
+
+							<groupbox style="padding:3px">
+								<caption label="Purchase Items" style="font-size:9px" />
+								<vbox>
+									<div id="prf_purchaseitems_div" />
+									
+									<div style="background:#778855;padding:3px">
+										<hbox>
+											<separator width="290px" />
+											<label id="prf_totalvalue_lbl" style="font-weight:bold;color:#ffffff" />
+										</hbox>
+									</div>
+									<grid>
+										<columns>
+											<column label="" />
+											<column label="" />
+											<column label="" />
+											<column label="" />
+										</columns>
+										<rows>
+										<row spans=",3">
+											<label value="Description" style="font-size:9px" />
+											<textbox id="itm_description_tb" multiline="true" width="400px" height="30px" style="font-size:9px" />
+										</row>
+										<row>
+											<label value="Unit.Price" style="font-size:9px" />
+											<textbox id="itm_unitprice_tb" width="50px" style="font-size:9px" />
+											<label value="Quantity" style="font-size:9px" />
+											<textbox id="itm_quantity_tb" width="50px" style="font-size:9px" />
+										</row>
+										</rows>
+									</grid>
+
+									<hbox>
+										<button id="prf_picktable_btn" label="Pick stock-item" style="font-size:9px" disabled="true" onClick="pickFromStockMaster_clicker()" />
+										<button label="Clear fields" style="font-size:9px" onClick="clearReqItemFields_clicker()" />
+										<button id="prf_newupdate_btn" label="New item" style="font-size:9px" disabled="true" onClick="newUpdateReqItem_Clicker()" />
+										<button id="prf_delete_btn" label="Delete" style="font-size:9px" disabled="true" onClick="deleteReqItem_Clicker()" />
+									</hbox>
+								
+								</vbox>
+
+							</groupbox>
+							
+						</tabpanel>
+						<!-- END OF purchase req + items panel -->
+
+						<!-- Justification/documents panel -->
+						<tabpanel>
+							<groupbox>
+								<caption label="Justification notes" />
+								<textbox id="prf_notes_tb" multiline="true" width="460px" height="100px" style="font-size:10px" disabled="true" />
+								<separator height="3px" />
+								<button id="prf_savenotes_btn" label="Save notes" style="font-size:9px" onClick="savePurchaseReq_head_Clicker()" />
+							</groupbox>
+
+							<groupbox>
+								<caption label="Supporting documents" />
+								<div id="supportingdocs_div" />
+								<hbox>
+									<button id="sjd_new_btn" label="Attach document " style="font-size:9px" disabled="true" onClick="attachSupportingDoc_Clicker()" />
+									<button id="sjd_view_btn" label="View document" style="font-size:9px" onClick="viewLinkingDocument()" />
+									<button id="sjb_delete_btn" label="Delete" style="font-size:9px" disabled="true" onClick="deleteSupportingDocument()" />
+								</hbox>
+							</groupbox>
+
+							</tabpanel>
+						<!-- ENDOF Justification/documents panel -->
+						<!-- Assign approver pane -->
+						<tabpanel>
+							<div style="padding:3px">
+							<hbox>
+							<grid>
+								<columns>
+									<column label="" />
+								</columns>
+								<rows>
+								<row spans="2">
+									<div id="approver_users_div" width="230px" />
+								</row>
+								<row>
+									<button id="appr_add_btn" label="Assign" style="font-size:9px" disabled="true" onClick="assignApprover_Clicker()" />
+								</row>
+								</rows>
+							</grid>
+							<grid>
+								<columns>
+									<column label="" />
+								</columns>
+								<rows>
+								<row spans="2">
+									<div id="assigned_approver_div" />
+								</row>
+								<row>
+									<button id="appr_del_btn" label="Remove" style="font-size:9px" disabled="true" onClick="deleteApprover_Clicker()" />
+								</row>
+								</rows>
+							</grid>
+							</hbox>
+							<separator height="3px" />
+							<groupbox>
+								<caption label="Approver's notes" />
+								<div id="approvernotes_div" />
+							</groupbox>
+							</div>
+						</tabpanel>
+						<!-- ENDOF Assign approver pane -->
+				
+					</tabpanels>
+				</tabbox>
+				
+				<separator height="5px" />
+				<button id="save_PR_btn" label="4. SAVE PURCHASE REQUISITION" onClick="savePurchaseReq_head_Clicker()" />
+				
+			</div>
+		</div>
+	</center>
+
+</borderlayout>
+
+</div>
+</panelchildren>
+</panel>
+</div>
+
+<zscript>
+<![CDATA[
+setTodayDatebox(hiddendatebox);
+
+// admin login, show special stuff
+if(useraccessobj.accesslevel == 9)
+{
+	admin_buttons_gb.setVisible(true);
+}
+
+// security notes: if user access level >= 5, then can attach documents to non-owned purchase-req, else can view only
+
+populateDropdownListbox(prf_priority_lb,purchasereq_priority);
+populatePurchaseReq_Listbox(1);
+
+populateDropdownListbox(prf_curcode,currencycode);
+
+// supporting docs stuff
+populateDropdownListbox(fileupl_docu_status, doculink_status);
+
+]]>
+</zscript>
+</zk>

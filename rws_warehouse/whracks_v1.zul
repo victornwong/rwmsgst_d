@@ -1,0 +1,742 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="whrcssfs"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="./whracks_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Warehouse Racks SS/FR";
+MYVERSION = "v0.1";
+MYPANEL = "whrcssfpabn";
+/*
+Title		: Warehouse racks management smart-storage / fast-retrieval
+Written by	: Victor Wong
+Dated		: 06/11/2013
+
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.geom.*;
+import org.zkoss.image.*;
+import javax.imageio.ImageIO;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+PALLET_SIZE = 60; // use to calc bar fill %
+
+BufferedImage globRackImage_A;
+BufferedImage globRackImage_B;
+BufferedImage globRackImage_C;
+BufferedImage globRackImage_D;
+BufferedImage globRackImage_E;
+BufferedImage globRackImage_F;
+AImage globAimage = null;
+HashMap globCellHash = null;
+
+Object imagemapHandler = null;
+Object manifestHandler = null;
+
+glob_sel_cell = "";
+
+String checkAssetPalletCell(String iastg)
+{
+	if(iastg.equals("")) return "Do enter an asset-tag..";
+
+	sqlstm = "select palletno from stockmasterdetails where stock_code='" + iastg + "'";
+	kx = sqlhand.gpSqlFirstRow(sqlstm);
+	if(kx == null) return "Asset not found in the database";
+
+	if(kx.get("palletno") != null)
+		if(!kx.get("palletno").equals("")) return "Asset already stored at cell : " + kx.get("palletno");
+
+	return "";
+}
+
+// Return string from selected-items in Listbox. isepa = separator
+String constStrFromLB_selitems(Listbox ilb, String isepa, boolean iquoteme)
+{
+	retv = "";
+	kx = ilb.getSelectedItems().toArray();
+	for(d : kx)
+	{
+		retv += ((iquoteme) ? "'" : "") + lbhand.getListcellItemLabel(d,0) + ((iquoteme) ? "'" : "") + isepa;
+	}
+	return retv;
+}
+
+String getRackCellItemDesc(String icell)
+{
+	sqlstm = "select top 1 description from stockmasterdetails where palletno='" + icell + "'";
+	trc = sqlhand.gpSqlFirstRow(sqlstm);
+	if(trc == null) return "";
+	return kiboo.checkNullString(trc.get("description")).trim();
+}
+
+boolean sameFromToCell(String ifcell, String itcell)
+{
+	sqlstm = "select top 1 description from stockmasterdetails where palletno='" + ifcell + "'";
+	frc = sqlhand.gpSqlFirstRow(sqlstm);
+	sqlstm = "select top 1 description from stockmasterdetails where palletno='" + itcell + "'";
+	trc = sqlhand.gpSqlFirstRow(sqlstm);
+	//alert(frc + " :: " + trc);
+
+	if(frc == null) return false; // nothing in from-cell to move..
+	if(trc == null) return true; // nothing in to-cell, can move 'em
+
+	frstr = kiboo.checkNullString(frc.get("description")).trim();
+	tostr = kiboo.checkNullString(trc.get("description")).trim();
+
+	if(frstr.equals("")) return false; // nothing to move..
+	if(!tostr.equals("")) // item found in to-cell, check description
+	{
+		if(!tostr.equals(frstr)) return false;
+	}
+
+	return true;
+
+	/* these codes to match stock-cat ..
+	// get first-item in fromcell stkcat
+	sqlstm = "select top 1 stock_cat,groupcode,classcode,class2code from stockmasterdetails where palletno='" + ifcell + "'";
+	frmcat = sqlhand.gpSqlFirstRow(sqlstm);
+	// get tocell stkcat
+	sqlstm = "select top 1 stock_cat,groupcode,classcode,class2code from stockmasterdetails where palletno='" + itcell + "'";
+	tocat = sqlhand.gpSqlFirstRow(sqlstm);
+
+	if(frmcat == null) return false; // nothing found in from-cell
+	frmstr = 
+		kiboo.checkNullString_RetWat(frmcat.get("stock_cat"),"0") + ">" +
+		kiboo.checkNullString_RetWat(frmcat.get("groupcode"),"0") + ">" +
+		kiboo.checkNullString_RetWat(frmcat.get("classcode"),"0") + ">" +
+		kiboo.checkNullString_RetWat(frmcat.get("class2code"),"0") ;
+
+	tocstr = "";
+	if(tocat != null)
+	{
+		tocstr =
+		kiboo.checkNullString_RetWat(tocat.get("stock_cat"),"0") + ">" +
+		kiboo.checkNullString_RetWat(tocat.get("groupcode"),"0") + ">" +
+		kiboo.checkNullString_RetWat(tocat.get("classcode"),"0") + ">" +
+		kiboo.checkNullString_RetWat(tocat.get("class2code"),"0") ;
+	}
+
+	// to-cell contains nothing, can move items to it. Or frm-cell = to-cell
+	if(tocstr.equals("") || tocstr.equals(frmstr)) return true;
+	return false; // or else, nothing matches
+	*/
+}
+
+void refreshRack(String irk)
+{
+	kk = "";
+	try { kk = irk.substring(0,1); } catch (Exception e) {}
+
+	if(kk.equals("A")) showRackManifest("A", rackmanifest_holder_A, rack_A, globRackImage_A);
+	if(kk.equals("B")) showRackManifest("B", rackmanifest_holder_B, rack_B, globRackImage_B);
+	if(kk.equals("C")) showRackManifest("C", rackmanifest_holder_C, rack_C, globRackImage_C);
+	if(kk.equals("D")) showRackManifest("D", rackmanifest_holder_D, rack_D, globRackImage_D);
+	if(kk.equals("E")) showRackManifest("E", rackmanifest_holder_E, rack_E, globRackImage_E);
+	if(kk.equals("F")) showRackManifest("F", rackmanifest_holder_F, rack_F, globRackImage_F);
+}
+
+void rackingGame(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshmap = refreshrack = false;
+	sqlstm = msgtext = cellnum = "";
+
+	if(itype.equals("setitmloc_b")) // set an item location
+	{
+		astg = kiboo.replaceSingleQuotes(uditm_asstg.getValue().trim());
+		msgtext = checkAssetPalletCell(astg); // check if asset-tag exist/already in a cell
+		// TODO need to check if selected cell's stock-cat is same as the one to be stored
+		if(msgtext.equals("")) // can assign asset to cell
+		{
+			celpa = udrack_lb.getSelectedItem().getLabel() + udcell_lb.getSelectedItem().getLabel();
+			sqlstm = "update stockmasterdetails set palletno='" + celpa + "' where stock_code='" + astg + "'";
+			msgtext = astg + "  stored at cell " + celpa;
+			uditm_asstg.setValue("");
+
+			refreshrack = true;
+			cellnum = cellpa;
+		}
+	}
+
+	if(itype.equals("batchsetloc_b")) // batch update assets location
+	{
+		upldata = kiboo.replaceSingleQuotes(uplod_tb.getValue().trim());
+		if(upldata.equals("")) return;
+
+		celpa = uplrack_lb.getSelectedItem().getLabel() + uplcell_lb.getSelectedItem().getLabel();
+		batchSetAssetLocation(upldata,celpa);
+
+		refreshrack = true;
+		cellnum = cellpa;
+	}
+
+	if(itype.equals("moveitemsloc_b")) // move cell around
+	{
+		fromcell = fromrack_lb.getSelectedItem().getLabel() + fromcell_lb.getSelectedItem().getLabel();
+		tocell = torack_lb.getSelectedItem().getLabel() + tocell_lb.getSelectedItem().getLabel();
+		if(sameFromToCell(fromcell,tocell)) // check from-cell's categ same as destination
+		{
+			msgtext = "Moving items " + fromcell + " to " + tocell;
+			sqlstm = "update stockmasterdetails set palletno='" + tocell + "' where palletno='" + fromcell + "';";
+
+			refreshRack(fromcell);
+			refreshrack = true;
+			cellnum = tocell;
+		}
+		else
+		{
+			msgtext = "ERR: Items must be of same type to move around or from-cell must contain something..";
+		}
+	}
+
+	if(itype.equals("mvselass_b"))
+	{
+		if(cellass_lb.getSelectedCount() == 0) return; // cellass_lb -> whracks_funcs.zs
+		mvass_things.setValue(constStrFromLB_selitems(cellass_lb,"\n",false));
+		mvass_div.setVisible(true);
+		rmass_div.setVisible(false);
+	}
+
+	if(itype.equals("rmselass_b"))
+	{
+		if(cellass_lb.getSelectedCount() == 0) return; // cellass_lb -> whracks_funcs.zs
+		rmass_things.setValue(constStrFromLB_selitems(cellass_lb,"\n",false));
+		rmass_div.setVisible(true);
+		mvass_div.setVisible(false);
+	}
+
+	if(itype.equals("reallymvass_b")) // really move selected items to other cell
+	{
+		tocell = mvass_torack_lb.getSelectedItem().getLabel() + mvass_tocell_lb.getSelectedItem().getLabel();
+		itmd = lbhand.getListcellItemLabel(cellass_lb.getSelectedItem(),2).trim();
+		tcds = getRackCellItemDesc(tocell);
+		cnmv = false;
+
+		if(!tcds.equals(""))
+		{
+			if(tcds.equals(itmd)) cnmv = true; // same item-type, can move
+		}
+		else
+			cnmv = true;
+
+		torm = constStrFromLB_selitems(cellass_lb,",",true);
+		try { torm = torm.substring(0, torm.length()-1); } catch (Exception e) {}
+
+		if(cnmv)
+		{
+			if (Messagebox.show("Really move selected item(s) to selected cell??", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+			sqlstm = "update stockmasterdetails set palletno='" + tocell + "' where stock_code in (" + torm + ")";
+			msgtext = "Selected items moved..";
+
+			torm = torm.replaceAll("'","").replaceAll(",",", ");
+			add_RWAuditLog("WHR", "EQUIPMENTS", "MOVED " + torm + " to " + tocell, useraccessobj.username);
+
+			refreshRack(selectcell_id.getValue());
+			refreshrack = true;
+			cellnum = tocell;
+		}
+		else
+			msgtext = "Sorry, cannot move selected item(s) to " + tocell;
+	}
+
+	if(itype.equals("reallyrmass_b")) // really remove selected items from cell
+	{
+		if (Messagebox.show("Really remove selected item(s) from cell??", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		torm = constStrFromLB_selitems(cellass_lb,",",true);
+		try { torm = torm.substring(0, torm.length()-1); } catch (Exception e) {}
+		sqltm = "update stockmasterdetails set palletno=null where stock_code in (" + torm + ")";
+
+		torm = torm.replaceAll("'","").replaceAll(",",", "); // selectcell_id -> whracks_funcs
+		fcl = selectcell_id.getValue();
+		add_RWAuditLog("WHR", "EQUIPMENTS", "REMOVED " + torm + " from " + fcl, useraccessobj.username);
+
+		refreshrack = true;
+		cellnum = fcl;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refreshmap) refreshImageMaps(cellnum);
+	if(refreshrack) refreshRack(cellnum);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void batchSetAssetLocation(String iastgs, String icell)
+{
+	tgs = iastgs.split("\n");
+	hhh = "";
+	for(i=0; i<tgs.length; i++)
+	{
+		hhh += "'" + tgs[i] + "',";
+	}
+
+	try { hhh = hhh.substring(0,hhh.length()-1); } catch (Exception e) {}
+
+	// check if the asset-tags already alloced
+	sqlstm = "select stock_code,palletno from stockmasterdetails where stock_code in (" + hhh + ") and (palletno is not null or palletno<>'')";
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() > 0) // some assets already alloced. error..
+	{
+		mmm = "";
+		for(d : rcs)
+		{
+			mmm += d.get("stock_code") + " is in cell " + d.get("palletno") + "\n";
+		}
+		existassloc_lbl.setValue(mmm);
+		existassloc_pop.open(batchsetloc_b);
+		return;
+	}
+
+	// check if assets really exist.. TODO see if want to activate this rule
+	sqlstm = "select count(id) as stkcnt from stockmasterdetails where stock_code in (" + hhh + ")";
+	kx = sqlhand.gpSqlFirstRow(sqlstm);
+	if(kx != null)
+	{
+		if( (int)kx.get("stkcnt") != tgs.length)
+		{
+			guihand.showMessageBox("ERR: Some assets do not exist in our shop..");
+			return;
+		}
+	}
+
+	sqlstm = "update stockmasterdetails set palletno='" + icell + "' where stock_code in (" + hhh + ")";
+	sqlhand.gpSqlExecuter(sqlstm);
+	guihand.showMessageBox("Assets batch set location to " + icell);
+}
+
+void searchItemsLocation(String itxt)
+{
+Object[] myhads =
+{
+	new listboxHeaderWidthObj("Description",true,""),
+	new listboxHeaderWidthObj("Pallet/Cell",true,"200px"),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+};
+	itxt = kiboo.replaceSingleQuotes(itxt.trim());
+	if(itxt.equals("")) return;
+	Listbox newlb = lbhand.makeVWListbox_Width(search_holder, myhads, "foundpallet_lb", 20);
+
+	sqlstm = "select count(stock_code) as stkcnt,palletno,description from stockmasterdetails " + 
+	"where (description like '%" + itxt + "%' or stock_code like '%" + itxt + "%') " +
+	"and palletno is not null and palletno<>'' " +
+	"group by palletno,description";
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+	newlb.setMold("paging");
+	//newlb.addEventListener("onSelect", manifestHandler);
+	ArrayList kabom = new ArrayList();
+	for(d : rcs)
+	{
+		kabom.add( kiboo.checkNullString(d.get("description")) );
+		kabom.add( d.get("palletno"));
+		kabom.add( d.get("stkcnt").toString() );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	searchpallet_pop.open(searchtb);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	if(itype.equals("viewlogs_b")) showSystemAudit(logs_holder,"WHR","EQUIPMENTS");
+}
+
+/*
+A0020738
+A0023004
+*/
+]]>
+</zscript>
+
+<popup id="adminpop">
+<div sclass="shadowbox" style="background:#f10c4f;" width="500px" >
+
+<button id="viewlogs_b" label="View logs" onClick="adminFunc(self)" />
+<separator height="3px" />
+<div id="logs_holder" />
+
+</div>
+
+</popup>
+
+<popup id="searchpallet_pop">
+<div sclass="shadowbox" style="background:#f10c4f;" width="600px" >
+
+<div id="search_holder" />
+
+</div>
+</popup>
+
+<popup id="existassloc_pop">
+<div sclass="shadowbox" style="background:#f10c4f;" width="300px" >
+
+<label sclass="subhead1" value="ERROR!! Cannot set location" />
+<separator height="5px" />
+<label id="existassloc_lbl" multiline="true" style="font-weight:bold;color:#ffffff" />
+
+</div>
+</popup>
+
+<popup id="updateitem_loc_pop">
+<div sclass="shadowbox" style="background:#729fcf;" width="300px" >
+<grid>
+	<rows>
+		<row>
+			<label value="Asset-Tag" />
+			<textbox id="uditm_asstg" style="font-weight:bold" width="99%" />
+		</row>
+		<row>
+			<label value="Rack / Cell" />
+			<hbox>
+				<listbox id="udrack_lb" mold="select" />
+				<listbox id="udcell_lb" mold="select" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button id="setitmloc_b" label="Set location" style="font-weight:bold" onClick="rackingGame(self)" />
+</div>
+</popup> <!-- ENDOF updateitem_loc_pop -->
+
+<popup id="uploaditems_loc_pop">
+<div sclass="shadowbox" style="background:#729fcf;" width="300px" >
+<grid>
+	<rows>
+		<row>
+			<label style="font-weight:bold;" value="Asset Tags" />
+			<textbox id="uplod_tb" multiline="true" width="99%" height="200px" />
+		</row>
+		<row>
+			<label value="Rack / Cell" />
+			<hbox>
+				<listbox id="uplrack_lb" mold="select" />
+				<listbox id="uplcell_lb" mold="select" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button id="batchsetloc_b" label="Batch set location" style="font-weight:bold" onClick="rackingGame(self)" />
+</div>
+</popup> <!-- ENDOF uploaditems_loc_pop -->
+
+<popup id="moveitems_loc_pop">
+<div sclass="shadowbox" style="background:#729fcf;" width="380px" >
+<grid>
+	<rows>
+		<row>
+			<label value="FROM" />
+			<label value="Rack / Cell" />
+			<hbox>
+				<listbox id="fromrack_lb" mold="select" />
+				<listbox id="fromcell_lb" mold="select" />
+			</hbox>
+		</row>
+		<row>
+			<label value="TO" />
+			<label value="Rack / Cell" />
+			<hbox>
+				<listbox id="torack_lb" mold="select" />
+				<listbox id="tocell_lb" mold="select" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button id="moveitemsloc_b" label="Move" style="font-weight:bold" onClick="rackingGame(self)" />
+</div>
+</popup> <!-- ENDOF moveitems_loc_pop -->
+
+<popup id="drillcell_pop" onOpen="mvass_div.setVisible(false); rmass_div.setVisible(false);" >
+<div sclass="shadowbox" style="background:#555753;">
+
+<label id="assets_header" sclass="subhead1" />
+<separator height="5px" />
+<div id="cellassets_holder" width="700px" />
+<separator height="3px" />
+<hbox>
+	<button id="mvselass_b" label="Move selected" onClick="rackingGame(self)" />
+	<button id="rmselass_b" label="Remove selected" onClick="rackingGame(self)" />
+</hbox>
+<separator height="3px" />
+<div id="mvass_div" visible="false" >
+<grid>
+	<rows>
+		<row>
+			<label id="mvass_things" multiline="true" />
+			<label value="Move to Rack/Cell" />
+			<hbox>
+				<listbox id="mvass_torack_lb" mold="select" />
+				<listbox id="mvass_tocell_lb" mold="select" />
+				<separator width="5px" />
+				<button id="reallymvass_b" label="Move selected" onClick="rackingGame(self)" />
+				<button label="Cancel" onClick="mvass_div.setVisible(false)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+</div>
+
+<div id="rmass_div">
+<grid>
+	<rows>
+		<row style="background:#f10c4f" >
+			<label id="rmass_things" multiline="true" />
+			<hbox>
+				<button id="reallyrmass_b" label="Remove selected from cell" onClick="rackingGame(self)" />
+				<button label="Cancel" onClick="rmass_div.setVisible(false)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+
+</div>
+<label id="selectcell_id" visible="false" />
+</div>
+</popup>
+
+<style>
+.subhead1 { font-size:16px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead2 { font-size:24px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div sclass="shadowbox" style="background:#2e3436;">
+
+<button id="uditmloc_b" label="Set item location" onClick="updateitem_loc_pop.open(self)" />
+<button label="Batch update" onClick="uploaditems_loc_pop.open(self)" />
+<button label="Batch move cell/pallet" onClick="moveitems_loc_pop.open(self)" />
+
+<textbox id="searchtb" />
+<button label="Search" onClick="searchItemsLocation(searchtb.getValue())" />
+
+<button id="adminbutt" label="ADMIN" style="color:#ff0000;font-weight:bold" visible="false" onClick="adminpop.open(self)" />
+
+</div>
+
+<separator height="5px" />
+
+<div style="background:#204a87;padding:2px">
+<label sclass="subhead2" value="Rental Equipments Racks" />
+</div>
+
+<tabbox> <!-- WH Racks accordion -->
+	<tabs>
+		<tab id="racka_tab" label="RACK A" />
+		<tab id="rackb_tab" label="RACK B" />
+		<tab id="rackc_tab" label="RACK C" />
+		<tab id="rackd_tab" label="RACK D" />
+		<tab id="racke_tab" label="RACK E" />
+		<tab id="rackf_tab" label="RACK F" />
+	</tabs>
+	<tabpanels>
+
+	<tabpanel> <!-- RACK A -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_A" />
+			<div width="500px" >
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_A" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_A" multiline="true" />
+				</div>
+				<div id="cellassets_holder_A" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK A -->
+
+	<tabpanel> <!-- RACK B -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_B" />
+			<div width="500px" >
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_B" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_B" multiline="true" />
+				</div>
+				<div id="cellassets_holder_B" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK B -->
+
+	<tabpanel> <!-- RACK C -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_C" />
+			<div width="500px" >
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_C" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_C" multiline="true" />
+				</div>
+				<div id="cellassets_holder_C" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK C -->
+
+	<tabpanel> <!-- RACK D -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_D" />
+			<div width="500px" >
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_D" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_D" multiline="true" />
+				</div>
+				<div id="cellassets_holder_D" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK D -->
+
+	<tabpanel> <!-- RACK E -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_E" />
+			<div width="500px" >
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_E" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_E" multiline="true" />
+				</div>
+				<div id="cellassets_holder_E" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK E -->
+
+	<tabpanel> <!-- RACK F -->
+		<div sclass="shadowbox" style="background:#2e3436;">
+
+		<separator height="5px" />
+		<hbox>
+			<div id="imagemap_holder_F" />
+			<div>
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" value="Rack Manifest" />
+				</div>
+				<div id="rackmanifest_holder_F" />
+				<separator height="5px" />
+				<div style="background:#1b4583;padding:2px" >
+				<label sclass="subhead1" id="assets_header_F" multiline="true" />
+				</div>
+				<div id="cellassets_holder_F" />
+			</div>
+		</hbox>
+		</div>
+	</tabpanel> <!-- ENDOF RACK F -->
+
+	</tabpanels>
+</tabbox>
+
+<label id="dbgbox" multiline="true" />
+
+<zscript>
+<![CDATA[
+
+imagemapHandler = new areamap_Listener();
+manifestHandler = new manifclk();
+globCellHash = new HashMap();
+
+popuCell_lb(udrack_lb, 1, 96, 1);
+popuCell_lb(udcell_lb, 1, 96, 2);
+
+popuCell_lb(uplrack_lb, 1, 96, 1);
+popuCell_lb(uplcell_lb, 1, 96, 2);
+
+popuCell_lb(fromrack_lb, 1, 96, 1);
+popuCell_lb(fromcell_lb, 1, 96, 2);
+popuCell_lb(torack_lb, 1, 96, 1);
+popuCell_lb(tocell_lb, 1, 96, 2);
+
+popuCell_lb(mvass_torack_lb, 1, 96, 1);
+popuCell_lb(mvass_tocell_lb, 1, 96, 2);
+
+globRackImage_A = makeImagemapThing(imagemap_holder_A,"rack_A","/rwimg/whr_A.png","rack_A_3");
+globRackImage_B = makeImagemapThing(imagemap_holder_B,"rack_B","/rwimg/whr_B.png","rack_B_3");
+globRackImage_C = makeImagemapThing(imagemap_holder_C,"rack_C","/rwimg/whr_C.png","rack_C_3");
+globRackImage_D = makeImagemapThing(imagemap_holder_D,"rack_D","/rwimg/whr_D.png","rack_D_3");
+globRackImage_E = makeImagemapThing(imagemap_holder_E,"rack_E","/rwimg/whr_E.png","rack_E_3");
+globRackImage_F = makeImagemapThing(imagemap_holder_F,"rack_F","/rwimg/whr_F.png","rack_F_3");
+
+showRackManifest("A", rackmanifest_holder_A, rack_A, globRackImage_A);
+showRackManifest("B", rackmanifest_holder_B, rack_B, globRackImage_B);
+showRackManifest("C", rackmanifest_holder_C, rack_C, globRackImage_C);
+showRackManifest("D", rackmanifest_holder_D, rack_D, globRackImage_D);
+showRackManifest("E", rackmanifest_holder_E, rack_E, globRackImage_E);
+showRackManifest("F", rackmanifest_holder_F, rack_F, globRackImage_F);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminbutt.setVisible(true);
+}
+
+//dbgbox.setValue("ibf: " + globRackImage_f);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

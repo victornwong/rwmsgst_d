@@ -1,0 +1,634 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="purchase_req_details_driller"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript src="../alsglobal/purchasereq_sqlfuncs.zs" />
+<zscript src="../alsglobal/bpm_funcs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+/*
+Title: Let user drill-into a purchase-requisition form
+Written by: Victor Wong
+Started: 30/7/2010
+*/
+
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+myincludeid = Executions.getCurrent().getParameter("myid");
+param_prorigid = Executions.getCurrent().getParameter("prid");
+global_selected_preq = param_prorigid;
+
+Object[] preq_items_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("mysoftcode",false),
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Stk",true),
+	new listboxHeaderObj("Unit.Price",true),
+	new listboxHeaderObj("Qty",true),
+	new listboxHeaderObj("S.Total",true),
+};
+
+// Show purchase-request items - iprorigid = purchase-req id, to be used for pr_parent_id checking
+void populatePReq_Items(String iprorigid)
+{
+	Listbox newlb = makeVWListbox(prf_purchaseitems_div, preq_items_lb_headers, "preq_items_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,mysoftcode,description,unitprice,quantity from PurchaseReq_Items where pr_parent_id=" + iprorigid;
+	reqitemrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(reqitemrecs.size() == 0) return;
+	newlb.setRows(8);
+	
+	itemcount = 1;
+	grandtotal = 0;
+	
+	NumberFormat nf = NumberFormat.getCurrencyInstance();
+	
+	for(reqitem : reqitemrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		mmcode = reqitem.get("mysoftcode");
+		kabom.add(mmcode);
+		kabom.add(itemcount.toString() + ".");
+
+		desc = reqitem.get("description");
+		desc = trimListitemLabel(desc,50);
+		kabom.add(desc);
+
+		if(mmcode.equals(""))
+			kabom.add("---");
+		else
+			kabom.add("-Y-");
+
+		unitprice = reqitem.get("unitprice");
+		kabom.add(nf.format(unitprice));
+
+		quantity = reqitem.get("quantity");
+		kabom.add(quantity.toString());
+
+		subtotal = unitprice * quantity;
+		grandtotal += subtotal;
+		kabom.add(nf.format(subtotal));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+
+		itemcount++;
+	}
+
+	prf_totalvalue_lbl.setValue("Total: " + nf.format(grandtotal));
+}
+
+Object[] suppdocs_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Crt.Date",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Owner",true),
+};
+
+// Show the supporting documents - uses DocumentStorage
+// supportingdocs_div
+void populateSupportingDocuments(String iprorigid)
+{
+	pr_id_str = makePurchaseReq_ID(iprorigid);
+	Listbox newlb = makeVWListbox(supportingdocs_div, suppdocs_lb_headers, "supportdocs_lb", 5);
+	
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,file_description,docu_status,username,datecreated from DocumentTable where docu_link='" + pr_id_str + "'";
+	docsrecs = ds_sql.rows(sqlstm);
+	ds_sql.close();
+
+	if(docsrecs.size() == 0) return;
+	
+	newlb.setRows(8);
+
+	for(docitem : docsrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		
+		kabom.add(docitem.get("origid").toString());
+
+		ftitle = trimListitemLabel(docitem.get("file_title"),15);
+		kabom.add(ftitle);
+
+		fdesc = trimListitemLabel(docitem.get("file_description"),23);
+		kabom.add(fdesc);
+
+		kabom.add(docitem.get("datecreated").toString().substring(0,10));
+		kabom.add(docitem.get("docu_status"));
+		kabom.add(docitem.get("username"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+Object[] username_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Fullname",true),
+};
+
+// List out all users from PortalUser, assume user with access level more than 3 capable to approve stuff
+void show_Usernames(Div mDiv)
+{
+	Listbox newlb = makeVWListbox(mDiv, username_lb_headers, "username_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,username,fullname from PortalUser where deleted=0 and locked=0 and accesslevel > 3 order by username";
+	userrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(userrecs.size() == 0) return;
+	newlb.setRows(10);
+
+	for(reqitem : userrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		kabom.add(reqitem.get("username"));
+		kabom.add(reqitem.get("fullname"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// onSelect listener for show_AssignedApprover()
+// to show approver's notes and decision
+class approverlistbox_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		bpmorigid = getListcellItemLabel(selitem,0);
+		approver = getListcellItemLabel(selitem,1);
+
+		bpmrec = getBPMActions_Rec(bpmorigid);
+
+		approver_notes_tb.setValue(""); // clear last approver's notes
+		actionstatus = "";
+		
+		if(bpmrec != null)
+		{
+			appnotes = bpmrec.get("notes");
+			if(appnotes != null)
+				approver_notes_tb.setValue(appnotes); // if got notes, put them in
+				
+			actionstatus = bpmrec.get("actionstatus");
+			if(actionstatus == null)
+				actionstatus = "";
+		}
+
+		approver_pr_btndiv.setVisible(false);
+		approver_notes_tb.setDisabled(true);
+		
+		// if approver = username, enable buttons
+		if(approver.equals(useraccessobj.username))
+		{
+			approver_pr_btndiv.setVisible(true);
+
+			// only allow changes to approver's notes if no decision on the task
+			if(actionstatus.equals("") || actionstatus.equals(PR_STATUS_DISAPPROVED))
+			{
+				approver_notes_tb.setDisabled(false);
+			}
+		}
+	}
+}
+
+Object[] approvers_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Approvers",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Act.Date",true),
+};
+
+void show_AssignedApprover(Div mDiv, String iprorigid)
+{
+	Listbox newlb = makeVWListbox(mDiv, approvers_lb_headers, "approvers_lb", 5);
+	
+	assigner = makePurchaseReq_ID(iprorigid);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,assignee,actionstatus,actiondate from BPM_Actions where (deleted is null or deleted=0) and assigner='" + assigner + "' order by assignee";
+	userrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(userrecs.size() == 0) return;
+	newlb.setRows(10);
+	newlb.addEventListener("onSelect", new approverlistbox_Listener());
+
+	for(reqitem : userrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		kabom.add(reqitem.get("assignee"));
+		
+		astat = reqitem.get("actionstatus");
+		astatstr = (astat == null) ? PR_STATUS_PENDING : astat;
+		kabom.add(astatstr);
+		
+		acdate = reqitem.get("actiondate");
+		acdatestr = (acdate == null) ? "-----" : acdate.toString().substring(0,10);
+		kabom.add(acdatestr);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// Show approvers assignment and so on - can be used for other modules too - make it so
+// users_lb approver_users_div assigned_approver_div approvers_lb
+void populate_Approver(String iprorigid)
+{
+	// show_Usernames(approver_users_div);
+	show_AssignedApprover(assigned_approver_div, iprorigid);
+}
+
+// let user view the supporting docu - copied from doculink.zul
+void viewLinkingDocument()
+{
+	if(global_selected_preq.equals("")) return;
+	if(supportingdocs_div.getFellowIfAny("supportdocs_lb") == null) return;
+	if(supportdocs_lb.getSelectedIndex() == -1 ) return;
+	
+	eorigid = supportdocs_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = makeRandomId("vdoc");
+	globalActivateWindow("miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+
+// 30/7/2010: knockoff from purchase_req.zul with some mods
+// Load selected purchase-req - populate the accordian motherload
+// prf_suppliername_lbl prf_datecreated_tb prf_duedate_tb prf_priority_lb prf_username_lbl
+// prf_purchaseitems_div
+void loadPurchaseReq_Clicker()
+{
+	prorigid = param_prorigid;
+
+	pr_rec = getPurchaseReq_Rec(prorigid);
+	if(pr_rec == null) return;
+
+	pridstr = makePurchaseReq_ID(global_selected_preq);
+	prf_tab_lbl.setLabel("1. Purchase requisition : " + pridstr);
+
+	prsuppnameapcode = pr_rec.get("SupplierName") + " [" + pr_rec.get("APCode") + "]";
+	prf_suppliername_lbl.setValue(prsuppnameapcode);
+
+	datecret = pr_rec.get("datecreated");
+	prf_datecreated_tb.setValue(datecret);
+	
+	duedate = pr_rec.get("duedate").toString().substring(0,10);
+	if(duedate.equals("1900-01-01"))
+		prf_duedate_tb.setValue(datecret);
+	else
+		prf_duedate_tb.setValue(pr_rec.get("duedate"));
+
+	priority = pr_rec.get("priority");
+	matchListboxItems(prf_priority_lb, priority);
+	
+	prf_username_lbl.setValue("Owner: " + pr_rec.get("username"));
+	
+	prf_notes_tb.setValue(pr_rec.get("notes")); // the justification notes!!!
+
+	// now, populate the purchase-req items , supporting documents
+	populatePReq_Items(global_selected_preq);
+	populateSupportingDocuments(global_selected_preq);
+	
+	// populate the approver panel
+	populate_Approver(global_selected_preq);
+}
+
+/*
+ Properties prop = new Properties();
+            prop.put("mail.smtp.port", "465");
+            prop.put("mail.smtp.socketFactory.fallback", "false");
+            prop.put("mail.smtp.quitwait", "false");
+            prop.put("mail.smtp.host", "smtp.gmail.com");
+            prop.put("mail.smtp.auth", "true");
+            prop.put("mail.smtp.starttls.enable", "true");
+
+            final String gusername = "gusername@gmail.com";
+            final String gpassword = "gpassword";
+
+            Session mailSession = Session.getInstance(prop, new Authenticator()
+            {   @Override
+                public PasswordAuthentication getPasswordAuthentication()
+              { return new PasswordAuthentication(gusername, gpassword); }
+            }
+            );
+*/
+void testEmail()
+{
+	if(useraccessobj.accesslevel < 9) return;
+
+	kkk = session.getWebApp().getRealPath("fluff/FordFloorPlanOneStory.jpg");
+
+	Properties props = new Properties();
+    props.put("mail.smtp.host", "mail.alsglobal.com.my");
+    props.put("mail.from", "elabman@alsglobal.com.my");
+    javax.mail.Session mailsession = javax.mail.Session.getInstance(props, null);
+	
+	msgText1 = "Testing attachments..";
+
+    try {
+        MimeMessage msg = new MimeMessage(mailsession);
+        msg.setFrom();
+        msg.setRecipients(Message.RecipientType.TO,"it@alsglobal.com.my");
+		msg.setSubject("Notification");
+		msg.setSentDate(new Date());
+		
+		// create and fill the first message part
+      MimeBodyPart mbp1 = new MimeBodyPart();
+      mbp1.setText(msgText1);
+
+      // create the second message part
+      MimeBodyPart mbp2 = new MimeBodyPart();
+
+            // attach the file to the message
+      FileDataSource fds = new FileDataSource(kkk);
+      mbp2.setDataHandler(new DataHandler(fds));
+      mbp2.setFileName(fds.getName());
+
+      // create the Multipart and add its parts to it
+      Multipart mp = new MimeMultipart();
+      mp.addBodyPart(mbp1);
+      mp.addBodyPart(mbp2);
+
+      // add the Multipart to the message
+      msg.setContent(mp);
+		
+		Transport.send(msg);
+    } catch (MessagingException mex) {
+        System.out.println("send failed, exception: " + mex);
+    }
+
+}
+
+// Check and see if all approvers approve the PR.. if so, update purchase-req flag and so on
+void purchaseReq_CheckFullApproval(String iwhat)
+{
+	// loop through listbox to check approval-string
+	apprcount = approvers_lb.getItemCount();
+	if(apprcount == 0) return;
+	approvalcount = 0;
+	disapprovecount = 0;
+	
+	for(i=0;i<apprcount;i++)
+	{
+		selitem = approvers_lb.getItemAtIndexApi(i);
+		acstat = getListcellItemLabel(selitem,2);
+		
+		if(acstat.equals(PR_STATUS_APPROVED))
+			approvalcount++;
+			
+		if(acstat.equals(PR_STATUS_DISAPPROVED))
+			disapprovecount++;
+	}
+
+	apprstr = PR_STATUS_COMMITED;
+
+	// still lacking some approvals .. put as pending
+	// if(approvalcount < apprcount)
+		// apprstr = PR_STATUS_PENDING;
+
+	// if everyone approve.. set approved flag
+	if(approvalcount == apprcount)
+	{
+		apprstr = PR_STATUS_APPROVED;
+		// to add codes to send an email to p-req owner
+	}
+
+	// totally everyone disapprove.. set so
+	if(disapprovecount == apprcount)
+	{
+		apprstr = PR_STATUS_DISAPPROVED;
+		// to add codes to send an email to p-req owner
+	}
+		
+	setPR_Status(param_prorigid,apprstr); // purchasereq_sqlfuincs.zs
+}
+
+// Purchase-req app/disapprove toggler
+/*
+new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Approvers",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Act.Date",true),
+*/
+void approveToggle_clicker(int iwhich)
+{
+	if(assigned_approver_div.getFellowIfAny("approvers_lb") == null) return;
+	if(approvers_lb.getSelectedIndex() == -1) return;
+
+	selitem = approvers_lb.getSelectedItem();
+	bpmorigid = getListcellItemLabel(selitem,0);
+	todaysdate = getDateFromDatebox(hiddendatebox);
+	approvername = getListcellItemLabel(selitem,1);
+
+	actionstr = PR_STATUS_APPROVED; // default iwhich = 1;
+	if(iwhich == 2)
+		actionstr = PR_STATUS_DISAPPROVED;
+
+	setBPMAction_Status_Date(bpmorigid,actionstr,todaysdate);
+
+	appnotes = replaceSingleQuotes(approver_notes_tb.getValue());
+	setBPMAction_Notes(bpmorigid, appnotes);
+
+	approver_pr_btndiv.setVisible(false); // hide crud buttons
+	approver_notes_tb.setDisabled(true);
+
+	populate_Approver(global_selected_preq); // refresh
+
+	purchaseReq_CheckFullApproval(param_prorigid);
+
+	// time to email approver's actions back to submitter.. fun
+	// param_prorigid
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select portaluser.email from portaluser " +
+	"left join purchaserequisition on portaluser.username = purchaserequisition.username " +
+	"where purchaserequisition.origid=" + param_prorigid;
+	pr_rec = sql.firstRow(sqlstm);
+	sql.close();
+	
+	if(pr_rec == null) return;
+	
+	prowner = pr_rec.get("email");
+	if(prowner.equals("")) return;
+	
+	prcode = PURCHASE_REQ_PREFIX + param_prorigid;
+	subjstr = "STATUS: Purchase-requisition " + prcode;
+	msgtext = "\n-- Notification from e-Labman --\n\n";
+	msgtext += approvername + " decided to " + actionstr + " your purchase-requisition " + prcode;
+	msgtext += "\n\n------\nDO NOT print this notification - save some trees";
+	
+	simpleSendEmail(SMTP_SERVER,ELABMAN_EMAIL,prowner,subjstr,msgtext);
+
+}
+
+// Let approver put in some notes
+void approveSaveNotes_clicker()
+{
+	if(assigned_approver_div.getFellowIfAny("approvers_lb") == null) return;
+	if(approvers_lb.getSelectedIndex() == -1) return;
+
+	bpmorigid = approvers_lb.getSelectedItem().getLabel(); // 1st col is bpm.origid
+	appnotes = replaceSingleQuotes(approver_notes_tb.getValue());
+	setBPMAction_Notes(bpmorigid, appnotes);
+	populate_Approver(global_selected_preq); // refresh
+	
+}
+
+]]>
+</zscript>
+
+<window id="purchasereq_detail_win" width="600px" height="450px" title="Purchase Requisition Details" position="center" 
+mode="overlapped" border="normal" closable="true" 
+onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<div>
+<button label="X Close window" style="font-size:9px" onClick="globalCloseWindow(myincludeid)" />
+<button label="testmail" onClick="testEmail()" />
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<tabbox mold="accordion">
+	<tabs>
+		<tab id="prf_tab_lbl" label="1. Purchase requisition" />
+		<tab label="2. Justification/supporting documents" />
+		<tab label="3. Assigned approver(s)" />
+	</tabs>
+
+	<tabpanels>
+	<!-- purchase req + items panel -->
+	<tabpanel>
+		<div style="background:#778844;padding:3px" >
+			<label id="prf_suppliername_lbl" style="font-size:12px;font-weight:bold;color:#FFFFFF" value="-Supplier-" />
+		</div>
+		<separator height="3px" />
+		<groupbox style="padding:3px">
+			<vbox>
+				<hbox>
+					<label value="Date created" style="font-size:9px" />
+					<datebox id="prf_datecreated_tb" format="yyyy-MM-dd" disabled="true" />
+					<separator width="5px" />
+
+					<label value="Due date" style="font-size:9px" />
+					<datebox id="prf_duedate_tb" format="yyyy-MM-dd" disabled="true" />
+					<separator width="5px" />
+
+					<label value="Priority" style="font-size:9px" />
+					<listbox id="prf_priority_lb" mold="select" style="font-size:9px" disabled="true" />
+					<separator width="5px" />
+
+					<label id="prf_username_lbl" value="Owner:" style="font-size:9px" />
+				</hbox>
+			</vbox>
+		</groupbox>
+
+		<groupbox style="padding:3px">
+			<caption label="Purchase details" style="font-size:9px" />
+			<vbox>
+				<div id="prf_purchaseitems_div" />
+									
+				<div style="background:#778855;padding:3px">
+					<hbox>
+						<separator width="380px" />
+							<label id="prf_totalvalue_lbl" style="font-weight:bold;color:#ffffff" />
+						</hbox>
+				</div>
+			</vbox>
+		</groupbox>
+	</tabpanel>
+	<!-- END OF purchase req + items panel -->
+						
+	<!-- Justification/documents panel -->
+	<tabpanel>
+		<div style="padding:3px">
+			<hbox>
+				<label value="Justification notes" />
+				<textbox id="prf_notes_tb" multiline="true" width="450px" height="80px" style="font-size:10px" />
+			</hbox>
+		</div>
+
+		<groupbox>
+			<caption label="Supporting documents" />
+			<vbox style="padding:3px">
+				<div id="supportingdocs_div" />
+
+				<hbox>
+					<button id="sjd_view_btn" label="View document" style="font-size:9px" onClick="viewLinkingDocument()" />
+				</hbox>
+			</vbox>
+		</groupbox>
+	</tabpanel>
+	<!-- END iOF Justification/documents panel -->
+
+	<tabpanel>
+		<div style="padding:3px">
+			<hbox>
+				<!-- <div id="approver_users_div" width="260px" /> -->
+				<div id="assigned_approver_div" width="200px" />
+
+				<groupbox>
+					<caption label="Notes / action" />
+					<textbox id="approver_notes_tb" multiline="true" width="330px" height="100px" style="font-size:9px" />
+					<separator height="3px" />
+					<div id="approver_pr_btndiv" visible="false">
+					<hbox>
+						<button id="appr_approve_btn" label="Approve" style="font-size:9px" onClick="approveToggle_clicker(1)" />
+						<button id="appr_disapprove_btn" label="Disapprove" style="font-size:9px" onClick="approveToggle_clicker(2)" />
+						<button id="appr_savenotes_btn" label="Save notes" style="font-size:9px" onClick="approveSaveNotes_clicker()" />
+					</hbox>
+					</div>
+					
+				</groupbox>
+
+			</hbox>
+		</div>
+	</tabpanel>
+
+	</tabpanels>
+</tabbox>
+
+</div>
+
+<zscript>
+<![CDATA[
+setTodayDatebox(hiddendatebox);
+populateDropdownListbox(prf_priority_lb,purchasereq_priority);
+loadPurchaseReq_Clicker();
+]]>
+</zscript>
+</window>
+</zk>

@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="gpformstore_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "General Purpose Form Storage";
+MYVERSION = "v0.2";
+MYPANEL = "gpformstorage_panel";
+/*
+Title		: General purpose form-storage/retrieval thing
+Written by	: Victor Wong
+Dated		: 07/08/2012
+
+For developement of some general-purpose funcs to get form from elb_formkeeper - 
+generate the form using vicFormMaker(formMaker_v1.zs) and etc.
+
+param:
+fl1, fl2 = flag fieldnames to show in list if any
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+param_parent_id = Executions.getCurrent().getParameter("pi");
+param_formkeeper_id = Executions.getCurrent().getParameter("fk");
+param_wintitle = Executions.getCurrent().getParameter("wt");
+param_flag1 = Executions.getCurrent().getParameter("fl1");
+param_flag2 = Executions.getCurrent().getParameter("fl2");
+
+kiboo = new Generals(); sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+// defaults - can be overidden by params passed by caller
+FORMSTORE_PARENT_ID = "formtest";
+FORMKEEPER_ID = "1";
+flag1_fieldname = flag2_fieldname = "";
+rowcount = last_list_type = 0;
+glob_selected_form = glob_selected_form_user = "";
+
+vicFormMaker glob_formmaker = null;
+
+Object getFormStorage_rec(String iwhat)
+{
+	sqlstm = "select * from elb_formstorage where origid=" + iwhat;
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
+void clearFormDesc()
+{
+	form_origid.setValue("");
+	form_title_tb.setValue("");
+}
+
+void showFormStorageMetadata(String iwhat)
+{
+	fstrec = getFormStorage_rec(iwhat);
+	if(fstrec == null) return;
+
+	fkepid = fstrec.get("formkeeper_id");
+
+	// load form-xml from formkeeper
+	fmobj = sqlhand.getFormKeeper_rec(fkepid.toString());
+	if(fmobj == null) { gui.showMessageBox("ERR: Cannot load XML-form definitions"); return; }
+
+	formxml = sqlhand.clobToString(fmobj.get("xmlformstring"));
+	glob_formmaker = new vicFormMaker(formholder,FORMSTORE_PARENT_ID,formxml);
+	glob_formmaker.generateForm();
+
+	forminputs = sqlhand.clobToString(fstrec.get("inputs_value"));
+	if(forminputs != null) glob_formmaker.populateFormValues(forminputs);
+
+	fillDocumentsList(documents_holder,GPF_PREFIX,iwhat);
+	docs_div.setVisible(true);
+	workarea.setVisible(true);
+}
+
+class formsstorage_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = forms_lb.getSelectedItem();
+		glob_selected_form = lbhand.getListcellItemLabel(isel,0);
+		glob_selected_form_user = lbhand.getListcellItemLabel(isel,3);
+		formdesc = lbhand.getListcellItemLabel(isel,2);
+		form_title_tb.setValue(formdesc); // form-title textbox
+		form_origid.setValue(glob_selected_form);
+		showFormStorageMetadata(glob_selected_form);
+	}
+}
+fmclicker = new formsstorage_onSelect();
+
+// uses FORMSTORE_PARENT_ID to list those forms
+// itype: 1=just load, 2=search text
+void listFormStorage(int itype)
+{
+Object[] formslist_headers = 
+{
+	new listboxHeaderWidthObj("ID#",true,"40px"),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Form.Description",true,""),
+	new listboxHeaderWidthObj("User",true,"60px"),
+	new listboxHeaderWidthObj("FLAG1",true,"70px"),
+	new listboxHeaderWidthObj("FLAG2",true,"70px"),
+};
+
+	last_list_type = itype;
+	Listbox newlb = lbhand.makeVWListbox_Width(formslist_holder, formslist_headers, "forms_lb", 20);
+
+	setxt = kiboo.replaceSingleQuotes(searchtext_tb.getValue());
+
+	inp = "";
+	chkinps = false;
+	if(!flag1_fieldname.equals("") || !flag2_fieldname.equals(""))
+	{
+		inp = ",inputs_value";
+		chkinps = true;
+	}
+
+	sqlstm = "select origid,form_title,updateby,lastupdate" + inp + " from elb_formstorage " +
+	"where formparent_id='" +  FORMSTORE_PARENT_ID + "'";
+
+	if(itype == 2) sqlstm += " and (inputs_value like '%" + setxt + "%' or form_title like '%" + setxt + "%') ";
+	sqlstm += " order by origid desc";
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", fmclicker);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid", "lastupdate", "form_title", "updateby" };
+	for(dpi : screcs)
+	{
+		ngfun.popuListitems_Data(kabom,fl,dpi);
+
+		if(chkinps) // need to put extra FLAG fields to list
+		{
+			if(dpi.get("inputs_value") != null)
+			{
+				inps = sqlhand.clobToString(dpi.get("inputs_value"));
+				irecs = inps.split("::");
+				f1s = f2s = "";
+				try {
+					for(int i=0; i<irecs.length; i++)
+					{
+						tmpstr = irecs[i];
+						iparts = tmpstr.split("\\|"); // split the field and data parts
+						fieldpart = iparts[0].replace("\"","");
+						datapart = iparts[1].replace("\"","");
+						if(fieldpart.equals(flag1_fieldname)) f1s = datapart;
+						if(fieldpart.equals(flag2_fieldname)) f2s = datapart;
+					}
+				} catch (Exception e) {}
+				kabom.add(f1s);
+				kabom.add(f2s);
+			}
+		}
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+// itype: 1=insert new entry, 2=delete entry, 3=save data entry
+void doFunc(int itype)
+{
+	boolean refresh = false;
+	todate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+
+	switch(itype)
+	{
+		case 1: // insert new form
+			sqlstm = "insert into elb_formstorage (formparent_id,inputs_value,formkeeper_id,form_title,lastupdate,updateby,thisform_parent) values " +
+			" ('" + FORMSTORE_PARENT_ID + "',''," + FORMKEEPER_ID + ",'NEW BLANK FORM','" + todate + "','" +
+			useraccessobj.username + "',0)";
+			refresh = true;
+			break;
+
+		case 2: // delete form
+			if(glob_selected_form.equals("")) break;
+			
+			if(useraccessobj.accesslevel < 9)
+			{
+				guihand.showMessageBox("Sorry, only admin can delete a form..");
+				return;
+			}
+
+			/*
+			if(!glob_selected_form_user.equals(useraccessobj.username) && useraccessobj.accesslevel < 9)
+			{
+				guihand.showMessageBox("Not owner, cannot delete form data");
+				return;
+			}
+			*/
+
+			if (Messagebox.show("Hard delete - form data will be removed completely.", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+			sqlstm = "delete from elb_formstorage where origid=" + glob_selected_form;
+			glob_formmaker.removeForm();
+			glob_selected_form = ""; // make sure not pointing to empty form
+			clearFormDesc();
+			refresh = true;
+
+			// TODO delete attach-docs if any -- maybe no need to delete for archive-purposes
+
+			break;
+
+		case 3: // save inputs
+			if(glob_selected_form.equals("")) break;
+			if(glob_formmaker == null) break;
+
+			fmtitl = kiboo.replaceSingleQuotes(form_title_tb.getValue().trim());
+			freezv = glob_formmaker.freezeFormValues();
+
+			sqlstm = "update elb_formstorage set form_title='" + fmtitl + "', lastupdate='" + todate + "', " +
+			"updateby='" + useraccessobj.username + "'," +
+			"inputs_value='" + freezv + "' where origid=" + glob_selected_form;
+			msgtext = "Form data saved..";
+			refresh = true;
+			break;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listFormStorage(last_list_type);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,GPF_PREFIX,glob_selected_form)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" sclass="k9" />
+				<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+			</row>
+			<row>
+				<label value="Description" sclass="k9" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,GPF_PREFIX,glob_selected_form)" sclass="k9" />
+	<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+</hbox>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#204a87" >
+
+<div sclass="shadowbox" style="background:#2e3436;">
+<label id="bigtitle" sclass="subhead2" />
+</div>
+<separator height="2px" />
+
+<hbox>
+
+<div sclass="shadowbox" style="background:#97b83a;" width="530px">
+	<grid>
+		<rows>
+			<row style="background:#babdb6;padding:3px">
+				<label value="Search text" sclass="k9" />
+				<textbox id="searchtext_tb" sclass="k9" width="99%" />
+				<button label="Search/Load" style="font-weight:bold" onClick="listFormStorage(2)" />
+			</row>
+			<row spans="3">
+			<label style="font-size:9px">
+			(Max. 200 forms per click, empty search-text will load available forms)
+			</label>
+			</row>
+			<row spans="3">
+				<hbox>
+					<button label="New form" style="font-weight:bold" onClick="doFunc(1)" />
+					<button label="Delete" style="font-weight:bold" onClick="doFunc(2)" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+	<separator height="2px" />
+	<div id="formslist_holder" />
+
+	<separator height="3px" />
+	<div sclass="shadowbox" style="background:#555753;" id="docs_div" visible="false" >
+		<label sclass="subhead1" value="ATTACHMENT / DOCUMENTS" />
+		<separator height="3px" />
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" sclass="k9" onClick="showUploadPopup(GPF_PREFIX,glob_selected_form)" />
+			<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+			<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(self)" />
+			<button id="deletedoc_btn" label="Delete" sclass="k9" onClick="deleteFile(documents_holder,GPF_PREFIX,glob_selected_form)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="documents_holder" />
+	</div>
+
+</div>
+
+<vbox id="workarea" visible="false" >
+<div sclass="shadowbox" style="background:#555753;" width="630px" >
+
+	<grid>
+		<columns><column width="15%" /><column width="85%" /></columns>
+		<rows>
+			
+			<row>
+				<label value="Form ID" style="font-weight:bold" />
+				<div style="background:#2e3436">
+				<label id="form_origid" sclass="subhead1" />
+				</div>
+			</row>
+			<row>
+				<label value="Form description" style="" />
+				<textbox id="form_title_tb" style="font-weight:bold" multiline="true" height="40px" width="99%" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="2px" />
+	<button label="Save form" style="font-weight:bold" onClick="doFunc(3)" />
+</div>
+
+<div sclass="shadowbox" style="background:#97b83a;">
+	<div id="formholder" />
+</div>
+
+</vbox>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+// overide defaults if params passed
+if(param_parent_id != null) FORMSTORE_PARENT_ID = param_parent_id;
+if(param_formkeeper_id != null) FORMKEEPER_ID = param_formkeeper_id;
+if(param_wintitle != null)
+{
+	//gpformstorage_panel.setTitle(param_wintitle);
+	bigtitle.setValue(param_wintitle);
+}
+
+if(param_flag1 != null) flag1_fieldname = param_flag1;
+if(param_flag2 != null) flag2_fieldname = param_flag2;
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

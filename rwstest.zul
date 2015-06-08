@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="testincluded"?>
+<zk>
+
+<zscript>
+// kk2 = Executions.getCurrent().getParameter("kk2");
+// parentpage = Executions.getCurrent().getParameter("parentpage");
+/*
+kk2 = Executions.getCurrent().getAttribute("kk2");
+parentpage = Executions.getCurrent().getAttribute("parentpage");
+
+thekk2 = Executions.getCurrent().getDesktop().getPage(parentpage).getFellowIfAny(kk2);
+
+dingdongpass = Executions.getCurrent().getAttribute("dingme");
+callmefunc = Executions.getCurrent().getAttribute("callmefunc");
+
+void showme()
+{
+	// alert(kk2 + " | " + parentpage + " | " + thekk2);
+
+	testlabel.setValue("dong: " + dingdongpass);	
+	// thekk2.open(memem);
+	kingkong.open(memem);
+
+}
+
+sometign else see if can write back
+*/
+</zscript>
+
+<popup id="kingkong">
+<groupbox>
+me pop string
+<label id="testlabel" />
+</groupbox>
+</popup>
+
+testing me...
+
+<div id="loadme" />
+
+<button id="memem" label="meinclude" onClick="showme()" />
+<button label="callme" onClick="callmefunc.callMe()" />
+
+</zk>

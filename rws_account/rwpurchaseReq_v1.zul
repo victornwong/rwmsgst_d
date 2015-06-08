@@ -1,0 +1,712 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rwprmmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rws_warehouse/assignJobID_funcs.zs" />
+<zscript src="./rwpurchaseReq_funcs.zs" />
+<zscript src="./genPO_Output.zs" />
+<zscript src="./rwpurchaseReports_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Purchase Order";
+MYVERSION = "v0.3.2";
+MYPANEL = "rwprmpopan";
+/*
+Title		: Purchase Req and Order for Rentwise ONLY!
+Written by	: Victor Wong
+Dated		: 04/10/2013
+
+Revisions:
+26/05/2014: export data out for analysis as required by Satish
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
+ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
+global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
+global_selected_customername = ""; // use this one as supplier_name instead
+global_selected_customer = glob_sel_prversion = ""; // PR version
+glob_icomponents_counter = 1;
+glob_sel_prid = glob_sel_prstatus = "";
+last_listpr_type = 0;
+
+String JN_linkcode()
+{
+	if(glob_sel_prid.equals("")) return "";
+	return PR_PREFIX + glob_sel_prid;
+}
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = kiboo.checkNullString(custr.get("address1yh")) + ",\n" + kiboo.checkNullString(custr.get("address2yh")) + ",\n" +
+		kiboo.checkNullString(custr.get("address3yh")) + ",\n" + kiboo.checkNullString(custr.get("address4yh"));
+
+	locstr = locstr.replaceAll(",,",",");
+
+	p_supplier_name.setValue(global_selected_customername);
+	p_sup_contact.setValue( kiboo.checkNullString(custr.get("contactyh")) );
+	p_sup_tel.setValue( kiboo.checkNullString(custr.get("telyh")) );
+	p_sup_fax.setValue( kiboo.checkNullString(custr.get("faxyh")) );
+	p_sup_email.setValue( kiboo.checkNullString(custr.get("emailyh")) );
+	p_sup_address.setValue(locstr);
+
+	global_selected_customer = global_selected_customername;
+}
+
+// Assign job-id to something -- BOM,DO and etc.. modi popup to set link-code and sqlstm accordingly
+// sel_assign_job = global set when job-listitem click (def in assignJobID_funcs.zs)
+void assignJobLink(String ilnk)
+{
+	if(ilnk.equals("")) return;
+	if(sel_assign_job.equals("")) return;
+
+	p_job_id.setValue(sel_assign_job);
+
+	sqlstm = "update purchaserequisition set job_id=" + sel_assign_job + " where origid=" + ilnk; // modi this for other mod
+	sqlhand.gpSqlExecuter(sqlstm);
+	linkjobs_pop.close();
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = false;
+	sqlstm = msgtext = "";
+	lnkc = PR_PREFIX + glob_sel_prid;
+
+	if(itype.equals("newpr_b"))
+	{
+		sqlstm = "insert into purchaserequisition (supplier_name,datecreated,duedate,priority,pr_status,username,version) values " +
+		"('UNDEF','" + todaydate + "','" + todaydate + "','NORMAL','DRAFT','" + useraccessobj.username + "',1)";
+
+		refresh = true;
+	}
+	else
+	{
+		if(glob_sel_prid.equals("")) return;
+
+		if(itype.equals("updatepr_b"))
+		{
+			Object[] iop = { p_supplier_name, p_sup_contact, p_sup_tel, p_sup_fax, p_sup_email, p_sup_address,
+			p_notes, p_duedate, p_priority, p_sup_etd, p_sup_quote_ref, p_curcode, p_creditterm, p_paydue_date, p_purchasecat };
+			idt = getString_fromUI(iop);
+			sqlstm = "update purchaserequisition set supplier_name='" + idt[0] + "', sup_contact='" + idt[1] + "', sup_tel='" + idt[2] + "'," +
+			"sup_fax='" + idt[3] + "',sup_email='" + idt[4] + "',sup_address='" + idt[5] + "',notes='" + idt[6] + "', " +
+			"duedate='" + idt[7] + "', priority='" + idt[8] + "',sup_etd='" + idt[9] + "', sup_quote_ref='" + idt[10] + "'," + 
+			"curcode='" + idt[11] + "', creditterm='" + idt[12] + "', paydue_date='" + idt[13] + "', purchasecat='" + idt[14] + "' where origid=" + glob_sel_prid;
+			refresh = true;
+		}
+
+		if(itype.equals("submitpr_b"))
+		{
+			if(!glob_sel_prstatus.equals("DRAFT")) { msgtext = "You can only submit new DRAFT PR for approval.."; }
+			else
+			{
+				sqlstm = "update purchaserequisition set pr_status='SUBMIT' where origid=" + glob_sel_prid;
+
+				glob_sel_prstatus = "SUBMIT";
+				injectApprovers(lnkc, "PR");
+				showPRMetadata(glob_sel_prid);
+				refresh = true;
+				disableButts(true);
+				sendPR_approver_email(glob_sel_prid);
+			}
+		}
+
+		if(itype.equals("cancelpr_b"))
+		{
+			if(!glob_sel_prstatus.equals("DRAFT") && !glob_sel_prstatus.equals("SUBMIT"))
+				msgtext = "Can only CANCEL a DRAFT or SUBMITTED PR..";
+			else
+			{
+				sqlstm = "update purchaserequisition set pr_status='CANCEL' where origid=" + glob_sel_prid;
+				glob_sel_prstatus = "CANCEL";
+				refresh = true;
+				disableButts(true);
+			}
+		}
+
+		if(itype.equals("printpr_b"))
+		{
+			if(glob_sel_prstatus.equals("APPROVE")) genPO_Template(glob_sel_prid);
+			else msgtext = "PR got no approval, cannot print/export anything..";
+		}
+
+		if(itype.equals("supdeliver_b")) // 27/11/2013: satish - update whether PO has been delivered..
+		{
+			sqlstm = "update purchaserequisition set sup_actual_deldate='" + todaydate + "' where origid=" + glob_sel_prid;
+			refresh = true;
+		}
+
+		if(itype.equals("notifynewpr_b")) // let other users notify procurement on new PR -- without submitting
+		{
+			sqlstm = "update purchaserequisition set notify_pr='" + todaydate + "' where origid=" + glob_sel_prid;
+			sendNoti_newPR(glob_sel_prid,glob_pr_rec.get("username"));
+		}
+		
+		if(itype.equals("shwauditlogs_b"))
+		{
+			showSystemAudit(auditlogs_holder,JN_linkcode(),"");
+			auditlogs_pop.open(iwhat);
+		}
+
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showPRList(last_listpr_type);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+	lnkc = PR_PREFIX + glob_sel_prid;
+
+	if(glob_sel_prid.equals("")) return;
+
+	if(itype.equals("delpr_b"))
+	{
+		if (Messagebox.show("HARD delete PR..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm =  "delete from purchaserequisition where origid=" + glob_sel_prid;
+		sqlstm += "delete from bpm_actions where assigner='" + lnkc + "'"; // remove approval-things too
+		workarea.setVisible(false);
+		bpm_area.setVisible(false);
+		glob_sel_prid = "";
+	}
+
+	if(itype.equals("setnewpr_b"))
+	{
+		sqlstm = "update purchaserequisition set pr_status='DRAFT' where origid=" + glob_sel_prid;
+		glob_sel_prstatus = "DRAFT";
+	}
+
+	if(itype.equals("shwappr_b"))
+	{
+		sendPR_approver_email(glob_sel_prid);
+	}
+
+	if(itype.equals("adminprintpo_b"))
+	{
+		genPO_Template(glob_sel_prid);
+	}
+
+	if(itype.equals("tester_b")) // testing purpose
+	{
+		tpy = 0;
+		if(glob_sel_prstatus.equals("APPROVE")) tpy = 1;
+		if(glob_sel_prstatus.equals("DISAPPROVE")) tpy = 2;
+		prApprovalEmailNoti(glob_sel_prid,tpy);
+	}
+
+	if(itype.equals("showpayweek_b"))
+	{
+		if(glob_pr_rec == null) return;
+		try {
+		alert(dtf2.format(glob_pr_rec.get("paydue_date")) + " :: payment month week: " + getWeekOfMonth( dtf2.format(glob_pr_rec.get("paydue_date")) ) );
+		} catch (Exception e) {}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showPRList(last_listpr_type);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	adminpop.close();
+}
+
+void itemFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+
+	if(glob_sel_prid.equals("")) return;
+
+	if(itype.equals("newitem_b"))
+	{
+		checkMakeItemsGrid();
+		ks = "font-size:9px;font-weight:bold;";
+
+		irow = gridhand.gridMakeRow("","","",pritems_rows);
+		gpMakeCheckbox(irow,"", "","");
+
+		desb = gpMakeTextbox(irow,"","",ks,"99%");
+		desb.setMultiline(true);
+		desb.setHeight("70px");
+
+		gpMakeTextbox(irow,"","",ks,"99%"); // qty
+		gpMakeTextbox(irow,"","",ks,"99%"); // unit price
+		gpMakeLabel(irow,"","",ks); // sub-total
+	}
+
+	if(itype.equals("remitem_b"))
+	{
+		if(pritems_holder.getFellowIfAny("pritems_grid") == null) return;
+		removePRItems(pritems_rows);
+	}
+
+	if(itype.equals("saveitems_b"))
+	{
+		savePRItems(glob_sel_prid);
+		calcPRItems(pritems_rows);
+	}
+
+	if(itype.equals("calcitems_b"))
+	{
+		calcPRItems(pritems_rows);
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refresh) showPRList();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void reportFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+
+	//preports_pop.close();
+	if(itype.equals("payduerept_b"))
+	{
+		rep_PaymentDueWeek( kiboo.getDateFromDatebox(rep_startdate), kiboo.getDateFromDatebox(rep_enddate) );
+	}
+
+	if(itype.equals("prodarep_b")) // product analysis report
+	{
+		pn = kiboo.replaceSingleQuotes(repprodname_tb.getValue().trim());
+		if(pn.equals("")) return;
+		showProductAnalysisRep(kiboo.getDateFromDatebox(rep_startdate), kiboo.getDateFromDatebox(rep_enddate), pn);
+	}
+
+	if(itype.equals("avrsupinrep_b")) // average supplier income report
+	{
+		pn = kiboo.replaceSingleQuotes(repsupname_tb.getValue().trim());
+		if(pn.equals("")) return;
+		showSupplierIncomeRep(kiboo.getDateFromDatebox(rep_startdate), kiboo.getDateFromDatebox(rep_enddate), pn);
+	}
+
+	if(itype.equals("commodorep_b")) // commodity report
+	{
+		pn = reppocate_lb.getSelectedItem().getLabel();
+		if(pn.equals("")) return;
+		showPurchasesByCat(kiboo.getDateFromDatebox(rep_startdate), kiboo.getDateFromDatebox(rep_enddate), pn);
+	}
+
+	//if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refresh) showPRList();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="preports_pop">
+<div sclass="shadowbox" style="background:#394752;" width="700px" >
+<hbox>
+	<label value="Report start date" sclass="k9b" />
+	<datebox id="rep_startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="Report end date" sclass="k9b" />
+	<datebox id="rep_enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+</hbox>
+<separator height="3px" />
+<grid>
+	<rows>
+		<row spans="2,1">
+			<separator />
+			<button id="payduerept_b" label="Payment due report" sclass="k9" onClick="reportFunc(self)" />
+		</row>
+		<row>
+			<label value="Product name" sclass="k9" />
+			<textbox id="repprodname_tb" sclass="k9" width="95%" />
+			<button id="prodarep_b" label="Product Analysis Report" sclass="k9" onClick="reportFunc(self)" />
+		</row>
+		<row>
+			<label value="Supplier" sclass="k9" />
+			<combobox id="repsupname_tb" sclass="k9" width="90%" />
+			<button id="avrsupinrep_b" label="Average Suppl Income Report" sclass="k9" onClick="reportFunc(self)" />
+		</row>
+		<row>
+			<label value="Purchase cate" sclass="k9" />
+			<listbox id="reppocate_lb" mold="select" sclass="k9" />
+			<button id="commodorep_b" label="Commodity Report" sclass="k9" onClick="reportFunc(self)" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<label id="repnothing_lb" class="blink" style="color:#ffffff" value="Nothing to show..." visible="false" />
+</div>
+</popup>
+
+<popup id="adminpop">
+<div width="400px">
+	<button id="delpr_b" label="DELETE" onClick="adminFunc(self)" />
+	<button id="shwappr_b"  label="show approvers" onClick="adminFunc(self)" />
+	<separator height="3px" />
+	<button id="showpayweek_b" label="show pay-due week" onClick="adminFunc(self)" />
+	<button id="tester_b" label="send approval-email" onClick="adminFunc(self)" />
+	<button id="adminprintpo_b" label="Print PO" onClick="adminFunc(self)" />
+</div>
+</popup>
+
+<popup id="linkjobs_pop">
+<div sclass="shadowbox" style="background:#204a87;" width="780px" >
+	<label id="linkjob_header" style="color:#ffffff;font-weight:bold" multiline="true" />
+	<separator height="3px" />
+	<hbox>
+		<div id="jobs_holder" />
+		<button label="Assign job" style="font-weight:bold" onClick="assignJobLink(glob_sel_prid)"  />
+	</hbox>
+	<separator height="3px" />
+	<div id="jobitems_holder" />
+	<separator height="3px" />
+	<button label="Close" sclass="k9" onClick="linkjobs_pop.close()" />
+</div>
+</popup> <!-- ENDOF linkjobs_pop -->
+
+<popup id="viewjob_popup">
+<div sclass="shadowbox" style="background:#204a87;" width="600px" >
+	<label id="vj_jobid_label" style="font-size:18;font-weight:bold;color:#ffffff" />
+	<separator height="2px" />
+	<div id="vj_jobitems_holder" />
+</div>
+</popup>
+
+<popup id="auditlogs_pop">
+<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+	<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+	<separator height="3px" />
+	<div id="auditlogs_holder" />
+	<separator height="3px" />
+	<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<!-- modded title to show "supplier" -->
+<popup id="pickcustomer_popup">
+<div sclass="shadowbox" style="background:#f9b12d;">
+	<hbox>
+		<label sclass="k9">Supplier name</label>
+		<textbox id="searchcust_tb" sclass="k9" />
+		<button label="Find" sclass="k9" onClick="findCustomers()" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<div id="foundcusts_holder" width="400px" />
+		<separator width="5px" />
+		<div width="400px" id="custfound_wa" visible="false" >
+			<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+			<separator height="2px" />
+			<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+			<separator height="3px" />
+			<button label="Select this customer" style="font-size:9px" onClick="assignCustomer()" />
+		</div>
+	</hbox>
+	<label id="selectcustid" visible="false" />
+</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" sclass="k9" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,PR_PREFIX,glob_sel_prid)" />
+		<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" sclass="k9" />
+				<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+			</row>
+			<row>
+				<label value="Description" sclass="k9" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,PR_PREFIX,glob_sel_prid)" sclass="k9" />
+	<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+</hbox>
+</popup>
+
+<popup id="approverbox_pop">
+<div sclass="shadowbox" style="background:#555753;" id="bpm_area" visible="false" width="450px" >
+	<div style="background:#555753;padding:2px">
+		<label value="PR APPROVAL" sclass="subhead1" />
+		<button label="Logs" sclass="k9" onClick="viewBPM_logs(PR_PREFIX + glob_sel_prid, self)" />
+	</div>
+	<div id="approvers_box" />
+</div>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#D5E843">
+
+<div sclass="shadowbox" style="background:#2e3436;">
+<hbox>
+	<label value="Start date" sclass="k9b" />
+	<datebox id="startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="End date" sclass="k9b" />
+	<datebox id="enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="Search" sclass="k9b" />
+	<textbox id="searhtxt_tb" width="200px" sclass="k9" />
+	<button label="Load/Search" sclass="k9mo" onClick="showPRList(1)" />
+	<separator width="8px" />
+	<label value="PR No." sclass="k9b" />
+	<textbox id="searchprno_tb" />
+	<separator width="8px" />
+	<button label="By PR" sclass="k9" onClick="showPRList(2)" />
+</hbox>
+<separator bar="true" />
+<hbox>
+	<button id="newpr_b" label="Create PR" onClick="doFunc(self)" />
+	<button id="notifynewpr_b" label="Notify procurement " style="color:#3465a4;font-weight:bold" onClick="doFunc(self)" />
+	<button id="submitpr_b" label="Submit for approval" style="color:#5c0404;font-weight:bold" onClick="doFunc(self)" />
+	<button id="cancelpr_b" label="CANCEL" onClick="doFunc(self)" />
+	<button id="printpr_b" label="Print/Export" onClick="doFunc(self)" />
+	<button label="Reports" onClick="preports_pop.open(self)" />
+	<button id="setnewpr_b" label="set DRAFT" style="color:#909d2a;font-weight:bold" onClick="adminFunc(self)" disabled="true" />
+	<button id="shwauditlogs_b" label="Audit logs" onClick="doFunc(self)" />
+	<separator width="10px" />
+
+	<!-- <button id="supdeliver_b" label="PO deliverd" onClick="doFunc(self)" /> -->
+	<separator width="10px" />
+
+	<button id="apprshwbox_b" label="APPROVER BOX" style="color:#5c0404;font-weight:bold" onClick="approverbox_pop.open(self)" />
+	<button label="View job" style="font-weight:bold" onClick="viewJobWindow(p_job_id.getValue(),rwprmpopan);" />
+	<button id="admin_bb" label="ADMIN" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+</hbox>
+
+</div>
+<separator height="3px" />
+
+<!-- listarea main div -->
+<div sclass="shadowbox" style="background:#888a85;">
+<hbox>
+	<button id="blind_listarea" label="-" onClick="blindTings_withTitle(self,listarea_holder,listarea_header)" />
+	<label id="listarea_header" sclass="subhead1" value="PRs List" visible="false" />
+	<hbox id="listarea_holder" >
+		<div id="prlist_holder" />
+	</hbox>
+</hbox>
+</div> <!-- ENDOF listarea main div -->
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#2e3436;" id="workarea" visible="false" >
+
+<hbox>
+	<button id="blind_workarea" label="-" onClick="blindTings_withTitle(self,workarea_holder,workarea_header)" />
+	<label id="workarea_header" sclass="subhead1" value="PR Work" visible="false" />
+
+<hbox id="workarea_holder" >
+
+<vbox width="700px"> <!-- workarea leftside -->
+
+<grid >
+	<rows>
+		<row style="background:#97b83a" >
+			<label value="PR#" />
+			<label id="p_origid" style="font-size:14px;font-weight:bold" />
+			<hbox>
+				<label value="Date:" />
+				<label id="p_datecreated" />
+			</hbox>
+		</row>
+		<row style="background:#888a85" spans="1,1,2" >
+			<label value="Job-ID" sclass="k9" />
+			<label id="p_job_id" style="font-weight:bold" />
+			<hbox>
+				<button id="viewjob_b" label="View job" style="font-weight:bold" onClick="viewJobWindow(p_job_id.getValue(),rwprmpopan);" />
+				<button id="getjobid_b" label="Get job-id" style="font-weight:bold" onClick="showLinkJobsAll(self,p_job_id.getValue())" />
+			</hbox>
+		</row>
+		<row>
+			<label value="Supplier" />
+			<textbox id="p_supplier_name" width="99%" style="font-weight:bold" />
+			<button id="asssupp_b" label="Get supplier" sclass="k9" onClick="pickcustomer_popup.open(self)" />
+		</row>
+		<row spans="3">
+			<hbox>
+				<button id="updatepr_b" label="Update.." onClick="doFunc(self)" />
+				<label id="customername" visible="false" /> <!-- used in pickcustomer but hide it for this mod -->
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<div id="prmetaform_holder" />
+
+<div style="background:#628821;padding:2px">
+<hbox>
+	<label sclass="subhead1" value="Purchase Items" />
+	<separator width="10px" />
+	<button id="newitem_b" label="New item" sclass="k9" onClick="itemFunc(self)" />
+	<button id="remitem_b" label="Remove" sclass="k9" onClick="itemFunc(self)" />
+	<separator width="10px" />
+	<button id="calcitems_b" label="CALC" style="font-weight:bold" onClick="itemFunc(self)" />
+	<button id="saveitems_b" label="SAVE" style="font-weight:bold" onClick="itemFunc(self)" />
+</hbox>
+
+</div>
+
+<div id="pritems_holder" />
+<separator height="3px" />
+
+<hbox>
+	<separator width="500px" />
+	<label sclass="subhead1" value="Total" />
+	<separator width="10px" />
+	<label sclass="subhead2" style=";text-decoration:underline" id="total_lbl" />
+</hbox>
+
+</vbox> <!-- ENDOF workarea leftside -->
+
+<vbox> <!-- workarea rightside -->
+
+	<div sclass="shadowbox" style="background:#555753;" id="jobnotes_div" >
+		<label sclass="subhead1">JOB NOTES</label>
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,JN_linkcode())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" sclass="k9" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" sclass="k9" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" sclass="k9" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+		</div>
+	</div>
+
+	<div sclass="shadowbox" style="background:#555753;">
+		<label sclass="subhead1">ATTACHMENT / DOCUMENTS</label>
+		<separator height="3px" />
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" sclass="k9" onClick="showUploadPopup(PR_PREFIX,glob_sel_prid)" />
+			<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+			<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(self)" />
+			<button id="deletedoc_btn" label="Delete" sclass="k9" onClick="deleteFile(documents_holder,PR_PREFIX,glob_sel_prid)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="documents_holder" />
+	</div>
+
+</vbox> <!-- ENDOF workarea rightside -->
+
+</hbox>
+
+</hbox>
+
+</div> <!-- ENDOF workarea -->
+<!-- <textbox id="debugbox" multiline="true" width="99%" height="100px" /> -->
+
+<div id="kasiexport" visible="false" />
+<div id="winsholder" />
+
+<zscript>
+<![CDATA[
+
+void popuSupplierCombo(Object tcombo)
+{
+	sqlstm = "select distinct supplier_name from purchaserequisition order by supplier_name";
+	r = sqlhand.gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+	ArrayList kabom = new ArrayList();
+	for(d : r)
+	{
+		kabom.add(d.get("supplier_name"));
+	}
+	gridhand.makeComboitem(tcombo, kiboo.convertArrayListToStringArray(kabom) );
+}
+
+prmetaform = dynamicForm(prmetaform_holder, "prmetaform_grid", "15");
+p_creditterm.setSelectedIndex(1); // default to COD
+
+luhand.populateListbox_ByLookup(reppocate_lb, "PURCHASE_CATEGORY", 2);
+popuSupplierCombo(repsupname_tb);
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_bb.setVisible(true);
+	setnewpr_b.setDisabled(false);
+}
+
+if(useraccessobj.username.equals("satish"))
+{
+	setnewpr_b.setDisabled(false);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

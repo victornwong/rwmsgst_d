@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="setupclient_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title: Setup/Update Client
+Written by: Victor Wong
+Date started: 26/10/2010
+
+**NOTES**
+
+*/
+
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.util.media.AMedia;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+/*
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+*/
+
+selected_custcat_id = "";
+selected_custcatcode = "";
+selected_custcatdesc = "";
+
+// onSelect for showCustomerCategories()
+class custcatsLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_custcat_id = getListcellItemLabel(selitem,0);
+		selected_custcatcode = getListcellItemLabel(selitem,1);
+		selected_custcatdesc = getListcellItemLabel(selitem,2);
+
+		custcat_category.setValue(selected_custcatcode);
+		custcat_cat_desc.setValue(selected_custcatdesc);
+		custcat_category.setDisabled(true); // disable cat.code input
+		newupdatecustcat_btn.setLabel("Update..");
+
+		//showZTC_List();
+		//clearZTCInputs_clicker(); // clear any prev inputs
+	}
+}
+// Show stuff from customercategory table
+void showCustomerCategories()
+{
+	Object[] custcats_lb_headers = {
+	new dblb_HeaderObj("catid",false,"id",2),
+	new dblb_HeaderObj("Cat.Code",true,"category",1),
+	new dblb_HeaderObj("Customer.Cat.Desc",true,"cat_desc",1),
+	};
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	sqlstm = "select id,category,cat_desc from customercategory";
+	Listbox newlb = makeVWListbox_onDB(customercategories_holder,custcats_lb_headers,"custcats_lb",15,sql,sqlstm);
+	sql.close();
+
+	newlb.addEventListener("onSelect", new custcatsLB_Listener());
+	/*
+	dc_obj = new custcatsDoubleClick_Listener();
+	setDoubleClick_ListItems(newlb, dc_obj);
+	*/
+}
+
+// doubleClicker for searchCustomer_clicker()
+class customerslbDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = customers_lb.getSelectedItem();
+		arcode = getListcellItemLabel(selitem,0);
+		custname = getListcellItemLabel(selitem,1);
+		
+		// Fill customer's ar-code and name into inputboxes
+		ztc_ar_code.setValue(arcode);
+		ztc_customer_name.setValue(custname);
+		
+		ztcdetails_grid.invalidate();
+	}
+}
+
+// Show customers from database
+// searchtype : 1=by searchstring or customer-cat, 2=load all by customer-cat
+void searchCustomer_clicker(int searchtype)
+{
+	Object[] customers_lb_headers = {
+	new dblb_HeaderObj("AR.Code",true,"ar_code",1),
+	new dblb_HeaderObj("Customer.Name",true,"customer_name",1),
+	new dblb_HeaderObj("Tel.Number",true,"telephone_no",1),
+	new dblb_HeaderObj("Cust.Contact",true,"contact_person1",1),
+	new dblb_HeaderObj("Salesman",true,"salesman_code",1),
+	};
+	
+	sqlstm = "select top 200 ar_code,customer_name,telephone_no,contact_person1,salesman_code from customer where " +
+	"ar_code like '%" + searchstr + "%' or customer_name like '%" + searchstr + "%' or " + 
+	"address1 like '%" + searchstr + "%' or address2 like '%" + searchstr + "%' or address3 like '%" + searchstr + "%' order by customer_name";
+	
+	if(searchtype == 1)
+	{
+		searchstr = replaceSingleQuotes(customersrch_tb.getValue());
+		if(searchstr.equals("")) return;
+
+		if(!selected_custcatcode.equals("")) // wanna do search by customer-category as well if selected
+		sqlstm = "select top 200 ar_code,customer_name,telephone_no,contact_person1,salesman_code from customer where " +
+		"(ar_code like '%" + searchstr + "%' or customer_name like '%" + searchstr + "%' or " + 
+		"address1 like '%" + searchstr + "%' or address2 like '%" + searchstr + "%' or address3 like '%" + searchstr + "%') and " +
+		"category='" + selected_custcatcode + "' order by customer_name";
+	}
+
+	if(searchtype == 2)
+	{
+		if(selected_custcatcode.equals("")) return;
+
+		sqlstm = "select top 200 ar_code,customer_name,telephone_no,contact_person1,salesman_code from customer where " +
+		"category='" + selected_custcatcode + "' order by customer_name";
+	}
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	Listbox newlb = makeVWListbox_onDB(customers_holder,customers_lb_headers,"customers_lb",5,sql,sqlstm);
+	sql.close();
+	if(newlb.getItemCount() > 15) newlb.setRows(20);
+	dc_obj = new customerslbDoubleClick_Listener();
+	setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// Let user deselect customer-category - 'cause it'll affect customer-searching sqlstm
+void deselectCustomerCat_clicker()
+{
+	if(customercategories_holder.getFellowIfAny("custcats_lb") != null)
+	{
+		custcats_lb.clearSelection();
+		// clear all global vars
+		selected_custcat_id = "";
+		selected_custcatcode = "";
+		selected_custcatdesc = "";
+	}
+}
+
+// Retrieve and populate salesman dropdown - can be used in other modules
+void getSalesman_MakeDropdown(Listbox ilb)
+{
+	sqlstm = "select distinct salesman_code from customer";
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	smrecs = sql.rows(sqlstm);
+	sql.close();
+	if(smrecs.size() == 0) return;
+	String[] strarray = new String[1];
+	for(dpi : smrecs)
+	{
+		smcode = (dpi.get("salesman_code") == null) ? "" : dpi.get("salesman_code");
+		strarray[0] = smcode;
+		insertListItems(ilb,strarray,"false");
+	}
+
+	ilb.setSelectedIndex(0);
+}
+
+// Retrieve and populate customer-category dropdown - can be used in other modules
+void getCustomerCat_MakeDropdown(Listbox ilb)
+{
+	sqlstm = "select distinct category from customercategory";
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	smrecs = sql.rows(sqlstm);
+	sql.close();
+	if(smrecs.size() == 0) return;
+	String[] strarray = new String[1];
+	for(dpi : smrecs)
+	{
+		smcode = (dpi.get("category") == null) ? "" : dpi.get("category");
+		strarray[0] = smcode;
+		insertListItems(ilb,strarray,"false");
+	}
+
+	ilb.setSelectedIndex(0);
+}
+
+//---- Customer Category setup related
+
+void clearCustCat_Fields()
+{
+	custcat_category.setValue("");
+	custcat_cat_desc.setValue("");
+
+	custcat_category.setDisabled(false);
+	newupdatecustcat_btn.setLabel("New..");
+
+	// reset global vars
+	selected_custcat_id = "";
+	selected_custcatcode = "";
+	selected_custcatdesc = "";
+}
+
+void newupdateCustCat_clicker()
+{
+	custcat = replaceSingleQuotes(custcat_category.getValue());
+	catdesc = replaceSingleQuotes(custcat_cat_desc.getValue());
+
+	if(custcat.equals("")) return;
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	// check for duplicate customer-category code if not updating
+	if(selected_custcat_id.equals(""))
+	{
+		sqlstm = "select category from customercategory where category='" + custcat + "'";
+		kkr = sql.firstRow(sqlstm);
+		if(kkr == null) // no dups.. insert a new customer-category into table
+		{
+			sqlstm = "insert into customercategory (category,cat_desc) values ('" + custcat + "','" + catdesc + "')";
+			sql.execute(sqlstm);
+		}
+		else
+			showMessageBox("Customer category code already in use..");
+	}
+
+	// It's an update..
+	if(!selected_custcat_id.equals(""))
+	{
+		sqlstm = "update customercategory set category='" + custcat + "',cat_desc='" + catdesc + "' where id=" + selected_custcat_id;
+		sql.execute(sqlstm);
+	}
+
+	sql.close();
+	showCustomerCategories(); // refresh
+	clearCustCat_Fields(); // clear inputs
+}
+
+void deleteCustCat_clicker()
+{
+	if(selected_custcat_id.equals("")) return;
+	
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	// check if customer-category code being used
+	sqlstm = "select top 1 ar_code from customer where category='" + selected_custcatcode + "'";
+	kkr = sql.firstRow(sqlstm);
+
+	// being used.. cannot delete
+	if(kkr != null)
+	{
+		showMessageBox("Customer-Category code is assigned to some customers, cannot delete..");
+	}
+	else // not being used.. can delete
+	{
+		if (Messagebox.show("Delete this customer-category : " + selected_custcatcode, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+		{
+			sqlstm = "delete from customercategory where id=" + selected_custcat_id;
+			sql.execute(sqlstm);
+		}
+	}
+	sql.close();
+	showCustomerCategories(); // refresh
+	clearCustCat_Fields(); // clear inputs
+}
+
+//---- ENDOF Customer Category setup related
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="setupclient_panel" title="Clients Setup" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<hbox>
+<groupbox mold="3d" width="320px" style="padding:2px">
+	<caption label="Customer Categories" />
+	<label value="Select a customer-category to narrow down your search" style="font-size:9px" />
+	<separator height="5px" />
+	<div id="customercategories_holder" />
+	<separator height="3px" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="Category.Code" style="font-size:9px" />
+				<textbox id="custcat_category" width="210px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Category.Desc" style="font-size:9px" />
+				<textbox id="custcat_cat_desc" width="210px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="3px" />
+	<hbox>
+		<button label="Deselect" style="font-size:9px" onClick="deselectCustomerCat_clicker()" />
+		<button label="Clear fields" style="font-size:9px" onClick="clearCustCat_Fields()" />
+		<button id="newupdatecustcat_btn" label="New.." style="font-size:9px" onClick="newupdateCustCat_clicker()" />
+		<button id="deletecustcat_btn" label="Delete" style="font-size:9px" onClick="deleteCustCat_clicker()" />
+	</hbox>
+</groupbox>
+
+<groupbox mold="3d" style="padding:2px" >
+	<caption label="Customers" />
+	<hbox>
+		<label value="Customer.Name/AR_Code/Address" style="font-size:9px" />
+		<textbox id="customersrch_tb" style="font-size:9px" width="250px" />
+		<button id="searchcustomer_btn" label="Search" style="font-size:9px" onClick="searchCustomer_clicker(1)" />
+		<button id="loadcustomers_btn" label="Load all by customer-category" style="font-size:9px" onClick="searchCustomer_clicker(2)" />
+		<label value="(Max. 200 recs per click)" style="font-size:9px" />
+	</hbox>
+	<separator height="5px" />
+	<div id="customers_holder" />
+</groupbox>
+</hbox>
+
+<hbox>
+<groupbox mold="3d" style="padding:2px">
+	<caption id="custdetails_lbl" label="Customer Details" />
+	<grid id="custdetails_grid">
+		<columns>
+			<column label="" />
+			<column label="" />
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="AR.Code" style="font-size:9px" />
+				<textbox id="ztc_ar_code" style="font-size:9px" disabled="true" />
+				<label value="Customer.Name" style="font-size:9px" />
+				<label id="ztc_customer_name" value="" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Salesman" style="font-size:9px" />
+				<listbox id="ztc_salesman_username" mold="select" style="font-size:9px" />
+				<label value="Customer.Cat" style="font-size:9px" />
+				<listbox id="ztc_customer_category" mold="select" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+	<separator height="3px" />
+</groupbox>
+</hbox>
+
+<zscript>
+<![CDATA[
+
+setTodayDatebox(hiddendatebox);
+
+showCustomerCategories();
+getSalesman_MakeDropdown(ztc_salesman_username);
+getCustomerCat_MakeDropdown(ztc_customer_category);
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billing_docs_manager"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title		: Allow user to update documents-sent status - scan airwaybill #, preprinted barcode or watever
+Written by	: Victor Wong
+Version		: 3.0-develop
+
+Code base invoices.zul
+
+Uses user-defined fields in MySoft.Invoice table (def 11/01/2010)
+
+Field2 = Date sent = date invoice/documents is sent to client
+Field3 = Consignment no. = courier or whatever tracking number
+Field4 = Delivery method = courier/by-hand/registered-post/normal-post
+Field5 = Recipient = whom the invoice/docs addressed to
+Field6 = document type = invoice only, invoice+coa, coa only, others
+
+Printed = document printed or sent-out (going to use this one 11/01/2010)
+
+*/
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+// check usergroup access - no access, just close the panel..
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,ADMIN_BIRT_REPORTS_USERGROUP,ADMIN_BIRT_REPORTS_ACCESSLEVEL);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+String[] docustatus = { "ALL","Not send out","Invoice/documents sent out" };
+
+selected_invoice = "";
+
+class invoiceLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_invoice = getListcellItemLabel(selitem,0);
+	}
+}
+
+// Do the search and populate listbox - will search for invoice/documents delivery user-def fields
+void startInvoiceDocSearch(Datebox startd, Datebox endd, Listbox docstat, Textbox icustomername, Textbox icustomeraddress)
+{
+Object[] invdocs_lb_headers = {
+	new listboxHeaderObj("Invoice#",true),
+	new listboxHeaderObj("Date issued",true),
+	new listboxHeaderObj("Client",true),
+	new listboxHeaderObj("Recipient",true),
+	new listboxHeaderObj("Date.Sent",true),
+	new listboxHeaderObj("Method",true),
+	new listboxHeaderObj("Track#",true),
+	new listboxHeaderObj("DocuType",true)
+};
+
+	tbstat = docstat.getSelectedItem().getLabel();
+	sdate = getDateFromDatebox(startd);
+	edate = getDateFromDatebox(endd);
+
+	cname = icustomername.getValue();
+	caddr = icustomeraddress.getValue();
+
+	if(sdate == null || edate == null)
+	{
+		showMessageBox("Please specify start and end date for search");
+		return;
+	}
+	// bizarre sql statement wrangling here
+	cname_wstring = (cname.equals("")) ? "" :  "and name like '%" + cname + "%' ";
+	caddr_wstring = (caddr.equals("")) ? "" : "and (address1 like '%" + caddr + "%' or address2 like '%" + caddr + "%' or address3 like '%" + caddr + "%') ";
+
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+
+/*	def: 11/01/2010
+"Not send out" = 0
+"Invoice/documents sent out" = 1
+
+Field2 = Date sent = date invoice/documents is sent to client
+Field3 = Consignment no. = courier or whatever tracking number
+Field4 = Delivery method = courier/by-hand/registered-post/normal-post
+Field5 = Recipient = whom the invoice/docs addressed to
+Field6 = document type = invoice only, invoice+coa, coa only, others
+*/
+
+	docstatstr = "";
+
+	if(tbstat == "Not send out")
+	{
+		docstatstr = "and Printed=0";
+	}
+	else if(tbstat == "Invoice/documents sent out")
+	{
+		docstatstr = "and Printed=1";
+	}
+
+	sqlstatem = "select top 550 InvoiceNo,InvoiceDate,Name,Attention,NewField2,NewField3,NewField4,NewField5,NewField6 from Invoice " +
+	"where InvoiceDate between '" + sdate + "' and '" + edate + "' and IsCancel=0 " +
+	cname_wstring +	caddr_wstring +	docstatstr +
+	" order by InvoiceDate desc";
+
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+	reccount = tlist.size();
+
+	if(reccount == 0)
+	{
+		showMessageBox("Cannot find anything..");
+		return;
+	}
+
+	Listbox newlb = makeVWListboxWithFooter(searchdiv, invdocs_lb_headers, "invdocs_lb", 30, reccount.toString() + " invoices");
+	newlb.setContext("billingDocsContext");
+	newlb.addEventListener("onSelect", new invoiceLB_Listener());
+
+	for(ilist : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(ilist.get("InvoiceNo"));
+		kabom.add(ilist.get("InvoiceDate").toString().substring(0,10));
+		kabom.add(ilist.get("Name"));
+		kabom.add(ilist.get("NewField5"));
+		kabom.add(ilist.get("NewField2"));
+		kabom.add(ilist.get("NewField4"));
+		kabom.add(ilist.get("NewField3"));
+		kabom.add(ilist.get("NewField6"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+} // end of startInvoiceSearch()
+
+void playDocsDeliveryDetails()
+{
+	invno = invdocs_lb.getSelectedItem().getLabel();
+	invstr = "invoiceno=" + invno;
+	uniqwindowid = makeRandomId("xdcm");
+	globalActivateWindow("miscwindows","acctmodules/invoice_docs_details.zul", uniqwindowid, invstr,useraccessobj);
+}
+
+void clearSendoutRec_clicker()
+{
+	alert(selected_invoice);
+
+}
+
+]]>
+</zscript>
+
+<menupopup id="billingDocsContext">
+	<menuitem label="Update document delivery details" onClick="playDocsDeliveryDetails()" /> 
+	<menuitem label="Hide popup" />
+</menupopup>
+
+<div width="1200px">
+<panel id="premarch_panel" title="Invoices + COA Sent-Out Tracking v.3-dev" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<vbox width="100%">
+
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+
+<hbox>
+	<hbox>
+		<label value="Start date" style="font-size:9px" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+	</hbox>
+	<separator width="10px"/>
+	<hbox>
+		<label value="End date" style="font-size:9px" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+	</hbox>
+	
+	<label value="D.Status" style="font-size:9px" />
+	<listbox mold="select" rows="1" id="docsstatus" style="font-size:9px" />
+	<zscript>
+		populateDropdownListbox(docsstatus,docustatus);
+	</zscript>
+	
+	<button label="Search/Refresh" style="font-size:9px" onClick="startInvoiceDocSearch(startdate,enddate,docsstatus,customername,customeraddress)" />
+	<button label="Docs delivery details" style="font-size:9px" onClick="playDocsDeliveryDetails()" />
+</hbox>
+
+<hbox>
+	<label value="Customer" style="font-size:9px" />
+	<textbox id="customername" width="200px" style="font-size:9px" />
+	<label value="Address" style="font-size:9px" />
+	<textbox id="customeraddress" width="200px" style="font-size:9px" />
+</hbox>
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+<div id="adminstuff" style="background:#DD2222" visible="false">
+<button label="Clear records" style="font-size:9px" onClick="clearSendoutRec_clicker()" />
+</div>
+<separator height="3px" />
+<div id="searchdiv" />
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminstuff.setVisible(true);
+}
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+</zk>

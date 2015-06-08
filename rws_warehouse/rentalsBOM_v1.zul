@@ -1,0 +1,824 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rentalbom_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./BOMfuncs/rentalsBOM_funcs.zs" />
+<zscript src="./BOMfuncs/ERG_ImpBOM.zs" />
+<zscript src="./BOMfuncs/buildsCommiter.zs" />
+<zscript src="./BOMfuncs/autoPopBom.zs" />
+<zscript src="./assignJobID_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Bill Of Materials (BOM)";
+MYVERSION = "v0.5.5";
+MYPANEL = "rentitebom3";
+/*
+@Title Rental items BOM maker
+@Author Victor Wong
+@Dated 23/06/2013
+
+**Notes**
+Focus uses mr000 and u0000 to store customer info
+select cust.name,cust.code,cust.code2, custd.address1yh, custd.address2yh, custd.address3yh, custd.address4yh,
+custd.telyh, custd.faxyh, custd.contactyh, custd.deliverytoyh, custd.salesrepyh, custd.emailyh
+from mr000 cust left join u0000 custd on custd.extraid = cust.masterid
+where cust.type=195 order by cust.name
+ERR: javax.mail.AuthenticationFailedException: No authentication mechansims supported by both server and client 
+
+13/06/2014: optimize - committal of builds will actually minus stock in FC6 !!! IMPORTANT only authorized person can do this
+23/06/2014: auto populate parts into builds and auto-insert monitors and full-NB/DT -- thanesh idea. good.
+07/07/2014: when assigning job to BOM, import also ROC-no from job-maker
+09/07/2014: thanesh requested for MPF to update remarks/others, webcam, optical, cardreader, grade and bluetooh. Added W7PR code-prefix to import SN/Keys
+10/07/2014: mass-update the things requested by Thanesh above to all selected builds
+16/10/2014: only show textbox to let user enter Job-ID which will link to BOM
+26/12/2014: can goto BOM by id
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+param_bomid = Executions.getCurrent().getParameter("bom");
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+APPROVE_STR = "APPROVE";
+NEW_STR = "NEW";
+COMMIT_STR = "COMMIT";
+
+glob_formmaker = null;
+
+global_selected_bom = global_sel_bom_status = global_selected_build = global_sel_buildtype = "";
+global_selected_customerid = global_selected_customer = glob_sel_bomcategory = glob_sel_jobid = "";
+global_bom_user = "";
+glob_commit_sql = ""; // used during commit-bom, if all builds ok, this will contain the magic sqlstm
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	global_selected_customer = customername.getValue();
+
+	// 11/09/2013: if user re-select new company, remove linking job-id
+	sqlstm = "update stockrentalitems set job_id=null where origid=" + global_selected_bom; // modi this for other mod
+	sqlhand.gpSqlExecuter(sqlstm);
+	showBOMMetadata(global_selected_bom); // modi these to refrsh in other mod
+	showBOMList();
+	shwmini_ji_row.setVisible(false);
+	customername.setValue(global_selected_customer);
+}
+
+// Customize this for other mods to produce the linking-code for rw_jobnotes
+// used at DIV and jobNotes_funcs.zs
+String JN_linkcode()
+{
+	if(global_selected_bom.equals("")) return "";
+	return BOM_PREFIX + global_selected_bom;
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshbomlist = refreshbuilds = false;
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("newbom_butt"))
+	{
+		sqlstm = "insert into stockrentalitems (customerid,customer_name,createdby,createdate,bomstatus,notes) values " +
+		"('0','UNDEF','" + useraccessobj.username + "','" + todaydate + "','NEW','')";
+
+		refreshbomlist = true;
+
+		global_selected_build = "";
+		build_details_grid.setVisible(false);
+	}
+
+	if(itype.equals("updatebom_butt"))
+	{
+		//cstid = selectcustid.getValue();
+		//if(cstid.equals("")) return;
+		if(!global_bom_user.equals(useraccessobj.username))
+		{
+			if(!useraccessobj.username.equals("padmin"))
+			{
+				guihand.showMessageBox("Not your BOM list, you cannot update it");
+				return;
+			}
+		}
+
+		bcat = bomcategory.getSelectedItem().getLabel();
+
+		sqlstm = "update stockrentalitems set customer_name='" + global_selected_customer + "'," + 
+		"bomcategory='" + bcat + "' where origid=" + global_selected_bom;
+
+		refreshbomlist = true;
+	}
+
+	if(itype.equals("newdesktop_butt") || itype.equals("newnotebook_butt") || itype.equals("newmonitor_butt") )
+	{
+		if(global_selected_bom.equals("")) return;
+
+		blty = "DESKTOP";
+		qty = newdt_qty; // qty textbox
+		if(itype.equals("newnotebook_butt")) { blty = "NOTEBOOK"; qty = newnb_qty; }
+		if(itype.equals("newmonitor_butt")) { blty = "MONITOR"; qty = newmt_qty; }
+
+		try { // add how many at once, def=1
+			bqy = Integer.parseInt( qty.getValue() );
+		} catch (Exception e) { bqy = 1; }
+		
+		for(i=0; i<bqy; i++)
+		{
+			sqlstm += "insert into stockrentalitems_det (parent_id,bomtype) values " +
+			"(" + global_selected_bom + ",'" + blty + "');";
+		}
+
+		refreshbuilds = true;
+	}
+
+	if(itype.equals("delbuilds_butt"))
+	{
+		if(global_selected_bom.equals("")) return;
+		//if(global_selected_build.equals("")) return;
+		slc = builds_lb.getSelectedCount();
+		if(slc == 0) return;
+
+		sli = builds_lb.getSelectedItems();
+		buds = "";
+		for(di : sli)
+		{
+			buds += lbhand.getListcellItemLabel(di,5) + ",";
+		}
+
+		try {
+		buds = buds.substring(0,buds.length()-1);
+		} catch (Exception e) {}
+
+		if (Messagebox.show("Delete these build(s)..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from stockrentalitems_det where origid in (" + buds + ")";
+		global_selected_build = ""; // reset
+
+		build_details_grid.setVisible(false);
+		refreshbuilds = true;
+	}
+
+	if(itype.equals("updbuild_b")) // update build-items
+	{
+		if(global_selected_bom.equals("")) return;
+		if(global_selected_build.equals("")) return;
+
+		Object[] ob = { m_grade, m_asset_tag, m_description, m_cpu, m_ram, m_hdd, m_gfxcard, m_vgacable, m_mouse, m_keyboard,
+		m_poweradaptor, m_misc, m_monitor, m_battery, osversion, coa1, coa2, coa3, coa4, offapps,
+		m_ram2, m_ram3, m_ram4, m_hdd2, m_hdd3, m_hdd4, m_optical, m_cardreader, m_webcam, m_bluetooth };
+
+		dt = ngfun.getString_fromUI(ob);
+
+		sqlstm = "update stockrentalitems_det set grade='" + dt[0] + "', asset_tag='" + dt[1] + "', description='" + dt[2] + "'," +
+		"cpu='" + dt[3] + "', ram='" + dt[4] + "', hdd='" + dt[5] + "', gfxcard='" + dt[6] + "', vgacable='" + dt[7] + "'," +
+		"mouse='" + dt[8] + "', keyboard='" + dt[9] + "', poweradaptor='" + dt[10] + "', misc='" + dt[11] + "', monitor='" + dt[12] + "', " +
+		"battery='" + dt[13] + "', osversion='" + dt[14] + "', coa1='" + dt[15] + "', coa2='" + dt[16] + "', coa3='" + dt[17] + "', " +
+		"coa4='" + dt[18] + "', offapps='" + dt[19] + "', ram2='" + dt[20] + "', ram3='" + dt[21] + "', ram4='" + dt[22] + "', " +
+		"hdd2='" + dt[23] + "',hdd3='" + dt[24] + "',hdd4='" + dt[25] + "', optical='" + dt[26] + "', cardreader='" + dt[27] + "'," +
+		"webcam='" + dt[28] + "', bluetooth='" + dt[29] + "' " +
+		"where origid=" + global_selected_build;
+
+		refreshbuilds = true;
+	}
+
+	if(itype.equals("commitbom_butt")) // commit the BOM -- check builds
+	{
+		if(global_selected_bom.equals("")) return;
+		if(!global_sel_bom_status.equals(NEW_STR)) return;
+		// commitBOM(global_selected_bom); 13/06/2014: not using anymore - linking direct to FC6 now
+		//msgtext = "coding something..";
+	}
+
+	if(itype.equals("realcommit_b"))
+	{
+		bomcommiterpopup.close();
+		if(!global_sel_bom_status.equals(NEW_STR))
+			msgtext = "You can only commit NEW BOM";
+		else
+		{
+			sqlstm = "update stockrentalitems set commitdate='" + todaydate + "', commitby='" + unm + "', " +
+			"bomstatus='" + COMMIT_STR + "' where origid=" + global_selected_bom;
+			refreshbomlist = true;
+			toggleBuildsButts(true);
+			//add_RWAuditLog(JN_linkcode(), "", "COMMIT BOM" , unm);
+		}
+	}
+
+	if(itype.equals("approveby_b")) // approve by production HOD
+	{
+		if(global_selected_bom.equals("")) return;
+		if(global_sel_bom_status.equals(APPROVE_STR))
+		{
+			msgtext = "BOM already approved.. no more approval needed.";
+		}
+		else
+		{
+			if(global_sel_bom_status.equals(COMMIT_STR))
+			{
+				sqlstm = "update stockrentalitems set approveby='" + unm + "', approvedate='" + todaydate + "'," +
+				"bomstatus='" + APPROVE_STR + "' where origid=" + global_selected_bom;
+				refreshbomlist = true;
+				toggleBuildsButts(true);
+				//add_RWAuditLog(JN_linkcode(), "", "Approve BOM" , unm);
+			}
+			else
+			{
+				msgtext = "Please commit BOM first to do approval--";
+			}
+		}
+	}
+
+	if(itype.equals("shortinventory_b"))
+	{
+		msgtext = "Bulum lagi..kena pakai DO le";
+	}
+
+	if(itype.equals("confirmcommit_b")) // really commit BOM
+	{
+		if(glob_commit_sql.equals(""))
+		{
+			guihand.showMessageBox("Error in this bOM, cannot commit..");
+			return;
+		}
+
+		sqlhand.gpSqlExecuter(glob_commit_sql);
+		glob_commit_sql = ""; // reset after commital -- avoid prob later
+		toggleBuildsButts(true); // disable build funcs butts
+		add_RWAuditLog(BOM_PREFIX + ibomid, "", "Commit BOM", useraccessobj.username);
+		//commbom_lbl.setValue(commbom_lbl.getValue() + " :: " + glob_commit_sql);
+		commitpro_pop.close();
+		refreshbomlist = true;
+	}
+
+	if(itype.equals("tieroctobom_b"))
+	{
+		enterROCpopup.close();
+		if(global_selected_bom.equals("")) return;
+		kk = kiboo.replaceSingleQuotes(entroc_tb.getValue().trim());
+		if(kk.equals("")) return;
+		sqlstm = "update stockrentalitems set roc_id='" + kk + "' where origid=" + global_selected_bom;
+		refreshbomlist = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	// TODO code update list-item instead of whole listbox everytime..
+	if(refreshbomlist) showBOMList();
+	if(refreshbuilds) showBuildItems(global_selected_bom);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshbomlist = refreshbuilds = false;
+	sqlstm = msgtext = "";
+	adminpopup.close();
+
+	if(itype.equals("opencompop_b"))
+	{
+		commitpro_pop.open(commitbom_butt);
+	}
+
+	if(itype.equals("chgdate_b"))
+	{
+		if(global_selected_bom.equals("")) return;
+		chgd = dtf.format(admchg_date.getValue());
+		sqlstm = "update stockrentalitems set createdate='" + chgd + "' where origid=" + global_selected_bom;
+		refreshbomlist = true;
+	}
+
+	if(itype.equals("uncommit_b"))
+	{
+		if(global_selected_bom.equals("")) return;
+		if (Messagebox.show(global_selected_bom + ": Uncommit BOM -- will remove all bom_id in parts", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "update stockmasterdetails set bom_id=null, bom_date=null, " +
+		"where bom_id=" + global_selected_bom + ";";
+		sqlstm += "update stockrentalitems set bomstatus='NEW', commitdate=null," + 
+		"commitby=null where origid=" + global_selected_bom + ";";
+
+		//sqlhand.gpSqlExecuter(sqlstm);
+		refreshbomlist = true;
+		global_selected_build = "";
+		build_details_grid.setVisible(false);
+	}
+
+	if(itype.equals("adm_setnew_b") || itype.equals("adm_setcommit_b") || itype.equals("adm_setapprove_b"))
+	{
+		if(global_selected_bom.equals("")) return;
+		sqlstm = "update stockrentalitems set bomstatus='" + iwhat.getLabel() + "' where origid=" + global_selected_bom;
+		refreshbomlist = true;
+	}
+
+	if(itype.equals("adm_clrcommit_b"))
+	{
+		sqlstm = "update stockrentalitems set commitby=null, commitdate=null where origid=" + global_selected_bom;
+		refreshbomlist = true;
+	}
+	if(itype.equals("adm_clrapprove_b"))
+	{
+		sqlstm = "update stockrentalitems set approveby=null, approvedate=null where origid=" + global_selected_bom;
+		refreshbomlist = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refreshbomlist) showBOMList();
+	if(refreshbuilds) showBuildItems(global_selected_bom);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+// Assign job-id to something -- BOM,DO and etc.. modi popup to set link-code and sqlstm accordingly
+// sel_assign_job = global set when job-listitem click (def in assignJobID_funcs.zs)
+// sel_assign_rocid = defn in assignJobID_funcs.zs
+void assignJobLink(String ilnk)
+{
+	if(ilnk.equals("")) return;
+	if(sel_assign_job.equals("")) return;
+
+	sqlstm = "update stockrentalitems set job_id=" + sel_assign_job + ", roc_id='" + sel_assign_rocid + "' where origid=" + ilnk; // modi this for other mod
+	sqlhand.gpSqlExecuter(sqlstm);
+	linkjobs_pop.close();
+	// modi these to refrsh in other mod
+	glob_sel_jobid = sel_assign_job;
+	showBOMMetadata(ilnk);
+	showBOMList();
+}
+
+// 16/10/2014: Link Job to BOM - uses only textbox instead of listing all jobs
+void assignJobLink_2(String ibom)
+{
+	linkjobbom_pop.close();
+	if(ibom.equals("")) return;
+	ljb = kiboo.replaceSingleQuotes( lnk_jobid_tb.getValue().trim() );
+	if(ljb.equals("")) return;
+	try { kk = Integer.parseInt(ljb); } catch (Exception e) { return; }
+	sqlstm = "update stockrentalitems set job_id=" + ljb + " where origid=" + ibom;
+	sqlhand.gpSqlExecuter(sqlstm);
+}
+
+void minishowJobItems()
+{
+	jid = job_id.getValue();
+	if(!jid.equals(""))
+	{
+		jrec = getRWJob_rec(jid);
+		showJobItems(jrec,mini_jobitems_holder,"mini_jobitems_grid","mini_jobitems_rows"); // assignJobID_funcs.zs
+		shwmini_ji_row.setVisible(true);
+	}
+}
+
+void mpfFunc(String itype)
+{
+	bommpfpop.close();
+	if(builds_lb.getSelectedCount() == 0) return;
+
+	selstr = "";
+	tt = builds_lb.getSelectedItems().toArray();
+	for(i=0; i<tt.length; i++) // refer to rentalsBOM_funcs.builds_headers for origid index
+	{
+		selstr += lbhand.getListcellItemLabel(tt[i],5) + ",";
+	}
+	try { selstr = selstr.substring(0,selstr.length()-1); } catch (Exception e) {}
+	if(selstr.equals("")) return;
+
+	todaydate =  kiboo.todayISODateTimeString();
+	refreshbomlist = refreshbuilds = false;
+	msgtext = whattoup = "";
+	unm = useraccessobj.username;
+
+	sqlstm = "update stockrentalitems_det set ";
+	refreshbuilds = true;
+
+	rmks = kiboo.replaceSingleQuotes( mpf_remarks.getValue().trim() );
+	grd = mpf_grade.getSelectedItem().getLabel();
+	optc = mpf_optical.getSelectedItem().getLabel();
+	wbm = mpf_webcam.getSelectedItem().getLabel();
+	crd = mpf_cardreader.getSelectedItem().getLabel();
+	bth = mpf_bluetooth.getSelectedItem().getLabel();
+
+	if(itype.equals("mpf_others_b"))
+	{
+		if(rmks.equals("")) return;
+		whattoup = "misc='" + rmks + "'";
+	}
+
+	if(itype.equals("mpf_grade_b")) whattoup = "grade='" + grd + "'";
+	if(itype.equals("mpf_optical_b")) whattoup = "optical='" + optc + "'";
+	if(itype.equals("mpf_webcam_b")) whattoup = "webcam='" + wbm + "'";
+	if(itype.equals("mpf_cardreader_b")) whattoup = "cardreader='" + crd + "'";
+	if(itype.equals("mpf_bluetooth_b")) whattoup = "bluetooth='" + bth + "'";
+
+	if(itype.equals("mpf_updateall_b"))
+		whattoup = "grade='" + grd + "',optical='" + optc + "',webcam='" + wbm + "',cardreader='" + crd + "',bluetooth='" + bth + "',misc='" + rmks + "'";
+
+	sqlstm += whattoup + " where origid in (" + selstr + ")";
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refreshbomlist) showBOMList();
+	if(refreshbuilds) showBuildItems(global_selected_bom);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="linkjobbom_pop">
+	<div sclass="shadowbox" style="background:#204a87;">
+		<hbox>
+			<label value="Job ID" style="color:#ffffff" />
+			<textbox id="lnk_jobid_tb" width="70px" />
+			<button label="Link job to this BOM" onClick="assignJobLink_2(global_selected_bom)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="linkjobs_pop">
+	<div sclass="shadowbox" style="background:#204a87;" width="600px" >
+		<label id="linkjob_header" style="color:#ffffff;font-weight:bold" multiline="true" />
+		<separator height="3px" />
+		<hbox>
+			<div id="jobs_holder" width="350px" />
+			<button label="Assign job" style="font-weight:bold" onClick="assignJobLink(global_selected_bom)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="jobitems_holder" />
+		<separator height="3px" />
+		<button label="Close" sclass="k9" onClick="linkjobs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="viewjob_popup">
+	<div sclass="shadowbox" style="background:#204a87;" width="600px" >
+		<label id="vj_jobid_label" style="font-size:18;font-weight:bold;color:#ffffff" />
+		<separator height="2px" />
+		<div id="vj_jobitems_holder" />
+	</div>
+</popup>
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="commitpro_pop">
+	<div sclass="shadowbox" style="background:#ce5c00;" width="500px" >
+		<label value="Commit BOM verification" style="font-size:15px;font-weight:bold;color:#eeeeee" />
+		<separator height="3px" />
+		<label id="commbom_lbl" style="font-weight:bold;color:#eeeeee" multiline="true" width="99%" height="100px" />
+		<separator height="3px" />
+		<button id="confirmcommit_b" label="Confirm commit" onClick="doFunc(self)" />
+		<button label="Cancel" sclass="k9" onClick="commitpro_pop.close()" />
+	</div>
+</popup>
+
+<popup id="adminpopup">
+	<div sclass="shadowbox" style="background:#F50F6F;">
+		<vbox>
+			<hbox>
+				<datebox id="admchg_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+				<button id="chgdate_b" label="Chg date" sclass="k9" onClick="adminFunc(self)" />
+			</hbox>
+			<button id="adm_setnew_b" label="${NEW_STR}" sclass="k9mo" onClick="adminFunc(self)" />
+			<button id="adm_setcommit_b" label="${COMMIT_STR}" sclass="k9mo" onClick="adminFunc(self)" />
+			<button id="adm_setapprove_b" label="${APPROVE_STR}" sclass="k9mo" onClick="adminFunc(self)" />
+			<button id="adm_clrcommit_b" label="Clear commit" sclass="k9mo" onClick="adminFunc(self)" />
+			<button id="adm_clrapprove_b" label="Clear approve" sclass="k9mo" onClick="adminFunc(self)" />
+			<separator bar="true" />
+			<button id="opencompop_b" label="open commit popup" sclass="k9" onClick="adminFunc(self)" />
+			<button id="uncommit_b" label="Uncommit BOM" sclass="k9" onClick="adminFunc(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="pickcustomer_popup">
+	<div sclass="shadowbox" style="background:#f9b12d;">
+		<hbox>
+			<label sclass="k9">Customer name</label>
+			<textbox id="searchcust_tb" sclass="k9" />
+			<button label="Find" sclass="k9" onClick="findCustomers()" />
+		</hbox>
+		<separator height="2px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<separator width="5px" />
+			<div width="400px" id="custfound_wa" visible="false" >
+				<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+				<separator height="2px" />
+				<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+				<separator height="3px" />
+				<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+			</div>
+		</hbox>
+		<label id="selectcustid" visible="false" />
+	</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<popup id="impERG_pop">
+	<div sclass="shadowbox" style="background:#611C20;" width="450px">
+		<hbox>
+			<label value="ERG" sclass="k9b" />
+			<textbox id="ergimp_tb" sclass="k9" />
+			<button label="Dig" sclass="k9" onClick="showReqItems( ergimp_tb.getValue(), ergitems_holder)" />
+		</hbox>
+		<separator height="5px" bar="true" />
+		<hbox>
+			<label value="Customer:" style="color:#ffffff" />
+			<label id="ergcustomer_lbl" style="color:#ffffff" />
+		</hbox>
+		<separator height="3px" />
+		<div id="ergitems_holder" />
+		<separator height="3px" />
+		<button label="Import ERG" sclass="k9" onClick="impERG_toBOM()" />
+	</div>
+</popup>
+
+<popup id="enterROCpopup">
+	<div sclass="shadowbox" style="background:#611C20;" width="450px">
+	<hbox>
+		<label value="ROC No." sclass="k9b" />
+		<textbox id="entroc_tb" width="60px" />
+		<button id="tieroctobom_b" label="Tie ROC to BOM" sclass="k9mo" onClick="doFunc(self)" />
+	</hbox>
+	</div>
+</popup>
+
+<popup id="bomcommiterpopup">
+	<div sclass="shadowbox" style="background:#611C20;" width="600px">
+		<label sclass="subhead1" value="Builds committal" />
+		<separator height="3px" />
+		<div id="cm_bomitems_holder" />
+		<separator height="3px" />
+		<label id="cm_error_lbl" sclass="blink" style="color:#ffffff;font-weight:bold" />
+		<separator height="3px" />
+		<button id="realcommit_b" label="Continue commit" sclass="k9mo" disabled="true" onClick="doFunc(self)" />
+	</div>
+</popup>
+
+<popup id="bommpfpop">
+<div sclass="shadowbox" style="background:#611C20;">
+	<grid>
+		<rows>
+			<row spans="3">
+				<label value="Others / Remarks" sclass="k9" />
+			</row>
+			<row spans="3">
+				<textbox id="mpf_remarks" multiline="true" width="350px" height="60px" sclass="k9" />
+			</row>
+			<row spans="3">
+				<button id="mpf_others_b" label="Update others/remarks" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+			<row>
+				<label value="Grade" sclass="k9mo" />
+				<listbox id="mpf_grade" mold="select" sclass="k9" />
+				<button id="mpf_grade_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+			<row>
+				<label value="Optical" sclass="k9mo" />
+				<listbox id="mpf_optical" mold="select" sclass="k9" />
+				<button id="mpf_optical_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+			<row>
+				<label value="Webcam" sclass="k9mo" />
+				<listbox id="mpf_webcam" mold="select" sclass="k9" />
+				<button id="mpf_webcam_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+			<row>
+				<label value="Cardreader" sclass="k9mo" />
+				<listbox id="mpf_cardreader" mold="select" sclass="k9" />
+				<button id="mpf_cardreader_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+			<row>
+				<label value="Bluetooth" sclass="k9mo" />
+				<listbox id="mpf_bluetooth" mold="select" sclass="k9" />
+				<button id="mpf_bluetooth_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+			</row>
+		</rows>
+	</grid>
+	<button id="mpf_updateall_b" label="UPDATE ALL" style="font-size:14px;font-weight:bold" onClick="mpfFunc(self.getId())" />
+</div>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#69644C">
+
+	<div sclass="shadowbox" style="background:#324544">
+		<hbox>
+			<label value="Start date" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="searhtxt_tb" sclass="k9" />
+			<button label="Search/Load" sclass="k9" onClick="showBOMList()" />
+			<textbox id="bybomid_tb" width="60px" sclass="k9" />
+			<button label="by BOM" sclass="k9" onClick="showBOMList()" />
+			<separator width="20px" />
+			<button id="admin_b" label="ADMIN" style="color:#ff0000;font-weight:bold;font-size:9px" onClick="adminpopup.open(self)" visible="false" />
+		</hbox>
+		<separator height="5px" bar="true" />
+		<hbox>
+			<button id="newbom_butt" label="New BOM" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="commitbom_butt" label="COMMIT" sclass="k9mo" onClick="newBOMCommiter();" />
+			<button id="approveby_b" label="APPROVE" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="shortinventory_b" label="SHORT INVENTORY" sclass="k9mo" style="color:#ff1111" onClick="doFunc(self)" />
+			<separator width="20px" />
+			<button label="Tie to ROC" sclass="k9mo" onClick="enterROCpopup.open(self)" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+
+	<div id="workloadholder" sclass="shadowbox" style="background:#324544;" visible="false" >
+
+		<div id="buildslikexcel_holder" sclass="shadowbox" style="background:#DBBB07">
+			<hbox>
+				<button label="Show builds like Excel" sclass="k9mo" onClick="showBuildsLikeExcel()" />
+				<button label="Export as Excel" sclass="k9mo" onClick="exportBuildsDetails()" />
+				<separator width="10px" />
+				<label style="color:#ffffff" value="Builds:" />
+				<label id="buildsnombor_lbl" style="font-weight:bold;color:#ffffff" />
+			</hbox>
+			<separator height="3px" />
+		</div>
+		<separator height="3px" />
+
+		<hbox>
+			<vbox>
+				<div id="boms_holder" />
+				<separator height="3px" />
+				<grid width="700px">
+					<rows>
+						<row>
+							<label id="bomheader" style="font-weight:bold" value="BOM#" />
+							<label id="bomuserheader" value="User" />
+							<label value="Category" sclass="k9" />
+							<listbox id="bomcategory" mold="select" rows="1" />
+						</row>
+						<row spans="1,2,1">
+							<label value="Customer" sclass="k9" />
+							<label id="customername" style="font-weight:bold" />
+							<button id="assigncust_b" label="Assign customer" sclass="k9mo" onClick="pickcustomer_popup.open(self)" />
+						</row>
+						<row spans="1,3">
+							<label value="Job Link: JOB" sclass="k9" />
+							<hbox>
+								<label id="job_id" style="font-weight:bold;font-size:15px" />
+								<separator width="5px" />
+								<button id="viewjob_b" label="View job" sclass="k9mo" onClick="minishowJobItems()" />
+								<!-- onClick="viewJobWindow(glob_sel_jobid,rentitebom3);" /> -->
+								<!-- <button id="getjobid_b" label="Get job-id" sclass="k9mo" onClick="showLinkJobs(self,glob_sel_jobid)" /> -->
+								<button id="getjobid_b" label="Get job-id" sclass="k9mo" onClick="linkjobbom_pop.open(self)" />
+							</hbox>
+						</row>
+						<row id="shwmini_ji_row" visible="false" spans="4" >
+							<div id="mini_jobitems_holder" />
+						</row>
+					</rows>
+				</grid>
+				<separator height="2px" />
+				<hbox>
+					<button id="updatebom_butt" label="Update BOM details" sclass="k9mo" onClick="doFunc(self)" />
+				</hbox>
+			</vbox>
+
+			<vbox>
+				<div sclass="shadowbox" style="background:#555753;" width="480px" id="jobnotes_div" visible="false" >
+					<label sclass="subhead1">JOB NOTES</label>
+					<separator height="3px" />
+					<div id="jobnotes_holder" />
+					<separator height="2px" />
+					<hbox>
+						<button id="deletejobn_b" label="Delete" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+					</hbox>
+					<separator height="2px" />
+					<div id="jobnotes_entry_holder">
+						<grid>
+							<rows>
+								<row visible="false">
+									<label value="To" sclass="k9" />
+									<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+								</row>
+								<row>
+									<label value="Subject" sclass="k9" />
+									<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+								</row>
+								<row>
+									<label value="Notes" sclass="k9" />
+									<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+								</row>
+							</rows>
+						</grid>
+						<separator height="2px" />
+						<button id="postjobn_b" label="Post" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+						<button id="clearjobn_b" label="Clear" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+					</div>
+				</div>
+			</vbox>
+		</hbox>
+	</div> <!-- ENDOF BOM listing things -->
+	<separator height="3px" />
+
+	<div id="workarea" visible="false" sclass="shadowbox" style="background:#324544;" >
+		<hbox>
+			<label style="font-weight:bold;color:#ffffff">RENTAL ITEMS</label>
+			<separator width="5px" />
+			<textbox id="newdt_qty" sclass="k9" width="30px" value="1" />
+			<button id="newdesktop_butt" label="New desktop" sclass="k9mo" onClick="doFunc(self)" />
+			<textbox id="newnb_qty" sclass="k9" width="30px" value="1" />
+			<button id="newnotebook_butt" label="New notebook" sclass="k9mo" onClick="doFunc(self)" />
+			<textbox id="newmt_qty" sclass="k9" width="30px" value="1" />
+			<button id="newmonitor_butt" label="New monitor" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="imperg_b" label="Import equip-request" sclass="k9mo" onClick="impERG_pop.open(self)" />
+			<button label="MPF" sclass="k9mo" onClick="bommpfpop.open(self)" />
+			<separator width="10px" />
+
+			<button id="delbuilds_butt" label="REMOVE" sclass="k9mo" style=";color:#ff0000" onClick="doFunc(self)" />
+			<button id="updbuild_b" label="Save build's parts" sclass="k9mo" onClick="doFunc(self)" />
+			<button label="Clear build's parts" sclass="k9mo" onClick="clearBuilds_items()" />
+		</hbox>
+		<separator height="3px" />
+
+		<hbox>
+			<div id="builds_holder" width="500px" />
+			<div id="form_holder">
+				<div style="background:#DBBB07;padding:5px">
+					<hbox>
+						<textbox id="fastscan_tb" multiline="true" width="180px" height="70px" />
+						<vbox>
+							<button id="pbuildparts_b" label="Populate selected build's parts" sclass="k9mo" onClick="autoPopulateParts()" />
+							<button id="autinserteq_b" label="Auto insert equipments" sclass="k9mo" onClick="autoInsertEquips()" />
+							<button id="autinsertmon_b" label="Auto insert monitors ONLY" sclass="k9mo" onClick="bomAutoInsertEquips(1)" />
+							<button label="Clear" sclass="k9mo" onClick='fastscan_tb.setValue("")' />
+						</vbox>
+					</hbox>
+				</div>
+				<separator height="2px" />
+			</div>
+		</hbox>
+	</div> <!-- ENDOF workarea -->
+
+	<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+luhand.populateListBox_ValueSelection(bomcategory,"BOM_CATEGORY",2,8);
+glob_formmaker = dynamicForm(form_holder, "build_details_grid", "2");
+build_details_grid.setVisible(false);
+
+luhand.populateListbox_ByLookup(mpf_bluetooth, "YESNO_DEF", 2);
+luhand.populateListbox_ByLookup(mpf_cardreader, "YESNO_DEF", 2);
+luhand.populateListbox_ByLookup(mpf_webcam, "YESNO_DEF", 2);
+luhand.populateListbox_ByLookup(mpf_optical, "OPTICAL_DRIVES", 2);
+luhand.populateListbox_ByLookup(mpf_grade, "PARTS_GRADES", 2);
+
+if(param_bomid != null)
+{
+	global_selected_bom = param_bomid;
+	showBOMMetadata(global_selected_bom);
+	showBuildItems(global_selected_bom);
+	toggleBuildsButts(true);
+}
+else
+{
+	showBOMList();
+}
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

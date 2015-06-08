@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="bugger_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Admin bugger";
+MYVERSION = "v0.1";
+MYPANEL = "BUGGERmm";
+/*
+Title		: bugger for admin - test out stuff
+Written by	: Victor Wong
+
+Revisions:
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+
+/*
+import com.lowagie.text.*;
+import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+//import com.lowagie.text.html.HtmlWriter;
+import com.lowagie.text.pdf.PdfContentByte;
+import com.lowagie.text.pdf.Barcode39;
+*/
+/*
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Image;
+import com.itextpdf.text.pdf.*;
+import com.itextpdf.text.*;
+*/
+
+import java.util.*;
+import java.text.*;
+import java.awt.*;
+import java.awt.image.*;
+import java.awt.geom.*;
+import org.apache.pdfbox.pdmodel.*;
+import org.apache.pdfbox.pdmodel.font.*;
+import org.apache.pdfbox.pdmodel.edit.*;
+import java.io.*;
+import org.zkoss.image.*;
+import javax.imageio.ImageIO;
+
+import com.google.gdata.client.calendar.*;
+import com.google.gdata.data.calendar.*;
+import com.google.gdata.data.calendar.*;
+import com.google.gdata.util.*;
+
+import java.net.*;
+
+import java.sql.*;
+
+import java.sql.DriverManager;
+import java.sql.Connection;
+import java.sql.SQLException;
+
+import java.util.regex.*;
+
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.parser.PdfReaderContentParser;
+import com.itextpdf.text.pdf.parser.SimpleTextExtractionStrategy;
+import com.itextpdf.text.pdf.parser.TextExtractionStrategy;
+
+import org.victor.*;
+
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs();
+
+void testMysql()
+{
+	Class.forName("com.mysql.jdbc.Driver");
+	Connection connection = null;
+	connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/wfmdb","root", "dell");
+	alert(connection);
+	connection.close();
+}
+
+void testme()
+{
+	alert(butt.getDraggable());
+}
+
+void showdropme()
+{
+	alert("asdf");
+}
+
+amapcount = 1;
+
+class mimgdrop implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(org.zkoss.zk.ui.event.Event event) throws UiException
+	{
+		imgmap = event.getTarget();
+		sx = event.getX();
+		sy = event.getY();
+
+		toltip = "mapi: " + amapcount.toString();
+		amapcount++;
+		Graphics2D g2d = ibufimg.createGraphics();
+		g2d.setColor(new Color(250,250,250));
+		g2d.drawRect(sx,sy,100,20);
+		g2d.drawString(imgmap.getId(),sx+5,sy+13);
+		imgmap.setContent(ibufimg);
+/*
+		karea = new org.zkoss.zul.Area();
+		ex = sx + 100; ey = sy + 20;
+		cord = sx.toString() + "," + sy.toString() + "," + ex.toString() + "," + ey.toString();
+		toltip = "mapi: " + amapcount.toString();
+		karea.setShape("rect");
+		karea.setCoords(cord);
+		karea.setTooltiptext( toltip );
+		karea.setParent(imgmap);
+*/
+		//imgmap.addEventListener("onClick", imgdropme);
+		//alert(event.getTarget().getId() + " x=" + event.getX() + " y=" + event.getY() + " cords: " + cord);
+	}
+}
+imgdropme = new mimgdrop();
+
+org.zkoss.zul.Imagemap kamage = null;
+BufferedImage ibufimg = null;
+
+void imgthing()
+{
+	kfn = session.getWebApp().getRealPath("rwimg/355078.jpg");
+	globAimage = new AImage(kfn);
+	InputStream in = new ByteArrayInputStream( globAimage.getByteData() );
+	ibufimg = new BufferedImage(globAimage.getWidth(),globAimage.getHeight(), BufferedImage.TYPE_INT_RGB);
+	ibufimg = ImageIO.read(in);
+
+	kamage = new org.zkoss.zul.Imagemap();
+	//kamage.setContent(globRackImage_f);
+	kamage.setParent(frogholder);
+	kamage.setId("frogmap");
+	kamage.setDroppable("true");
+	//kamage.addEventListener("onClick", imgdropme);
+
+	//kamage.setWidth("800px");
+	kamage.setContent(ibufimg);
+}
+
+void testDBF()
+{
+	Class.forName("jstels.jdbc.dbf.DBFDriver2");
+	Connection conn = DriverManager.getConnection("jdbc:jstels:dbf:/home/victor/Desktop/cosomos/");
+	alert(conn);
+	conn.close();
+
+//kfn = session.getWebApp().getRealPath("tmp/BALSET.DBF");
+/*	kfn = "/home/victor/Desktop/cosomos/FRGLBR_wk.DBF";
+	DBF dbf = new DBF(kfn, DBF.READ_ONLY);
+	kk = "";
+	for (int f = 1; f <= dbf.getFieldCount(); ++f)
+	{
+		Field fld = dbf.getField(f);
+		kk += "Field " + f  
+				+ ": " + fld.getName() 
+				+ ", type=" + fld.getType()
+				+ ", len=" + fld.getLength();
+	}
+	for (int i = 1; i <= dbf.getRecordCount(); i++)	{
+		dbf.read();
+		System.out.println("Record " + i);
+		for (int f = 1; f <= dbf.getFieldCount(); ++f) {
+			Field fld = dbf.getField(f);
+			System.out.println(fld.getName() 
+					+ "= >" + fld.get() + "<");
+		}
+	}				
+	alert(kk);
+	dbf.close();
+*/
+}
+
+void doregex(String istring, String ipattern)
+{
+	//String mydata = wowow.getValue();
+	//mypatt = ipattern.getValue();
+	// Pattern pattern = Pattern.compile("([NAM])([0-9][0-9][0-9][0-9][0-9][0-9]?[0-9])");
+	// "Issue To(.*?)PO No"
+	Pattern pattern = Pattern.compile(ipattern);
+	Matcher matcher = pattern.matcher(istring);
+	
+	if(matcher.find())
+	{
+		resul.setValue(resul.getValue() + "\n" + matcher.group(1).trim());
+	}
+	else
+		resul.setValue("Nada...");
+}
+
+int calcFocusDate(String dstr)
+{
+	java.util.Calendar thedate = Calendar.getInstance();
+	thedate.setTime(GlobalDefs.dtf2.parse(dstr));
+	// ((2014-1950)*416) + ((9*32)+1) + (18 - 1);
+	retval = ((thedate.get(Calendar.YEAR)-1950)*416) + ((thedate.get(Calendar.MONTH)*32)+1) + (thedate.get(Calendar.DAY_OF_MONTH)-1);
+	alert(thedate);
+	return retval;
+}
+
+void procInvoicePDF()
+{
+	ifn = session.getWebApp().getRealPath("tmp/taxinvoices/RWI_15628-AMBANGWIRA.pdf");
+	PdfReader reader = new PdfReader(ifn);
+	PdfReaderContentParser parser = new PdfReaderContentParser(reader);
+	//PrintWriter out = new PrintWriter(new FileOutputStream(txt));
+	TextExtractionStrategy strategy;
+	StringBuffer buff = new StringBuffer();  
+	for (int i = 1; i <= reader.getNumberOfPages(); i++)
+	{
+		strategy = parser.processContent(i, new SimpleTextExtractionStrategy());
+		buff.append(strategy.getResultantText()); 
+		//alert(strategy.getResultantText());
+	}
+	//out.flush();
+	//out.close();
+	reader.close();
+	//alert(buff.toString());
+	tis = buff.toString(); //.replaceAll("\n","  ");
+	thestring.setValue(tis);
+	doregex(tis,"(.*?)\nEmail:");
+	doregex(tis,"Issue To: (.*?)\n");
+	doregex(tis,"Invoice No.: (.*?)\n");
+	doregex(tis,"Date: (.*?)\n");
+
+/*
+	Pattern pattern = Pattern.compile("Issue To(.*?)PO No");
+	Matcher matcher = pattern.matcher(buff.toString());
+	// "(\\[)(.*?)(\\])");
+	// Issue To: AMALGAMATED INDUSTRIAL STEEL BERHAD PO No
+	listMatches = new ArrayList();
+	while(matcher.find())
+	{
+		listMatches.add(matcher.group(1).trim());
+	}
+
+	ks = "";
+	for(String s : listMatches)
+	{
+		ks += s + "::";
+	}
+	alert(ks);
+*/
+}
+
+]]>
+</zscript>
+
+<?component name="tipcolor" macroURI="/macros/macrocomp1.zul" ?>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<button label="Proc pdf invoice" onClick="procInvoicePDF()" />
+<separator height="5px" />
+
+<grid width="600px">
+	<rows>
+		<row>
+			<label value="the text" />
+			<textbox id="wowow" />
+		</row>
+		<row>
+			<label value="the pattern" />
+			<textbox id="ipattern" />
+		</row>
+		<row spans="2">
+			<button label="proc" onClick="doregex(wowow.getValue(),ipattern.getValue())" />
+		</row>
+		<row>
+			<label id="thestring" multiline="true" />
+			<label id="resul" multiline="true" />
+		</row>
+	</rows>
+</grid>
+
+
+<!--
+<textbox id="inputdate" />
+<button label="Parse date" onClick="calcFocusDate(inputdate.getValue())" />
+-->
+ 
+ <!--
+<timeline height="300px" width="100%">
+    <bandinfo width="70%" id="b1" intervalUnit="month" intervalPixels="100" eventSourceUrl="data/newXMLDocument.xml">
+    </bandinfo>
+    <bandinfo width="30%" intervalUnit="year" intervalPixels="200" syncWith="b1" eventSourceUrl="data/newXMLDocument.xml">
+    </bandinfo>
+</timeline>
+-->
+
+<!--
+<iframe style="width:99%;height:700px" src="http://localhost:8080/rws_d/adminmodules/helloprocessing.html" />
+-->
+<!--
+<image id="butt" src="../rwimg/button.png" draggable="true" onDrag="showdropme()" />
+<button label="testDBF" onClick="testDBF()" />
+
+<separator height="3px" />
+
+<div id="frogholder" droppable="true" />
+-->
+
+<zscript>
+<![CDATA[
+//<script src="/adminmodules/go-debug.js" />
+//imgthing();
+
+class divdropp implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(org.zkoss.zk.ui.event.Event event) throws UiException
+	{
+		alert(event.getTarget());
+	}
+}
+//kamage.addEventListener("onDrop", new divdropp());
+
+/*
+<!-- <image id="frogmap" src="../rwimg/1331F960A12F-12D5.jpg" droppable="true" width="800px" /> -->
+<!-- <button label="testme" onClick="testme()" /> -->
+<!-- <button label="test mysql" onClick="testMysql()" /> -->
+<!-- <include src="adminmodules/helloprocessing.html" /> -->
+*/
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

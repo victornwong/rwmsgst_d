@@ -1,0 +1,923 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="pickpackmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="./partsInventory_funcs.zs" />
+<zscript src="./stockPickPack_funcs.zs" />
+<zscript src="./pickItems_func.zs" />
+<zscript src="./assignJobID_funcs.zs" />
+<style src="/css/rwstylesheet1.css" />
+<zscript>
+<![CDATA[
+MYTITLE = "Parts Pick / Pack Management";
+MYVERSION = "v0.2";
+MYPANEL = "partsppak";
+/*
+Title		: Pick/Pack list for warehouse
+Written by	: Victor Wong
+Dated		: 14/08/2013
+
+*/
+/*
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.apache.poi.xssf.usermodel.*;
+import org.apache.poi.ss.util.*;
+import org.apache.poi.ss.usermodel.*;
+*/
+import java.util.*;
+import java.text.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+param_ppl = Executions.getCurrent().getParameter("ppl");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+gridhand = new GridHandler();
+
+LISTBOX_WIDTH = "700px";
+
+Object upload_Data = null;
+
+glob_sel_picklist = global_selected_customer = "";
+glob_sel_status = glob_sel_jobid = "";
+
+global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
+global_selected_customername = "";
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+/*
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = custds =  custr.get("address1yh") + ", " + custr.get("address2yh") + ", " +
+		custr.get("address3yh") + ", " + custr.get("address4yh");
+	global_selected_customername = kiboo.checkNullString( custr.get("name") ); // save for later use
+	customer_name.setValue( kiboo.checkNullString( custr.get("name")) );
+*/
+	// 11/09/2013: if user re-select new company, remove linking job-id
+	sqlstm = "update rw_pickpack set job_id=null where origid=" + glob_sel_picklist;
+	sqlhand.gpSqlExecuter(sqlstm);
+	showPickPackMeta(glob_sel_picklist);
+	showPickPacks();
+	shwmini_ji_row.setVisible(false);
+
+	customername.setValue(global_selected_customername);
+	//alert(global_selected_customerid + " :: " + global_selected_customername);
+}
+
+// Customize this for other mods to produce the linking-code for rw_jobnotes
+// used at DIV and jobNotes_funcs.zs
+String JN_linkcode()
+{
+	if(glob_sel_picklist.equals("")) return "";
+	return PICKLIST_PREFIX + glob_sel_picklist;
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = false;
+	lnkc = PICKLIST_PREFIX + glob_sel_picklist;
+
+	if(itype.equals("newpicklist_b"))
+	{
+		sqlstm = "insert into rw_pickpack (datecreated,username,customer_name,status,os_id) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','UNDEF','NEW','HQ')";
+		refresh = true;
+	}
+
+	if(itype.equals("updatepl_b"))
+	{
+		if(glob_sel_picklist.equals("")) return;
+		ireq = kiboo.replaceSingleQuotes(i_requestor.getValue().trim());
+		iosd = i_os_id.getSelectedItem().getLabel();
+		icust = kiboo.replaceSingleQuotes(customername.getValue().trim());
+		inotes = kiboo.replaceSingleQuotes(i_notes.getValue().trim());
+
+		if(icust.equals("")) msgtext = "ERR: invalid customer..";
+		else
+		{
+			sqlstm = "update rw_pickpack set customer_name='" + icust + "',os_id='" + iosd + "',requestor='" + ireq + "', " +
+			"notes='" + inotes + "' where origid=" + glob_sel_picklist;
+			refresh = true;
+		}
+	}
+
+	if(itype.equals("submit_b"))
+	{
+		if(!glob_sel_status.equals("NEW")) msgtext = "Submit only NEW pick-list to start picking";
+		else
+		if(!pickItemsExist(glob_sel_picklist)) msgtext = "You've not define anything to pick..";
+		else
+		if(!pickItemsCategorySet(glob_sel_picklist)) msgtext = "Some entries without stock-category, cannot start pick";
+		else
+		{
+			sqlstm = "update rw_pickpack set status='WIP' where origid=" + glob_sel_picklist;
+			toggleButts(0,true);
+			toggleButts(3,false); // enable save-all-items and upload
+			refresh = true;
+
+			add_RWAuditLog(lnkc,"","Submit to warehouse to start picking",useraccessobj.username);
+		}
+	}
+
+	if(itype.equals("complete_b"))
+	{
+		if(glob_sel_picklist.equals("")) return;
+		if(glob_sel_status.equals("RECV")) return; // already recv..
+		if(glob_sel_status.equals("DONE")) msgtext = "Already completed..";
+		else
+		if(!glob_sel_status.equals("WIP")) msgtext = "Try again.. please complete the picking first";
+		else
+		{
+			// need to make sure all items are good then change the pick-list status
+			if(checkPickItems(glob_sel_picklist))
+			{
+				sqlstm = "update rw_pickpack set status='DONE' where origid=" + glob_sel_picklist;
+				toggleButts(0,true);
+				refresh = true;
+				add_RWAuditLog(lnkc,"","Approved the pick-items",useraccessobj.username);
+			}
+		}
+	}
+
+	if(itype.equals("recv_b")) // production receive items
+	{
+		if(glob_sel_status.equals("RECV")) return; // already recv..
+		if(!glob_sel_status.equals("DONE")) msgtext = "Picking is not done yet..";
+		else
+		{
+			sqlstm = "update rw_pickpack set status='RECV', receivedby='" + useraccessobj.username + 
+			"',receivedate='" + todaydate + "' " + 
+			"where origid=" + glob_sel_picklist;
+			toggleButts(0,true);
+			refresh = true;
+			add_RWAuditLog(lnkc,"","Received the pick-items",useraccessobj.username);
+		}
+	}
+
+	if(itype.equals("printpick_b")) // print/export excel pick-list
+	{
+		if(glob_sel_picklist.equals("")) return;
+		if(!glob_sel_status.equals("WIP")) msgtext = "Submit pick-list to start picking first then you can print-out the list..";
+		else
+			export_Picklist(glob_sel_picklist);
+	}
+
+	if(itype.equals("assignjob_b"))
+	{
+	}
+
+	if(itype.equals("showlogs_b"))
+	{
+		showSystemAudit(auditlogs_holder,lnkc,"");
+		auditlogs_pop.open(iwhat);
+	}
+	
+	if(itype.equals("prndetlist_b"))
+	{
+		exportPrintPickParts(glob_sel_picklist);
+	}
+
+	if(itype.equals("qacheck_b")) // quality-ass record button
+	{
+		if(glob_sel_picklist.equals("")) return;
+		sqlstm = "update rw_pickpack set qa_date='" + todaydate + "', qa_username='" + useraccessobj.username + "' " +
+		"where origid=" + glob_sel_picklist;
+		msgtext = "QA status updated..";
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showPickPacks();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void export_Picklist(String ipid)
+{
+	lnkc = PICKLIST_PREFIX + ipid;
+	ppr = getPickPack_rec(ipid);
+	if(ppr == null)
+	{
+		guihand.showMessageBox("ERR: Cannot access pick-list database..");
+		return;
+	}
+
+	Workbook wb = new HSSFWorkbook();
+	Sheet sheet = wb.createSheet("PICK_LIST");
+
+	excelInsertString(sheet,0,0,"WAREHOUSE PICK-LIST");
+	excelInsertString(sheet,0,2,"REF#: " + lnkc );
+	excelInsertString(sheet,1,0,"USER: " + ppr.get("username") );
+	excelInsertString(sheet,1,1,"RESQ: " + kiboo.checkNullString(ppr.get("requestor")) );
+	excelInsertString(sheet,1,2,"DATED: " + dtf2.format(ppr.get("datecreated")) );
+
+	// grab 'em pick stock-cats
+	sqlstm = "select stock_cat,groupcode,classcode,class2code,qty,item_name from rw_pickpack_items where parent_id=" + ipid;
+	kr = sqlhand.gpSqlGetRows(sqlstm);
+	if(kr.size() == 0) { guihand.showMessageBox("ERR: Nothing to pick.."); return; }
+	cnt = 1;
+	for(di : kr)
+	{
+		qts = (di.get("qty") == null) ? "(QTY : 0)" : "(QTY : " + di.get("qty").toString() + ")";
+		cts = cnt.toString() + ". " + kiboo.checkNullString( di.get("stock_cat") ) + " > " +
+		kiboo.checkNullString_RetWat( di.get("groupcode"),"0" ) + " > " +
+		kiboo.checkNullString_RetWat( di.get("classcode"),"0" ) + " > " +
+		kiboo.checkNullString_RetWat( di.get("class2code"),"0" );
+
+		excelInsertString(sheet,2+cnt,0,cts);
+		excelInsertString(sheet,2+cnt,1,qts);
+		excelInsertString(sheet,2+cnt,2,
+		kiboo.checkNullString_RetWat( di.get("item_name"),"" ) ); // 03/10/2013: item-name to let user know what model to pick
+		cnt++;
+	}
+
+	jjfn = PICKLIST_PREFIX + ipid + "_picklist.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + jjfn);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wb.write(fileOut); // Write Excel-file
+	fileOut.close();
+
+	add_RWAuditLog(lnkc,"","Print/Export list to start pick",useraccessobj.username);
+	downloadFile(kasiexport,jjfn,outfn); // rwsqlfuncs.zs TODO need to move this
+}
+
+void itemFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = "";
+	sqlstm = "";
+	refresh = false;
+
+	if(glob_sel_picklist.equals("")) return;
+
+	if(itype.equals("newpicktype_b"))
+	{
+		sqlstm = "insert into rw_pickpack_items (parent_id,qty) values (" + glob_sel_picklist + ",0)";
+		refresh = true;
+	}
+
+	if(itype.equals("chggroup_butt")) // update pick item stock-cat
+	{
+		chgpart_stockgroup = getSelected_StockGroup(chgpart_stockshd,chgpart_stockslb);
+		kstkc = chgpart_stockgroup[0];
+		kgrpc = chgpart_stockgroup[1];
+		kcls1 = chgpart_stockgroup[2];
+		kcls2 = chgpart_stockgroup[3];
+		//msgtext = kstkc + " :: " + kgrpc + " :: " + kcls1 + " :: " + kcls2;
+		iorig = chgcat_store.getValue();
+
+		sqlstm = "update rw_pickpack_items set stock_cat='" + kstkc + "', groupcode='" + kgrpc + "'," +
+		"classcode='" + kcls1 + "', class2code='" + kcls2 + "' where origid=" + iorig;
+
+		tgs = kstkc + " > " + kgrpc + " > " + kcls1 + " > " + kcls2;
+		lbi = pl_rows.getFellowIfAny( "CL" + iorig );
+		if(lbi != null) lbi.setValue(tgs);
+
+		chgstockgroup_popup.close();
+	}
+
+	if(itype.equals("saveallitems_b"))
+	{
+		ms0 = pl_rows.getFellows().toArray();
+		for(i=0;i<ms0.length;i++)
+		{
+			if( ms0[i].getId().indexOf("IB") != -1 )
+			{
+				oni = ms0[i].getId().substring( 2, ms0[i].getId().length() );
+
+				kks = ms0[i].getChildren();
+				tbs = "";
+				tbp = "";
+				for(hi : kks)
+				{
+					for(wo : hi.getChildren())
+					{
+						if(wo instanceof Textbox)
+						{
+							wid = wo.getId().substring(0,2);
+							if(wid.equals("IC")) tbs += kiboo.replaceSingleQuotes( wo.getValue().trim() ) + "::"; // item code
+							if(wid.equals("IP")) tbp += kiboo.replaceSingleQuotes( wo.getValue().trim() ) + "::"; // item price
+						}
+					}
+				}
+				try {
+				tbs = tbs.substring(0,tbs.length() - 2);
+				} catch (Exception e) {}
+
+				itmname = ",item_name='' ";
+				itntb = pl_rows.getFellowIfAny("IN" + oni);
+				if(itntb != null)
+				{
+					itmname = ",item_name='" + kiboo.replaceSingleQuotes( itntb.getValue().trim() ) + "' ";
+				}
+
+				sqlstm += "update rw_pickpack_items set pick_items='" + tbs + "', items_price='" + tbp + "' " + itmname + 
+				" where origid=" + oni + ";";
+				msgtext = "Picked items saved..";
+			}
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showPickPack_items(glob_sel_picklist);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = "";
+	refresh = false;
+
+	if(glob_sel_picklist.equals("")) return;
+
+	if(itype.equals("chgtkdate_b"))
+	{
+		sqlstm = "update rw_pickpack set datecreated='" + todaydate + "' where origid=" + glob_sel_picklist;
+		refresh = true;
+	}
+
+	if(itype.equals("setnew_b") || itype.equals("setwip_b") || itype.equals("setdone_b") )
+	{
+		// set only pick-list stat, pick-items maybe later TODO
+		kst = "NEW";
+		if(itype.equals("setwip_b")) kst = "WIP";
+		if(itype.equals("setdone_b")) kst = "DONE";
+
+		sqlstm = "update rw_pickpack set status='" + kst + "' where origid=" + glob_sel_picklist;
+		refresh = true;
+		toggleButts(0,false);
+	}
+
+	if(itype.equals("clrqa_b")) // clear the QA records
+	{
+		sqlstm = "update rw_pickpack set qa_date=null, qa_username=null where origid=" + glob_sel_picklist;
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showPickPacks();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	adminpopup.close();
+}
+
+// Assign job-id to something -- BOM,DO and etc.. modi popup to set link-code and sqlstm accordingly
+// sel_assign_job = global set when job-listitem click (def in assignJobID_funcs.zs)
+void assignJobLink(String ilnk)
+{
+	if(ilnk.equals("")) return;
+	if(sel_assign_job.equals("")) return;
+
+	sqlstm = "update rw_pickpack set job_id=" + sel_assign_job + " where origid=" + ilnk;
+	sqlhand.gpSqlExecuter(sqlstm);
+	linkjobs_pop.close();
+	glob_sel_jobid = sel_assign_job;
+
+	showPickPackMeta(ilnk);
+	showPickPacks();
+}
+
+void minishowJobItems()
+{
+	jid = job_id.getValue();
+	if(!jid.equals(""))
+	{
+		jrec = getRWJob_rec(jid);
+		showJobItems(jrec,mini_jobitems_holder,"mini_jobitems_grid","mini_jobitems_rows"); // assignJobID_funcs.zs
+		shwmini_ji_row.setVisible(true);
+	}
+}
+
+void exportPrintPickParts(String ipplid)
+{
+	rowcount = 0;
+
+	//templatefn = "rwimg/doTemplate_1.xls";
+	//inpfn = session.getWebApp().getRealPath(templatefn);
+	//InputStream inp = new FileInputStream(inpfn);
+	//HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	HSSFWorkbook excelWB = new HSSFWorkbook();
+	evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	HSSFSheet sheet = excelWB.createSheet("PARTS");
+	//HSSFSheet sheet = excelWB.createSheet("THINGS");
+
+	Font wfont = excelWB.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+
+	pplsqlstm = "select ppl.origid as picklist, ppli.stock_cat,ppli.groupcode,ppli.classcode,ppli.class2code, " + 
+	"ppli.qty, ppli.pick_items " +
+	"from rw_pickpack_items ppli left join rw_pickpack ppl on ppli.parent_id = ppl.origid " +
+	"left join rw_deliveryorder rwdo on ppl.do_id = rwdo.origid " + 
+	"where ppl.origid=" + ipplid + " order by ppl.origid";
+
+	plrcs = sqlhand.gpSqlGetRows(pplsqlstm);
+	if(plrcs.size() == 0) { guihand.showMessgeBox("No parts being defined in pick-list"); return; }
+
+	excelInsertString(sheet,0,0,"PICK-LIST - PARTS DETAILS");
+	excelInsertString(sheet,1,0,"PICK-LIST: " + ipplid );
+	rowcount += 3;
+
+	String[] plhds = { "P.LIST","CATEGORY / STOCK-CODE" };
+	for(i=0;i<plhds.length;i++)
+	{
+		sheet.addMergedRegion(new CellRangeAddress( rowcount, rowcount, 1,3));
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, i, plhds[i] ),wfont,true,"");
+	}
+	sheet.addMergedRegion(new CellRangeAddress( rowcount, rowcount, 1,3));
+	POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 2, "" ),wfont,false,"");
+	POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 3, "" ),wfont,false,"");
+
+	rowcount++;
+
+	lastppl = "";
+	for(d : plrcs)
+	{
+		if(!lastppl.equals( PICKLIST_PREFIX + d.get("picklist").toString() ) )
+		{
+		}
+
+		lastppl = PICKLIST_PREFIX + d.get("picklist").toString();
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet,rowcount, 0, lastppl ),wfont,true,"");
+
+		cts = 
+		kiboo.checkNullString( d.get("stock_cat") ) + " > " +
+		kiboo.checkNullString_RetWat( d.get("groupcode"),"0" ) + " > " +
+		kiboo.checkNullString_RetWat( d.get("classcode"),"0" ) + " > " +
+		kiboo.checkNullString_RetWat( d.get("class2code"),"0" ) +
+		" (QTY: " + d.get("qty").toString() + ")";
+
+		sheet.addMergedRegion(new CellRangeAddress( rowcount , rowcount , 1,3));
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 1, cts ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 2, "" ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 3, "" ),wfont,false,"");
+
+		rowcount++;
+
+		itms = kiboo.checkNullString( d.get("pick_items") ).split("::");
+		itc = 1;
+		for(i=0; i < (int)d.get("qty"); i++)
+		{
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 1, itc.toString() + "." ),wfont,true,"");
+
+			try {
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount, 2, itms[i]),wfont,false,"");
+			} catch (Exception e) {
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount , 2, ""),wfont,false,"");
+			}
+
+			itc++;
+			rowcount++;
+		}
+
+		rowcount++;
+	}
+
+	tfname = "tpplitems_outp.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + tfname );
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+
+	downloadFile(kasiexport,tfname,outfn);
+}
+
+]]>
+
+</zscript>
+
+<popup id="linkjobs_pop">
+<div style="background:#204a87; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="600px" >
+
+	<label id="linkjob_header" style="color:#ffffff;font-weight:bold" multiline="true" />
+	<separator height="3px" />
+	<hbox>
+		<div id="jobs_holder" width="350px" />
+		<button label="Assign job" style="font-weight:bold" onClick="assignJobLink(glob_sel_picklist)"  />
+	</hbox>
+	<separator height="3px" />
+	<div id="jobitems_holder" />
+	<separator height="3px" />
+	<button label="Close" style="font-size:9px" onClick="linkjobs_pop.close()" />
+</div>
+</popup>
+
+<popup id="viewjob_popup">
+
+<div style="background:#204a87; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="600px" >
+
+<label id="vj_jobid_label" style="font-size:18;font-weight:bold;color:#ffffff" />
+<separator height="2px" />
+
+<div id="vj_jobitems_holder" />
+
+</div>
+</popup>
+
+<popup id="checkitems_popup">
+<div width="500px">
+	<label id="checkitems_lbl" multiline="true" />
+	<separator height="3px" />
+	<button label="OK" onClick="checkitems_popup.close()" />
+</div>
+</popup>
+
+<popup id="chgstockgroup_popup">
+<div style="background:#cfee14; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="450px" >
+<grid>
+	<rows>
+		<row>
+			<label value="Stock category" style="font-size:9px" />
+			<div id="chg_stkcode_hd">
+				<listbox id="chg_stock_cat" style="font-size:9px" mold="select" />
+			</div>
+			<label value="Group" style="font-size:9px" />
+			<div id="chg_grpcode_hd" />
+		</row>
+		<row>
+			<label value="Sub-class 1" style="font-size:9px" />
+			<div id="chg_cls1_hd" />
+			<label value="Sub-class 2" style="font-size:9px" />
+			<div id="chg_cls2_hd" />
+		</row>
+	</rows>
+</grid>
+<separator height="2px" />
+<button id="chggroup_butt" label="Set stock-group" style="font-size:9px" onClick="itemFunc(self)" />
+<label id="chgcat_store" visible="false" />
+</div>
+</popup>
+
+<zscript>
+<![CDATA[
+// chg item's stock-cat-group selectors
+Div[] chgpart_stockshd = { chg_stkcode_hd, chg_grpcode_hd, chg_cls1_hd, chg_cls2_hd };
+String[] chgpart_stockslb = { "chg_stock_cat","chg_groupcode","chg_classcode","chg_class2code" };
+
+class chg_subcls1Click implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		luid = lbhand.getListcellItemLabel(isel,1);
+		newpop_StockSelector(3,luid,chg_cls2_hd,"chg_class2code",null,chgpart_stockshd,chgpart_stockslb);
+	}
+}
+
+class chg_grpcodeClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		luid = lbhand.getListcellItemLabel(isel,1);
+		newpop_StockSelector(2,luid,chg_cls1_hd,"chg_classcode",new chg_subcls1Click(),chgpart_stockshd,chgpart_stockslb);
+		gpHideListbox(chg_cls2_hd,"chg_class2code");
+	}
+}
+
+class chg_stkcatClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		luid = lbhand.getListcellItemLabel(isel,1);
+		newpop_StockSelector(1,luid,chg_grpcode_hd,"chg_groupcode",new chg_grpcodeClick(),chgpart_stockshd,chgpart_stockslb);
+		gpHideListbox(chg_cls1_hd,"chg_classcode");
+		gpHideListbox(chg_cls2_hd,"chg_class2code");
+	}
+}
+
+]]>
+</zscript>
+
+<popup id="auditlogs_pop">
+<div style="background:#ef2929; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="500px" >
+<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+<separator height="3px" />
+<div id="auditlogs_holder" />
+<separator height="3px" />
+<button label="Ok" style="font-size:9px" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<popup id="adminpopup">
+<div width="400px">
+
+<datebox id="adm_datechg" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" visible="false" />
+<button id="chgtkdate_b" label="Set to-date" style="font-size:9px" onClick="adminFunc(self)" />
+<button id="setnew_b" label="Set NEW" style="font-size:9px" onClick="adminFunc(self)" />
+<button id="setwip_b" label="Set WIP" style="font-size:9px" onClick="adminFunc(self)" />
+<button id="setdone_b" label="Set DONE" style="font-size:9px" onClick="adminFunc(self)" />
+<button id="clrqa_b" label="clr QA" style="font-size:9px" onClick="adminFunc(self)" />
+<separator height="3px" />
+<button label="toggle 1" onClick="toggleButts(1,true)" />
+<button label="toggle 2" onClick="toggleButts(2,true)" />
+<button label="shw fellows" onClick="alert(pl_rows.getFellows())" />
+</div>
+</popup>
+
+<popup id="pickcustomer_popup">
+<div style="background:#f9b12d;	-moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+	<hbox>
+		<label style="font-size:9px">Customer name</label>
+		<textbox id="searchcust_tb" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="findCustomers()" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<div id="foundcusts_holder" width="400px" />
+		<separator width="5px" />
+		<div width="400px" id="custfound_wa" visible="false" >
+			<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+			<separator height="2px" />
+			<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+			<separator height="3px" />
+			<button label="Select this customer" style="font-size:9px" onClick="assignCustomer()" />
+		</div>
+	</hbox>
+	<label id="selectcustid" visible="false" />
+</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,PICKLIST_PREFIX,glob_sel_picklist)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,PICKLIST_PREFIX,glob_sel_picklist)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<style>
+.subhead1 {	font-size:16px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead2 {	font-size:24px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div style="background:#3d42af; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+ box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+<hbox>
+	<button id="blind_srch" label="-" style="font-weight:bold" onClick="blindTings(self,searchgrid)" />
+	<grid width="${LISTBOX_WIDTH}" id="searchgrid" >
+		<rows>
+			<row>
+				<label value="Start date" style="font-size:9px" />
+				<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+				<label value="End date" style="font-size:9px" />
+				<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			</row>
+			<row spans=",3">
+				<label value="Search" style="font-size:9px" />
+				<hbox>
+					<textbox id="searhtxt_tb" width="200px" style="font-size:9px" />
+					<button label="Load" style="font-size:9px" onClick="showPickPacks()" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+</hbox>
+</div>
+
+<hbox> <!-- main workarea hbox -->
+
+<div> <!-- pick-list holder + metadata -->
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${LISTBOX_WIDTH}" >
+
+	<hbox>
+		<button id="blind_list" label="-" style="font-weight:bold" onClick="blindTings(self,picklists_holder)" />
+		<vbox>
+		<hbox>
+			<button id="newpicklist_b" label="New pick-list" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="submit_b" label="Start pick" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="complete_b" label="Complete" style="font-weight:bold" onClick="doFunc(self)" />
+			<separator width="10px" />
+			<button id="recv_b" label="Prod. receive items" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="qacheck_b" label="Prod/QC checked items" style="font-weight:bold" onClick="doFunc(self)" />
+		</hbox>
+		<hbox>
+			<button id="printpick_b" label="Print pick-list" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="prndetlist_b" label="Print parts list" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="admin_b" label="Admin" visible="false" style="font-weight:bold;color:#cc0000" onClick="adminpopup.open(self)" />
+		</hbox>
+		</vbox>
+	</hbox>
+
+	<separator height="3px" />
+	<div id="picklists_holder" />
+</div>
+<separator height="2px" />
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="${LISTBOX_WIDTH}" id="ppl_workarea" visible="false"  >
+
+	<hbox>
+		<button id="blind_workarea" label="-" style="font-weight:bold" onClick="blindTings(self,meta_workarea)" />
+		<button id="asscust_b" label="Assign customer" onClick="pickcustomer_popup.open(self)" />
+		<button id="updatepl_b" label="Update" onClick="doFunc(self)" />
+		<button id="showlogs_b" label="Audit logs" style="font-size:9px" onClick="doFunc(self)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="meta_workarea">
+		<label sclass="subhead1" id="pick_mhd" />
+		<separator height="3px" />
+		<div id="form_holder1" />
+		<separator height="2px" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Job Link: JOB" style="font-size:9px" />
+					<hbox>
+						<label id="job_id" style="font-weight:bold;font-size:15px" />
+						<separator width="5px" />
+
+						<button id="viewjob_b" label="View job" style="font-weight:bold"
+							onClick="minishowJobItems()" />
+							<!-- onClick="viewJobWindow(glob_sel_jobid,partsppak);" /> -->
+						<button id="getjobid_b" label="Get job-id" style="font-weight:bold"
+							onClick="showLinkJobs(self,glob_sel_jobid)" />
+					</hbox>
+				</row>
+				<row id="shwmini_ji_row" visible="false" spans="2" >
+					<div id="mini_jobitems_holder" />
+				</row>
+			</rows>
+		</grid>
+
+		<separator height="3px" />
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px"  id="jobnotes_div" visible="false" >
+		<label sclass="subhead1" value="JOB NOTES" />
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,JN_linkcode())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" style="font-size:9px" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" style="font-size:9px" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" style="font-size:9px" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+			
+		</div>
+	</div>
+		
+		<separator height="3px" />
+		
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+		<label sclass="subhead1" value="ATTACHMENT / DOCUMENTS" />
+		<separator height="3px" />
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(PICKLIST_PREFIX,glob_sel_picklist)" />
+			<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+			<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+			<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile(documents_holder,PICKLIST_PREFIX,glob_sel_picklist)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="documents_holder" />
+	</div>
+
+	</div> <!-- ENDOF meta_workarea -->
+</div>
+
+</div> <!-- ENDOF pick-list holder + metadata -->
+
+<div id="workarea" style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" visible="false">
+	
+	<label id="pick_mhd2" style="font-size:14px;font-weight:bold;color:#ffffff" />
+	<hbox>
+		<button id="newpicktype_b" label="New pick category" onClick="itemFunc(self)" />
+		<button id="saveallitems_b" label="SAVE ITEMS STOCK-CODE" style="font-weight:bold" onClick="itemFunc(self)" />
+	</hbox>
+	<separator height="3px" />
+	<grid>
+		<columns>
+			<column width="20px" />
+			<column label="Category / Pick-items" />
+		</columns>
+		<rows id="pl_rows" >
+		</rows>
+	</grid>
+</div> <!-- ENDOF workarea -->
+
+</hbox> <!-- ENDOF main workarea hbox -->
+
+<div id="kasiexport" visible="false"/>
+
+<zscript>
+<![CDATA[
+
+glob_formmaker = dynamicForm(form_holder1, "picklist_metaform", "3");
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+// for change item stock-group popup
+luhand.populateListBox_ValueSelection(chg_stock_cat,"STOCK_CAT",2,8);
+chg_stock_cat.addEventListener("onSelect", new chg_stkcatClick());
+
+if(param_ppl != null)
+{
+	glob_sel_picklist = param_ppl;
+	showPickPackMeta(glob_sel_picklist);
+	toggleButts(0,true);
+}
+else
+	showPickPacks();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

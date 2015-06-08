@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rwbilligmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rws_customer/digDNSI_funcs.zs" />
+<zscript src="./billass/rwBilling_funcs.zs" />
+<zscript src="./billass/billManualInv.zs" />
+<zscript src="./billass/rwassignment_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Billing / Assignment";
+MYVERSION = "v0.2.3";
+MYPANEL = "bilingasspan";
+/*
+@Title Billing and Assignment super module..
+@Author Victor Wong
+@Since 23/01/2014
+
+Revisions:
+21/03/2014: recode - with data in rw_lc_records, build a tree
+11/06/2014: search by customer in expiring-LCs popup
+12/06/2014: add assignment-drawdown funcs
+
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs(); gridhand = new GridHandler();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+expire_lc_daysbefore = "30"; // to check expiring-LC days-before
+
+global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
+global_selected_customername = global_selected_customer = glob_selected_lc = glob_sel_lcid = glob_ordertype = "";
+glob_sel_item = null;
+
+void pickcustomer_Callback()
+{
+	fc6id_lb.setValue(global_selected_customerid);
+	//custr = getFocus_CustomerRec(global_selected_customerid);
+	//i_customer_name.setValue(global_selected_customername);
+	rwis_holder.setVisible(false);
+	glob_selected_lc = ""; // reset and hide
+}
+
+String JN_linkcode()
+{
+	if(glob_selected_lc.equals("")) return "";
+	return LC_PREFIX + glob_selected_lc;
+}
+
+void adminFunc(String itype)
+{
+	sqlstm = "";
+
+	if(itype.equals("adm_setasgn_b"))
+	{
+		//kk = adm_asgnum_tb.getValue();
+		sqlstm = "update rw_lc_records set assigned=1-assigned where origid=" + glob_selected_lc;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//alert(sqlstm);
+}
+
+BUTT_WIDTH1 = "100px";
+BUTT_WIDTH2 = "190px";
+
+]]>
+</zscript>
+
+<popup id="updlcrem_pop">
+	<div sclass="shadowbox" style="background:#9db91d">
+		<vbox>
+			<hbox>
+				<label value="RW/LC: " sclass="k9b" />
+				<label id="upremlclbl" sclass="subhead1" />
+			</hbox>
+			<label value="Remarks" sclass="k9b" />
+			<textbox id="lcremarks_tb" multiline="true" width="200px" height="70px" sclass="k9" />
+			<button label="Update remarks" sclass="k9" onClick="updlcrem_pop.close(); updLCRemarks(lcremarks_tb.getValue().trim())" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="report_pop">
+	<div sclass="shadowbox" style="background:#9db91d">
+		<vbox>
+			<button label="Export EVF" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,1)" />
+			<button label="Export EVF(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,3)" />
+			<button label="Export EVF(with specs)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,5)" />
+			<button label="Export equipments/rental" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,2)" />
+			<button label="Export equipments/rental(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,4)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="expasspop">
+	<div id="expass_div" width="700px" />
+</popup>
+
+<popup id="extbilling_pop">
+	<div sclass="shadowbox" style="background:#5c3566;" width="500px">
+		<label sclass="subhead2" value="Link extension RWI/LC" />
+		<separator height="3px" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Extended RW/LC" sclass="k9" />
+					<textbox id="extlctb" sclass="k9" />
+					<button label="Get data" sclass="k9" onClick="getFC_RWI(extlctb.getValue().trim())" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="2px" />
+		<div id="impdiv" visible="false">
+			<div id="implcdetholder" />
+			<separator height="2px" />
+			<button label="Import and extend" style="font-weight:bold" onClick="actuallyLinkExtension()" />
+		</div>
+	</div>
+</popup>
+
+<popup id="lcsetstat_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<label id="lcsetstat_lbl" />
+		<vbox>
+			<button id="stactive_b" label="ACTIVE" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="stinactive_b" label="INACTIVE" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="sttermin_b" label="TERMINATED" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="stextens_b" label="EXTENSION" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="stinerti_b" label="INERTIA" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="stbuyout_b" label="BUYOUT" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="stpartial_b" label="PARTIAL" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="partret_b" label="PARTIAL_RET" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+			<button id="creditn_b" label="CN" width="${BUTT_WIDTH1}" onClick="updLC_stat(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label sclass="subhead" value="Audit Logs" />
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="pickcustomer_popup">
+	<div sclass="shadowbox" style="background:#f9b12d;">
+		<hbox>
+			<label sclass="k9">Customer name</label>
+			<textbox id="searchcust_tb" sclass="k9" value="misc" />
+			<button label="Find" sclass="k9" onClick="findCustomers()" />
+		</hbox>
+		<separator height="2px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<separator width="5px" />
+			<div width="400px" id="custfound_wa" visible="false" >
+				<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+				<separator height="2px" />
+				<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+				<separator height="3px" />
+				<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+			</div>
+		</hbox>
+		<label id="selectcustid" visible="false" />
+	</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" sclass="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,LC_PREFIX,glob_selected_lc)" />
+			<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+		<caption label="Upload a file" />
+			<grid>
+				<rows>
+					<row>
+						<label value="Filename" sclass="k9" />
+						<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+					</row>
+					<row>
+						<label value="Description" sclass="k9" />
+						<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+					</row>
+				</rows>
+			</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,LC_PREFIX,glob_selected_lc)" sclass="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+	</hbox>
+</popup>
+
+<popup id="instalmentprit_pop">
+	<div sclass="shadowbox" style="background:#909d2a" >
+		<vbox>
+			<hbox>
+				<label value="Instalment No." sclass="k9mo" style="color:#ffffff" />
+				<textbox id="instno_tb" width="50px" />
+				<button label="by instalment" sclass="k9mo" onClick="procInstalmentPrintout(1)" />
+			</hbox>
+			<separator height="2px" />
+			<button label="Whole rental schedule" sclass="k9mo" width="200px" onClick="procInstalmentPrintout(2)" />
+			<button label="List LC need instalment printout" sclass="k9mo" width="200px" onClick="showLC_tree(2, mainlc_tree); instalmentprit_pop.close()" />
+			<button label="Toggle rental-instalment printout" sclass="k9mo" width="200px" onClick="togRentInstPrintout(); instalmentprit_pop.close()" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="expiring_pop">
+	<div sclass="shadowbox" style="background:#909d2a" >
+		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="expsdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<label value="End" sclass="k9b" />
+			<datebox id="expedate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<separator width="5px" />
+			<button label="Load" sclass="k9" onClick="expiring_pop.close(); showLC_tree(3, mainlc_tree)" />
+		</hbox>
+		<hbox>
+			<label value="Search" sclass="k9b" />
+			<textbox id="expschtb" sclass="k9" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="asgnpop">
+	<div sclass="shadowbox" style="background:#909d2a" >
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#909d2a" width="150px" >
+		<vbox>
+			<textbox id="adm_asgnum_tb" width="50px" sclass="k9" />
+			<button id="adm_setasgn_b" label="Toggle assignment" sclass="k9" onClick="adminFunc(self.getId())" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="assignmentMeta_pop">
+	<div sclass="shadowbox" style="background:#909d2a" width="700px" >
+		<div id="asgnmetaform_holder" />
+		<separator height="3px" />
+		<button id="updasgndata_b" label="Update" sclass="k9mo" onClick="assignmentFunc(self.getId())" />
+	</div>
+</popup>
+
+<popup id="asgn_adminpop">
+	<div sclass="shadowbox" style="background:#909d2a" width="150px" >
+		<vbox>
+			<button id="asg_toggleasgna_b" label="Toggle assignment flag" sclass="k9" onClick="assignmentFunc(self.getId())" />
+			<button id="asg_setasgnasset_b" label="Set assets assign" sclass="k9" onClick="assignmentFunc(self.getId())" />
+			<button id="asg_unsetasgnasset_b" label="Clear assets assign" sclass="k9" onClick="assignmentFunc(self.getId())" />
+			<button id="asg_clrgroupi_b" label="Clear groupi" sclass="k9" onClick="assignmentFunc(self.getId())" />
+			<button id="asg_clrnoadate_b" label="Clear NOA date" sclass="k9" onClick="assignmentFunc(self.getId())" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="asgnhelp_pop">
+	<div sclass="shadowbox" style="background:#909d2a" width="250px" >
+	<label multiline="true" sclass="k9">
+GRP = assignment grouping number
+C.Let = cover letter issue date
+DrawD = draw-down date
+DrawA = draw-down amount
+F/Ref = financer reference
+ASGN = assign/unassign
+	</label>
+	</div>
+</popup>
+
+<popup id="noagenpop">
+	<div sclass="shadowbox" style="background:#909d2a" width="180px" >
+		<vbox>
+			<button label="Jenis MRA" sclass="k9mo" onClick="genNOA(0)" />
+			<button label="Jenis MA" sclass="k9mo" onClick="genNOA(1)" />
+			<button label="Jenis AR Type MA" sclass="k9mo" onClick="genNOA(2)" />
+			<button label="Jenis AR Type MRA" sclass="k9mo" onClick="genNOA(3)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="assetlistingpop"> <!-- same like in contractbillingtrack_v1 -->
+	<div sclass="shadowbox" style="background:#9db91d">
+		<vbox>
+			<button label="Export EVF" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(1)" />
+			<button label="Export EVF(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(3)" />
+			<button label="Export EVF(with specs)" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(5)" />
+			<button label="Export equipments/rental" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(2)" />
+			<button label="Export equipments/rental(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(4)" />
+			<textbox id="userdef_inv" sclass="k9" visible="false" />
+			<button label="Export multi-LC EVF with grouping" sclass="k9" width="${BUTT_WIDTH2}" onClick="genAssetListing(6)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="utilpop">
+	<div sclass="shadowbox" style="background:#9db91d">
+		<vbox>
+			<button label="Rental-instalment printout" sclass="k9mo" width="${BUTT_WIDTH2}" onClick="instalmentprit_pop.open(self)" />
+			<button id="repbutt" label="Report" sclass="k9mo" width="${BUTT_WIDTH2}" onClick="report_pop.open(self)" />
+			<button label="Export" sclass="k9mo" width="${BUTT_WIDTH2}" onClick="exportLC_thing()" />
+			<button label="View log" sclass="k9mo" width="${BUTT_WIDTH2}" onClick="showLC_audit()" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="enterarpop">
+	<div sclass="shadowbox" style="background:#9db91d">
+		<label value="AR No." sclass="k9" />
+		<textbox id="a_artext" sclass="k9" />
+		<button id="asg_updatear_b" label="Update selected" sclass="k9" onClick="assignmentFunc(self.getId())" />
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#254257">
+	<div sclass="shadowbox" style="background:#A2B65B">
+		<hbox>
+			<textbox id="schbox" sclass="k9" />
+			<button label="Find/Load" sclass="k9mo" onClick="showLC_tree(0, mainlc_tree)" />
+			<textbox id="lc_tb" sclass="k9" width="50px" />
+			<button label="by LC" sclass="k9mo" onClick="showLC_tree(1, mainlc_tree)" />
+			<button label="Load expiring LC" sclass="k9mo" onClick="expiring_pop.open(self)" />
+			<button label="Extension billing" sclass="k9mo" width="100px" onClick="impdiv.setVisible(false);extbilling_pop.open(glob_sel_item.get(0))" />
+			<button label="Set status" sclass="k9mo" width="100px" onClick="lcsetstat_pop.open(self)" />
+			<button label="Assignment" sclass="k9mo" onClick="assignmentCreate()" />
+			<button label="Utils" sclass="k9mo" onClick="utilpop.open(self)" />
+			<separator width="200px" />
+			<button label="Update remarks" sclass="k9mo" onClick="upremlclbl.setValue(glob_sel_lcid); updlcrem_pop.open(self)" />
+			<separator width="10px" />
+			<button id="adminbutt" label="ADMIN" sclass="k9mo" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+
+	<textbox id="debugbox" multiline="true" width="50%" height="200px" visible="false" />
+
+	<borderlayout height="600px">
+		<west title="LC Tree" size="99%" collapsible="true" border="0" style="background:#254257;" >
+			<div>
+				<tree id="mainlc_tree" zclass="z-dottree" rows="25" checkmark="true" multiple="true" vflex="1" >
+				<treecols sizable="true" >
+					<treecol label="LC/RW" width="280px" />
+					<treecol label="Customer" />
+					<treecol label="InvDate" width="70px" />
+					<treecol label="LC.Start" width="70px" />
+					<treecol label="LC.End" width="70px" />
+					<treecol label="GMth" width="30px" />
+					<treecol label="Order type" width="100px" />
+					<treecol label="A.Qty" />
+					<treecol label="Status" />
+					<treecol label="Remarks" width="100px" />
+					<treecol label="Asgn" width="30px" />
+					<treecol label="org" visible="false" />
+				</treecols>
+				<treefoot>
+					<treefooter id="itmcount_lbl" style="background:#FA8F43" />
+				</treefoot>
+				</tree>
+			</div>
+		</west>
+
+		<east title="Assignment Juggler" sclass="k9" size="97%" border="0" style="background:#254257;">
+			<div>
+				<separator height="2px" />
+				<hbox>
+					<separator width="5px" />
+					<button id="asg_remove_b" label="REMOVE" sclass="k9" onClick="assignmentFunc(self.getId())" />
+					<separator width="10px" />
+					<button label="Refresh" sclass="k9" onClick="showAssignmentJuggler()" />
+					<button id="asg_groupi_b" label="Group LCs" sclass="k9" onClick="assignmentFunc(self.getId())" />
+					<button label="Enter AR" sclass="k9" onClick="enterarpop.open(self)" />
+					<button id="noabutt" label="NOA" sclass="k9" onClick="noagenpop.open(self)" />
+					<button id="asg_assetslisting_b" label="Assets list" sclass="k9" onClick="assetlistingpop.open(self)" />
+					<button label="HELP" sclass="k9" onClick="asgnhelp_pop.open(self)" />
+					<button id="asgnadmin_b" label="ADMIN" sclass="k9mo" style="color:#ff0000" onClick="asgn_adminpop.open(self)" visible="false" />
+				</hbox>
+				<separator height="3px" />
+				<div id="asgn_holder" />
+				<separator height="3px" />
+			</div>
+		</east>
+	</borderlayout>
+
+	<div id="windsholder"  />
+	<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+asgnformthing = dynamicForm(asgnmetaform_holder, "asgnmetaform", "36");
+
+implcform = dynamicForm(implcdetholder, "implc_metagrid", "35");
+r_bookno.setVisible(false); // hide
+
+showAssignmentJuggler(); // show assignments juggler list
+
+Object[] ob = { r_voucherno, r_vdate, r_customer_name, r_dorefyh, r_rocnoyh, r_opsnoteyh, r_ordertypeyh, r_deliverytoyh,
+r_insttypeyh, r_noofinstallmentyh, r_projectsiteyh, r_bookno };
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminbutt.setVisible(true);
+	asgnadmin_b.setVisible(true);
+}
+
+/*
+<!--
+<div sclass="shadowbox" style="background:#555753;" >
+	<label id="customername" sclass="subhead2" style="color:#ffffff;font-weight:bold" />
+	<separator height="2px" />
+	<div id="rwis_holder" />
+</div>
+-->
+*/
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+
+

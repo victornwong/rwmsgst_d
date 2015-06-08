@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="alsacct_invoice"?>
+<!--
+
+Version				:
+Coding began date	:
+Developers			: Victor
+
+Code base quotations.zul
+
+-->
+
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+// to count open invoice-details window
+windcounter = 1;
+
+void closeAcctQuotationPanel()
+{
+	// refering back to main page, hardcoded for now.
+	Vbox contdiv = Path.getComponent("//als_portal_main/workbox");
+	Include thiswin = contdiv.getFellow(myincludeid);
+
+	// just set the include source to empty, should remove this window
+	thiswin.setSrc("");
+}
+
+// Populate quotation status from table SOPHeader, distinct select
+void populateQuotationStatus(Listbox wlistbox)
+{
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    // Bizarre setup, using Address_5 field as status for quotation. Not a proper lookup in Mysoft
+	sqlstatem = "select distinct(address_5) from SOPHeader";
+	tlist = sql.rows(sqlstatem);
+
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[1];
+
+        // Put first selection in listbox to ALL, to search for everything in db
+        strarray[0] = "ALL";
+        insertListItems(wlistbox,strarray);
+        wlistbox.setSelectedIndex(0);
+
+		for(ilist : tlist)
+		{
+            strarray[0] = ilist.get("address_5");
+
+            if(strarray[0] == "")
+            {
+                strarray[0] = "**NO STATUS**";
+            }
+
+            insertListItems(wlistbox,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+
+	sql.close();
+
+} // end of populateQuotationStatus()
+
+// Populate salesperson in a listbox from table Invoice, distinct select
+void populateSalesPerson(Listbox wlistbox)
+{
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    // Bizarre setup, using Address_5 field as status for quotation. Not a proper lookup in Mysoft
+	sqlstatem = "select distinct(SalesPerson) from Invoice";
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[1];
+
+        // Put first selection in listbox to ALL, to search for everything in db
+        strarray[0] = "ALL";
+        insertListItems(wlistbox,strarray);
+        wlistbox.setSelectedIndex(0);
+
+		for(ilist : tlist)
+		{
+            strarray[0] = ilist.get("SalesPerson");
+
+            if(strarray[0] == "0")
+            {
+                strarray[0] = "**NOBODY**";
+            }
+
+            insertListItems(wlistbox,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+
+} // end of populateSalesPerson()
+
+Listbox makeInvoiceListbox(Div mDiv, Integer totalrecs)
+{
+    Listbox newlb = new Listbox();
+
+    newlb.setId("testsdrillbit");
+    newlb.setContext("quoteContext");
+    newlb.setVflex(true);
+    // newlb.setPopup("testmypop");
+
+    newlb.setParent(mDiv);
+
+    Listhead newhead = new Listhead();
+    newhead.setSizable(true);
+    newhead.setParent(newlb);
+	
+    Listheader hd1 = new Listheader();
+    hd1.setLabel("InvoiceNo");
+    hd1.setSort("auto");
+    hd1.setParent(newhead);
+
+    Listheader hd2 = new Listheader();
+    hd2.setLabel("Date issued");
+    hd2.setSort("auto");
+    hd2.setParent(newhead);
+
+    Listheader hd3 = new Listheader();
+    hd3.setLabel("Code");
+    hd3.setSort("auto");
+    hd3.setParent(newhead);
+
+    Listheader hd4 = new Listheader();
+    hd4.setLabel("Client");
+    hd4.setSort("auto");
+    hd4.setParent(newhead);
+
+    Listheader hd5 = new Listheader();
+    hd5.setLabel("Contact");
+    hd5.setSort("auto");
+    hd5.setParent(newhead);
+
+    Listheader hd6 = new Listheader();
+    hd6.setLabel("Sales person");
+    hd6.setSort("auto");
+    hd6.setParent(newhead);
+
+    Listheader hd7 = new Listheader();
+    hd7.setLabel("Terms");
+    hd7.setSort("auto");
+    hd7.setParent(newhead);
+
+    Listheader hd8 = new Listheader();
+    hd8.setLabel("Amount");
+    hd8.setSort("auto");
+    hd8.setParent(newhead);
+
+    Listheader hd9 = new Listheader();
+    hd9.setLabel("Issued by");
+    hd9.setSort("auto");
+    hd9.setParent(newhead);
+	
+    Listfoot newfooter = new Listfoot();
+    newfooter.setParent(newlb);
+
+    Listfooter fd1 = new Listfooter();
+    fd1.setLabel("Found:");
+    fd1.setParent(newfooter);
+
+    Listfooter fd2 = new Listfooter();
+    fd2.setLabel(totalrecs.toString());
+    fd2.setParent(newfooter);
+
+    newlb.setRows(20);
+
+    return newlb;
+
+} // end of makeInvoiceListbox()
+
+// Do the search and populate listbox
+void startInvoiceSearch(Datebox startd, Datebox endd, Listbox salesperson)
+{
+    tbstat = salesperson.getSelectedItem().getLabel();
+    sdate = getDateFromDatebox(startd);
+    edate = getDateFromDatebox(endd);
+
+    if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+	
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    salespersonstr = (tbstat == "ALL") ? "" : "and SalesPerson = '" + tbstat + "' ";
+
+	sqlstatem = "select InvoiceNo,convert(char(10),InvoiceDate,103) as InvoiceDateCreated, Code, Name, Attention, " +
+    "SalesPerson,Terms,GrossTotal,CurCode,UserName from Invoice " +
+    "where InvoiceDate between '" + sdate + "' and '" + edate + "' " +
+	" and IsCancel=0 " +
+    salespersonstr +
+    " order by InvoiceNo";
+
+    tlist = sql.rows(sqlstatem);
+	
+    sql.close();
+
+    // found some records
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[9];
+
+        // showMessageBox(tlist.get(0).get("Date_Created").toString());
+
+        // if there's previously a listbox, remove before adding a new one.
+        Listbox oldlb = searchdiv.getFellowIfAny("testsdrillbit");
+        if(oldlb != null)
+            oldlb.setParent(null);
+
+        // create a new listbox and attach to searchdiv
+        Listbox newlb = makeInvoiceListbox(searchdiv, tlist.size());
+
+    	for(ilist : tlist)
+		{
+            strarray[0] = ilist.get("InvoiceNo");
+            strarray[1] = ilist.get("InvoiceDateCreated");
+            strarray[2] = ilist.get("Code");
+            strarray[3] = ilist.get("Name");
+            strarray[4] = ilist.get("Attention");
+            strarray[5] = ilist.get("SalesPerson");
+			strarray[6] = ilist.get("Terms");
+            strarray[7] = ilist.get("CurCode") + " " + ilist.get("GrossTotal").toString();
+			strarray[8] = ilist.get("UserName");
+
+            insertListItems(newlb,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+    else
+    {
+        showMessageBox("No records found..");
+    }
+
+} // end of startInvoiceSearch()
+
+void tryNotes()
+{
+    msele = testsdrillbit.getSelectedItem().getLabel();
+
+    alert("selected this: " + msele);
+
+}
+
+void playInvoiceDetails()
+{
+	uniqwindowid = "inv" + myincludeid + "wind" + windcounter;
+	globalActivateWindow("acctmodules/invoicedetails.zul", uniqwindowid);
+	windcounter++;
+}
+
+]]>
+</zscript>
+
+<popup id="testmypop">
+<vbox>
+<label value="i'm poped..." />
+</vbox>
+</popup>
+
+<menupopup id="quoteContext">
+
+<menu label="Follow-ups">
+<menupopup>
+    <menuitem label="Notes" onClick="tryNotes()" />
+</menupopup>
+</menu>
+
+<menuitem label="Invoice details" onClick="playInvoiceDetails()" /> 
+<menuitem label="Create task" />
+<menuitem label="Hide popup" />
+</menupopup>
+
+<div width="100%">
+<panel id="acctquotation" title="Invoices"
+		border="normal"
+		collapsible="true" closable="true"
+>
+<panelchildren>
+
+<vbox width="100%">
+
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+
+<hbox>
+	<hbox>
+		<label value="Start date" />
+		<datebox id="startdate" format="yyyy-MM-dd" />
+	</hbox>
+	<separator width="10px"/>
+	<hbox>
+		<label value="End date" />
+		<datebox id="enddate" format="yyyy-MM-dd" />
+	</hbox>
+
+    <separator width="10px"/>
+
+</hbox>
+
+<hbox>
+    <hbox>
+        <label value="Sales person" />
+        <listbox mold="select" rows="1" id="salesperson" />
+        <zscript>
+            populateSalesPerson(salesperson);
+        </zscript>
+
+    </hbox>
+
+</hbox>
+
+<button label="Start search" onClick="startInvoiceSearch(startdate,enddate,salesperson)" />
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+
+<vbox>
+
+<div id="searchdiv" />
+
+</vbox>
+
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+/*
+Calendar kkk = Calendar.getInstance();
+kkk.set(2008,0,1);
+*/
+
+/*
+startdd = patientRecsDateStart();
+Calendar myend = Calendar.getInstance();
+myend.setTime(startdd);
+myend.add(myend.DAY_OF_MONTH,6);
+startgraphdate.setValue(startdd);
+endgraphdate.setValue(myend.getTime());
+*/
+
+// Set search startdate and enddate to today's date
+Calendar kkk = Calendar.getInstance();
+startdate.setValue(kkk.getTime());
+enddate.setValue(kkk.getTime());
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+
+</zk>
+

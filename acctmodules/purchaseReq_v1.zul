@@ -1,0 +1,1347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="purchreq_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Purchase Requisition / Order";
+MYVERSION = "v0.2";
+MYPANEL = "purpopanl";
+/*
+Title		: Purchase requisition and PO
+Written by	: Victor Wong
+
+17/04/2013: totally rewriting the overall codes
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.math.BigDecimal;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+PR_STAT_NEW = "NEW";
+PR_STAT_SUBMIT = "SUBMIT";
+PR_STAT_APPROVE = "APPR";
+PR_STAT_QUERY = "QRY";
+PR_STAT_DISAPPROVE = "DAPPR";
+PR_STAT_CANCEL = "CANCEL";
+
+PR_PREFIX = "EPR";
+DecimalFormat nf = new DecimalFormat("0.00");
+
+last_load_type = 0;
+glob_selected_pr = "";
+glob_selected_status = "";
+glob_selected_pri = "";
+glob_selected_supplier = "";
+
+Object getPR_Rec(String iorigid)
+{
+	sqlstm = "select * from purchaserequisition where origid=" + iorigid;
+	retv = sqlhand.gpSqlFirstRow(sqlstm);
+	return retv;
+}
+
+APPROVER_EMAIL = "tchin@alsglobal.com.my, finance@alsglobal.com.my, accts@alsglobal.com.my";
+
+// inoti_type: 1=approver query, 2=req response, 3=new PR submitted, .. read switch
+void notifyEmail(String iprid, int inoti_type)
+{
+	subjstr = "";
+	switch(inoti_type)
+	{
+		case 1:
+			subjstr = "Approver posted item query";
+			break;
+		case 2:
+			subjstr = "Requester responsed to your item query";
+			break;
+		case 3:
+			subjstr = "New PR submitted for approval";
+			break;
+		case 4:
+			subjstr = "Your PR has been approved";
+			break;
+		case 5:
+			subjstr = "Your PR has been disapproved";
+			break;
+		case 6:
+			subjstr = "Approver posted PR query";
+			break;
+		case 7:
+			subjstr = "Requester updated PR justification";
+			break;
+	}
+
+	prc = getPR_Rec(iprid);
+	if(prc == null) { guihand.showMessageBox("DBERR: Cannot email notification.."); return; }
+
+	subjstr = PR_PREFIX + prc.get("origid").toString() + " : " + subjstr;
+
+	msgbody  = "Purchase Req   : " + PR_PREFIX + prc.get("origid").toString();
+	msgbody += "\n\nDate requested : " + prc.get("datecreated").toString().substring(0,10);
+	msgbody += "\nApproved by    : " + prc.get("duedate").toString().substring(0,10);
+	msgbody += "\nRequested by   : " + prc.get("username");
+	msgbody += "\nDepartment     : " + kiboo.checkNullString(prc.get("dept_number"));
+	msgbody += "\nApproved by    : " + kiboo.checkNullString(prc.get("approveby")) + 
+	" Approved date : " + ((prc.get("approvedate") == null) ? "" : prc.get("approvedate").toString().substring(0,10));
+	msgbody += "\n---------------------------------------------------------------------------";
+	msgbody += "\nVendor         : " + kiboo.checkNullString(prc.get("SupplierName"));
+	msgbody += "\n\nJustification  : ";
+	msgbody += "\n" + kiboo.checkNullString(prc.get("notes"));
+	msgbody += "\n\nApprover query : ";
+	msgbody += "\n" + kiboo.checkNullString(prc.get("approver_notes"));
+	msgbody += "\n\n**Login to E-LAMBMAN to access the complete PR to take action**";
+	
+	topeople22 = luhand.getLookupChildItems_StringArray("PR_APPROVER_USERS",2);
+	topeople = kiboo.convertStringArrayToString(topeople22);
+	topeople += "," + useraccessobj.email;
+
+	//topeople = APPROVER_EMAIL;
+	simpleSendEmail(SMTP_SERVER,"elabman@alsglobal.com.my",topeople,subjstr,msgbody);
+	//alert(subjstr + msgbody);
+	//alert(topeople);
+}
+
+void showPRItems(String iwhat)
+{
+	sqlstm = "select mysoftcode,description,curcode,unitprice,quantity," + 
+	"justification,approver_query,requester_response from purchasereq_items where origid=" + iwhat;
+	retv = sqlhand.gpSqlFirstRow(sqlstm);
+	if(retv == null) { guihand.showMessageBox("DBERR: Cannot load purchase item record.."); return; }
+
+	pri_mysoftcode.setValue(retv.get("mysoftcode"));
+	pri_description.setValue(kiboo.checkNullString(retv.get("description")));
+	lbhand.matchListboxItems(pri_curcode,retv.get("curcode"));
+	pri_unitprice.setValue(retv.get("unitprice").toString());
+	pri_quantity.setValue(retv.get("quantity").toString());
+	pri_justification.setValue(kiboo.checkNullString(retv.get("justification")));
+	pri_approver_query.setValue(kiboo.checkNullString(retv.get("approver_query")));
+	pri_requester_response.setValue(kiboo.checkNullString(retv.get("requester_response")));
+}
+
+class prilb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_selected_pri = lbhand.getListcellItemLabel(isel,0);
+		showPRItems(glob_selected_pri);
+	}
+}
+
+Object[] prilb_headers = 
+{
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("#",true,"20px"),
+	new listboxHeaderWidthObj("Item.Description",true,""),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+	new listboxHeaderWidthObj("U.Price",true,"120px"),
+	new listboxHeaderWidthObj("Stat",true,"40px"),
+};
+
+void loadPR_items(String iprno)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(pritems_holder, prilb_headers, "pri_lb", 10);
+
+	sqlstm = "select origid,description,unitprice,quantity,item_app_stat from purchasereq_items " +
+	"where pr_parent_id=" + iprno + " order by origid";
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.addEventListener("onSelect", new prilb_onSelect());
+	lncnt = 1;
+	pritotal = 0.0;
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(lncnt.toString() + ".");
+		kabom.add(kiboo.checkNullString(dpi.get("description")));
+
+		pritotal += dpi.get("quantity") * dpi.get("unitprice");
+
+		kabom.add(dpi.get("quantity").toString());
+		//kabom.add(kiboo.checkNullString(dpi.get("curcode")) + " " + nf.format(dpi.get("unitprice")) );
+		kabom.add(nf.format(dpi.get("unitprice")) );
+
+		kabom.add((dpi.get("item_app_stat") == null) ? "NA" : ((dpi.get("item_app_stat") == 0) ? "NA" : "AP") );
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+
+		lncnt++;
+	}
+	
+	pritems_total.setValue(nf.format(pritotal));
+}
+
+void showPR_metadata(String iwhat)
+{
+	prec = getPR_Rec(iwhat);
+	if(prec == null) { guihand.showMessageBox("DB ERROR!!!! Cannot load PR record"); return; }
+	
+	pr_origid.setValue(prec.get("origid").toString());
+	pr_datecreated.setValue(prec.get("datecreated").toString().substring(0,10));
+	pr_suppliername.setValue(kiboo.checkNullString(prec.get("SupplierName")));
+	pr_apcode.setValue(kiboo.checkNullString(prec.get("APCode")));
+	pr_address1.setValue(kiboo.checkNullString(prec.get("address1")));
+	pr_address2.setValue(kiboo.checkNullString(prec.get("address2")));
+	pr_address3.setValue(kiboo.checkNullString(prec.get("address3")));
+	pr_address4.setValue(kiboo.checkNullString(prec.get("address4")));
+	pr_contact_name.setValue(kiboo.checkNullString(prec.get("contact_name")));
+	pr_supp_email.setValue(kiboo.checkNullString(prec.get("supp_email")));
+	pr_supp_tel_number.setValue(kiboo.checkNullString(prec.get("supp_tel_number")));
+	pr_supp_fax.setValue(kiboo.checkNullString(prec.get("supp_fax")));
+	lbhand.matchListboxItems(pr_priority,kiboo.checkNullString(prec.get("priority")));
+	pr_notes.setValue(kiboo.checkNullString(prec.get("notes")));
+	pr_duedate.setValue(prec.get("duedate"));
+	pr_approver_notes.setValue(kiboo.checkNullString(prec.get("approver_notes")));
+	lbhand.matchListboxItems(pr_dept_number,kiboo.checkNullString(prec.get("dept_number")));
+
+	workspace.setVisible(true);
+}
+
+class prlb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_selected_pr = lbhand.getListcellItemLabel(isel,0);
+		glob_selected_status = lbhand.getListcellItemLabel(isel,6);
+
+		showPR_metadata(glob_selected_pr);
+		loadPR_items(glob_selected_pr);
+
+		wksb = (!glob_selected_status.equals(PR_STAT_NEW)) ? true : false;
+		disableWorkspaceButts(wksb,glob_selected_status);
+
+		fillDocumentsList(glob_selected_pr);
+	}
+}
+
+Object[] prlb_headers = 
+{
+	new listboxHeaderWidthObj(PR_PREFIX,true,"30px"),
+	//new listboxHeaderWidthObj("###",true,"35px"),
+	new listboxHeaderWidthObj("Req.Date",true,"60px"),
+	new listboxHeaderWidthObj("Supplier",true,"100px"),
+	new listboxHeaderWidthObj("ReqBy",true,""),
+	new listboxHeaderWidthObj("Dept",true,"70px"),
+	new listboxHeaderWidthObj("Priority",true,"70px"),
+	new listboxHeaderWidthObj("Stat",true,"50px"),
+	new listboxHeaderWidthObj("PO",true,""),
+	//new listboxHeaderWidthObj("Justification",true,"180px"),
+};
+
+// itype: 1=pr
+void loadPurchaseReq(int itype)
+{
+	last_load_type = itype;
+	sdate = kiboo.getDateFromDatebox(startdate);
+    edate = kiboo.getDateFromDatebox(enddate);
+	searchtext = kiboo.replaceSingleQuotes(searhtxt_tb.getValue());
+
+	Listbox newlb = lbhand.makeVWListbox_Width(pr_holder, prlb_headers, "pr_lb", 20);
+
+	sqlstm = "select top 200 origid,datecreated,suppliername,dept_number,username,pr_status,upload,priority from purchaserequisition " +
+	"where datecreated between '" + sdate + "' and '" + edate + "' order by origid";
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.addEventListener("onSelect", new prlb_onSelect());
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		//kabom.add(PR_PREFIX + dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(kiboo.checkNullString(dpi.get("suppliername")));
+		kabom.add(kiboo.checkNullString(dpi.get("username")));
+		kabom.add(kiboo.checkNullString(dpi.get("dept_number")));
+		kabom.add(kiboo.checkNullString(dpi.get("priority")));
+		kabom.add(kiboo.checkNullString(dpi.get("pr_status")));
+		kabom.add((dpi.get("upload") == null) ? "N" : ((dpi.get("upload") == 0) ? "N" : "Y") );
+		//kabom.add(kiboo.checkNullString(dpi.get("notes")));
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void disableWorkspaceButts(boolean iwhat, String iprstat)
+{
+	getsupplier_butt.setDisabled(iwhat);
+	savepr_butt.setDisabled(iwhat);
+	newitem_butt.setDisabled(iwhat);
+	deleteitem_butt.setDisabled(iwhat);
+	getitem_butt.setDisabled(iwhat);
+
+	if(!iprstat.equals(PR_STAT_APPROVE) && !iprstat.equals(PR_STAT_CANCEL)) iwhat = false;
+
+	savepritem_butt.setDisabled(iwhat);
+	approverquery_butt.setDisabled(iwhat);
+	reqresp_butt.setDisabled(iwhat);
+	saveapproverquery.setDisabled(iwhat);
+	approveitem_butt.setDisabled(iwhat);
+	savejustification_butt.setDisabled(iwhat);
+}
+
+// check PR if all items approved - if yes, set PR status to APPR and lock
+void checkAllItemsApproved(String iwhat)
+{
+	sqlstm = "select count(origid) as itemcount, " +
+	"(select count(origid)from purchasereq_items where pr_parent_id=" + iwhat + " and item_app_stat=1) as approved " +
+	"from purchasereq_items where pr_parent_id=" + iwhat;
+
+	ckre = sqlhand.gpSqlFirstRow(sqlstm);
+	if(ckre == null) return;
+	itmc = (int)ckre.get("itemcount");
+	itma = (int)ckre.get("approved");
+
+	if(itmc == itma) // itemcount = item-approved : PR approved
+	{
+		if (Messagebox.show("You have approved all request items, proceed to approve this PR?", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		doFunc("approvepr_butt"); // use main-func to do the approval
+	}
+}
+
+void doFunc_PRItem(String iwhat)
+{
+	sqlstm = "";
+	refresh_prilb = false;
+	refresh_prlb = false;
+	email_noti = 0;
+	todate = kiboo.todayISODateString();
+
+	if(iwhat.equals("newitem_butt"))
+	{
+		if(glob_selected_pr.equals("")) return;
+
+		sqlstm = "insert into purchasereq_items " +
+		"(pr_parent_id,description,unitprice,quantity,curcode,mysoftcode,item_app_stat) values " +
+		"(" + glob_selected_pr + ",'',0.0,0,'MYR','',0)" ;
+
+		refresh_prilb = true;
+	}
+
+	if(sqlstm.equals("") && glob_selected_pri.equals("")) return;
+
+	if(iwhat.equals("savepritem_butt"))
+	{
+		mysc = pri_mysoftcode.getValue();
+		idsc = kiboo.replaceSingleQuotes(pri_description.getValue());
+		iccd = pri_curcode.getSelectedItem().getLabel();
+		iupr = kiboo.replaceSingleQuotes(pri_unitprice.getValue());
+		iqty = kiboo.replaceSingleQuotes(pri_quantity.getValue());
+		ijusty = kiboo.replaceSingleQuotes(pri_justification.getValue());
+		apquy = kiboo.replaceSingleQuotes(pri_approver_query.getValue());
+		reqrs = kiboo.replaceSingleQuotes(pri_requester_response.getValue());
+
+		sqlstm = "update purchasereq_items set mysoftcode='" + mysc + "', description='" + idsc + "'," +
+		"curcode='" + iccd + "',unitprice=" + iupr + ", quantity=" + iqty + ",justification='" + ijusty + "'," +
+		"approver_query='" + apquy + "', requester_response='" + reqrs + "' " +
+		"where origid=" + glob_selected_pri;
+
+		refresh_prilb = true;
+	}
+
+	if(iwhat.equals("deleteitem_butt"))
+	{
+		if (Messagebox.show("Delete purchase item...", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from purchasereq_items where origid=" + glob_selected_pri;
+		refresh_prilb = true;
+	}
+
+	if(iwhat.equals("approverquery_butt"))
+	{
+		if(glob_selected_status.equals(PR_STAT_NEW))
+		{
+			guihand.showMessageBox("Please wait till requester submit this PR..");
+			return;		
+		}
+
+		apquy = kiboo.replaceSingleQuotes(pri_approver_query.getValue());
+		sqlstm = "update purchasereq_items set approver_query='" + apquy + "' where origid=" + glob_selected_pri + ";";
+		sqlstm += "update purchaserequisition set pr_status='" + PR_STAT_QUERY + "' where origid=" + glob_selected_pr + ";";
+		refresh_prlb = true;
+
+		email_noti = 1;
+	}
+
+	if(iwhat.equals("reqresp_butt"))
+	{
+		reqrs = kiboo.replaceSingleQuotes(pri_requester_response.getValue());
+		sqlstm = "update purchasereq_items set requester_response='" + reqrs + "' where origid=" + glob_selected_pri;
+
+		email_noti = 2;
+	}
+
+	if(iwhat.equals("approveitem_butt"))
+	{
+		sqlstm = "update purchasereq_items set item_app_stat=1-item_app_stat where origid=" + glob_selected_pri;
+		refresh_prilb = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh_prilb) loadPR_items(glob_selected_pr);
+	if(refresh_prlb) loadPurchaseReq(last_load_type);
+
+	checkAllItemsApproved(glob_selected_pr); // check if all items approved
+
+	if(email_noti > 0) notifyEmail(glob_selected_pr,email_noti);
+}
+
+void doFunc(String iwhat)
+{
+	sqlstm = "";
+	refresh_prlb = false;
+	email_noti = 0;
+	todate = kiboo.todayISODateString();
+
+	if(iwhat.equals("newpr_butt"))
+	{
+		sqlstm = "insert into purchaserequisition " + 
+		"(apcode,suppliername,datecreated,duedate,priority,pr_status,deleted,username,upload) values " +
+		"('','','" + todate + "','" + todate + "','NORMAL','NEW',0,'" + useraccessobj.username + "',0)";
+
+		refresh_prlb = true;
+	}
+
+	if(sqlstm.equals("") && glob_selected_pr.equals("")) return;
+
+	if(iwhat.equals("savepr_butt"))
+	{
+		spnm = kiboo.replaceSingleQuotes(pr_suppliername.getValue());
+		spcod = pr_apcode.getValue();
+		add1 = kiboo.replaceSingleQuotes(pr_address1.getValue());
+		add2 = kiboo.replaceSingleQuotes(pr_address2.getValue());
+		add3 = kiboo.replaceSingleQuotes(pr_address3.getValue());
+		add4 = kiboo.replaceSingleQuotes(pr_address4.getValue());
+		spcont = kiboo.replaceSingleQuotes(pr_contact_name.getValue());
+		speml = kiboo.replaceSingleQuotes(pr_supp_email.getValue());
+		sptel = kiboo.replaceSingleQuotes(pr_supp_tel_number.getValue());
+		spfax = kiboo.replaceSingleQuotes(pr_supp_fax.getValue());
+		prty = pr_priority.getSelectedItem().getLabel();
+		prnots = kiboo.replaceSingleQuotes(pr_notes.getValue());
+		prddat = kiboo.getDateFromDatebox(pr_duedate);
+		prdept = pr_dept_number.getSelectedItem().getLabel();
+
+		sqlstm = "update purchaserequisition set suppliername='" + spnm + "',apcode='" + spcod + "'," +
+		"address1='" + add1 + "',address2='" + add2 + "',address3='" + add3 + "',address4='" + add4 + "'," +
+		"contact_name='" + spcont + "',supp_email='" + speml + "',supp_tel_number='" + sptel + "',supp_fax='" + spfax + "'," +
+		"priority='" + prty + "',notes='" + prnots + "',duedate='" + prddat + "', dept_number='" + prdept + "' " + 
+		"where origid=" + glob_selected_pr;
+
+		refresh_prlb = true;
+	}
+
+	if(iwhat.equals("submit_butt"))
+	{
+		if(glob_selected_status.equals(PR_STAT_SUBMIT)) return; // submitted
+		if(glob_selected_status.equals(PR_STAT_NEW)) // only PR status=NEW, set to SUBMIT
+		{
+			sqlstm = "update purchaserequisition set pr_status='" + PR_STAT_SUBMIT + "' where origid=" + glob_selected_pr;
+			disableWorkspaceButts(true,PR_STAT_SUBMIT);
+			glob_selected_status = PR_STAT_SUBMIT;
+			refresh_prlb = true;
+
+			email_noti = 3;
+		}
+	}
+
+	if(iwhat.equals("cancel_butt"))
+	{
+		if(glob_selected_status.equals(PR_STAT_APPROVE))
+		{
+			guihand.showMessageBox("PR is approved, cannot cancel. Contact admin");
+			return;
+		}
+
+		sqlstm = "update purchaserequisition set pr_status='" + PR_STAT_CANCEL + "' where origid=" + glob_selected_pr;	
+		glob_selected_status = PR_STAT_CANCEL;
+		disableWorkspaceButts(true,PR_STAT_CANCEL);
+		refresh_prlb = true;
+	}
+
+	if(iwhat.equals("approvepr_butt"))
+	{
+		if(glob_selected_status.equals(PR_STAT_APPROVE))
+		{
+			guihand.showMessageBox("PR was approved, no need to redo..");
+			return;
+		}
+
+		sqlstm = "update purchaserequisition set pr_status='" + PR_STAT_APPROVE + "'," + 
+		"approveby='" + useraccessobj.username + "', approvedate='" + todate + "' " +
+		"where origid=" + glob_selected_pr;
+
+		refresh_prlb = true;
+		disableWorkspaceButts(true,PR_STAT_APPROVE);
+		glob_selected_status = PR_STAT_APPROVE; // set flag
+		email_noti = 4;
+	}
+
+	if(iwhat.equals("disapprovepr_butt"))
+	{
+		sqlstm = "update purchaserequisition set pr_status='" + PR_STAT_DISAPPROVE + "'," + 
+		"approveby='" + useraccessobj.username + "', approvedate='" + todate + "' " +
+		"where origid=" + glob_selected_pr;
+
+		refresh_prlb = true;
+		disableWorkspaceButts(true,PR_STAT_DISAPPROVE);
+		glob_selected_status = PR_STAT_DISAPPROVE; // set flag
+		email_noti = 5;
+	}
+
+	if(iwhat.equals("saveapproverquery"))
+	{
+		if(glob_selected_status.equals(PR_STAT_NEW))
+		{
+			guihand.showMessageBox("Please wait till requester submit this PR..");
+			return;		
+		}
+
+		reqrs = kiboo.replaceSingleQuotes(pr_approver_notes.getValue());
+		sqlstm = "update purchaserequisition set approver_notes='" + reqrs + "'," + 
+		"pr_status='" + PR_STAT_QUERY + "' where origid=" + glob_selected_pr;
+
+		refresh_prlb = true;
+		email_noti = 6;
+	}
+
+	if(iwhat.equals("uploadpo_butt"))
+	{
+		if(glob_selected_status.equals(PR_STAT_APPROVE))
+		{
+			uploadPRToMySoft(glob_selected_pr);
+		}
+		else
+		{
+			guihand.showMessageBox("Sorry, cannot upload disapproved PR to MySoft..");
+		}
+	}
+
+	if(iwhat.equals("savejustification_butt"))
+	{
+		pr_just = kiboo.replaceSingleQuotes(pr_notes.getValue());
+		sqlstm = "update purchaserequisition set notes='" + pr_just + "' where origid=" + glob_selected_pr;
+		email_noti = 7;
+	}
+
+	//-- admin funcs
+	if(iwhat.equals("setnewpr_butt")) // set PR stat to NEW
+	{
+		sqlstm = "update purchaserequisition set pr_status='" + PR_STAT_NEW + "'," + 
+		"approveby='', approvedate=null " +
+		"where origid=" + glob_selected_pr;
+		
+		glob_selected_status = PR_STAT_NEW;
+		refresh_prlb = true;
+		disableWorkspaceButts(false,PR_STAT_NEW);
+	}
+
+	if(iwhat.equals("hardel_butt")) // hard-delete, ONLY ADMIN
+	{
+		if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from purchasereq_items where pr_parent_id=" + glob_selected_pr + ";";
+		sqlstm += "delete from purchaserequisition where origid=" + glob_selected_pr + ";";
+		refresh_prlb = true;
+
+		workspace.setVisible(false);
+		glob_selected_pr = ""; // reset stuff if PR deleted..
+		glob_selected_status = "";
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh_prlb) loadPurchaseReq(last_load_type);
+	
+	if(email_noti > 0) notifyEmail(glob_selected_pr,email_noti);
+}
+
+void uploadPRToMySoft(String ipr)
+{
+	prec = getPR_Rec(ipr);
+	if(prec == null) return;
+
+	todate = kiboo.todayISODateString();
+
+	// chk ap_code
+	apcode = kiboo.checkNullString(prec.get("APCode"));
+	if(apcode.equals(""))
+	{
+		guihand.showMessageBox("ERR: Undefined supplier -- please create it to upload this PR");
+		return;
+	}
+	
+	datecrt = prec.get("datecreated").toString().substring(0,10);
+	appdt = prec.get("approvedate").toString().substring(0,10);
+
+	prid = PR_PREFIX + ipr;
+
+	// remove old EPR and items if any --
+	sqlstm = "delete from popheader where order_number='" + prid + "';";
+	sqlstm += "delete from pop_detail where order_number='" + prid + "';";
+	sqlhand.gpSqlExecuter(sqlstm);
+	
+sqlstm =
+"insert into popheader (ORDER_NUMBER, ORDER_DATE, ORDER_TYPE, ACCOUNT_REF, Reference," +
+"NAME, ADDRESS_1, ADDRESS_2, ADDRESS_3, ADDRESS_4, ADDRESS_5, " +
+"DELIVERY_NAME, DEL_ADDRESS_1, DEL_ADDRESS_2, DEL_ADDRESS_3, DEL_ADDRESS_4, DEL_ADDRESS_5, " +
+"CONTACT_NAME, SUPP_TEL_NUMBER, SUPP_ORDER_NUMBER, CURRENCY_CODE, CURRENCY_EX_RATE, " +
+"SUPP_DISC_RATE, SUPP_DISC_FOREIGN, SUPP_DISC_VALUE,FOREIGN_GROSS,FOREIGN_TAX, FOREIGN_NET, " +
+"ORDER_GROSS, ORDER_TAX, ORDER_NET, NOTES_1, NOTES_2, NOTES_3, PRINTED_CODE, POSTED_CODE, " +
+"DISC_RATE, DUE_DAYS, STATUS, TAKEN_BY, DATE_CREATED, LAST_MODIFY, " +
+"CurCode, ExchangeRate, BaseRate, ForeignRate, Order_Status, " +
+"DocumentType, ApprovedBy, ApprovedOn, PurchaseOrder,SuppQuotationDate, " +
+"UserName, Warehouse, UpFlag) values " +
+"('" + prid + "','" + datecrt + "','PR','" + apcode + "','PurchaseReq', " +
+"'" + prec.get("SupplierName") + "','" + prec.get("address1") + "','" + prec.get("address2") + 
+"','" + prec.get("address3") + "','" + prec.get("address4") + "',''," +
+"'','','','','',''," +
+"'" + prec.get("contact_name") + "','" + prec.get("supp_tel_number") + "','','',0," +
+"0,0,0,0,0,0," +
+"0,0,0,'" + prec.get("notes") + "','','',null,0, " +
+"0,0,'X','','" + datecrt + "','" + todate + "'," +
+"'MYR',1,1,1,0," +
+"'PR','" + prec.get("approveby") + "','" + appdt + "','',''," +
+"'" + useraccessobj.username + "','none',0)";
+
+	sqlhand.gpSqlExecuter(sqlstm);
+
+	// insert 'em purchase-items
+	sqlstm = "select description,unitprice,quantity,mysoftcode from purchasereq_items where pr_parent_id=" + ipr;
+	pitms = sqlhand.gpSqlGetRows(sqlstm);
+	if(pitms.size() == 0) return;
+	itmc = 1;
+	for(dpi : pitms)
+	{
+		gtotal = dpi.get("unitprice") * dpi.get("quantity");
+		mysc = dpi.get("mysoftcode");
+		if(mysc.equals("")) mysc = "-";
+
+	sqlstm =
+"insert into pop_detail (ORDER_NUMBER,ITEM_NUMBER,STOCK_CODE,DESCRIPTION, " +
+"COMMENT_1,COMMENT_2,LONG_DESCRIPTION,DEPT_NUMBER, " +
+"QTY_ORDER,QTY_ALLOCATED,QTY_DELIVERED,QTY_DESPATCH, " +
+"UNIT_OF_SALE,UNIT_PRICE,TAX_AMOUNT,TAX_CODE,TAX_RATE, " +
+"FULL_NET_AMOUNT,DISCOUNT_AMOUNT,DISCOUNT_RATE,NET_AMOUNT, " +
+"NOMINAL_CODE,RequestDate) values (" +
+"'" + prid + "'," + itmc.toString() + ",'" + mysc + "','" + dpi.get("description") + "'," +
+"'','','','" + prec.get("dept_number") + "'," +
+dpi.get("quantity").toString() + ",0,0,0, " +
+"''," + dpi.get("unitprice").toString() + ",0,'Ts',0," +
+gtotal.toString() + ",0,0,0," +
+"'61100.710','" + datecrt + "')";
+
+		sqlhand.gpSqlExecuter(sqlstm);
+		itmc++;
+	}
+
+	// set upload bit
+	sqlstm = "update purchaserequisition set upload=1 where origid=" + ipr;
+	sqlhand.gpSqlExecuter(sqlstm);
+	loadPurchaseReq(last_load_type);
+
+	guihand.showMessageBox("PR uploaded to MySoft now..");
+}
+
+//---- Suppliers selector funcs ----
+
+void showSupplierDetails(String iwhat)
+{
+	sqlstm = "select apcode,suppliername,supadd1,supadd2,supadd3,supadd4,cperson1,email,phone,fax " +
+	"from supplierdetail where apcode='" + iwhat + "'";
+
+	retv = sqlhand.gpSqlFirstRow(sqlstm);
+	if(retv == null) { guihand.showMessageBox("DB ERR: Cannot access supplier table!!"); return; }
+
+	supp_apcode.setValue(retv.get("apcode"));
+	supp_suppliername.setValue(retv.get("suppliername"));
+	supp_addr1.setValue(retv.get("supadd1"));
+	supp_addr2.setValue(retv.get("supadd2"));
+	supp_addr3.setValue(retv.get("supadd3"));
+	supp_addr4.setValue(retv.get("supadd4"));
+	supp_cperson1.setValue(retv.get("cperson1"));
+	supp_email.setValue(retv.get("email"));
+	supp_phone.setValue(retv.get("phone"));
+	supp_fax.setValue(retv.get("fax"));
+
+	suppdet_grid.setVisible(true);
+}
+
+// customize the inject box-id for other module 
+void selectTheSupplier()
+{
+	pr_suppliername.setValue(supp_suppliername.getValue());
+	pr_apcode.setValue(supp_apcode.getValue());
+	pr_address1.setValue(supp_addr1.getValue());
+	pr_address2.setValue(supp_addr2.getValue());
+	pr_address3.setValue(supp_addr3.getValue());
+	pr_address4.setValue(supp_addr4.getValue());
+	pr_contact_name.setValue(supp_cperson1.getValue());
+	pr_supp_email.setValue(supp_email.getValue());
+	pr_supp_tel_number.setValue(supp_phone.getValue());
+	pr_supp_fax.setValue(supp_fax.getValue());
+
+	suppselect_popup.close();
+}
+
+class supplb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_selected_supplier = lbhand.getListcellItemLabel(isel,0);
+		showSupplierDetails(glob_selected_supplier);
+	}
+}
+
+Object[] supplb_headers = 
+{
+	new listboxHeaderWidthObj("APCode",true,"60px"),
+	new listboxHeaderWidthObj("Supplier",true,""),
+};
+
+void searchSupplier()
+{
+	srch = kiboo.replaceSingleQuotes(suppselect_search.getValue());
+	if(srch.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(suppsel_holder, supplb_headers, "suppliers_lb", 10);
+
+	sqlstm = "select top 50 apcode,suppliername from supplierdetail " +
+	"where apcode like '%" + srch + "%' or suppliername like '%" + srch + "%' or " +
+	"supadd1 like '%" + srch + "%' or supadd2 like '%" + srch + "%' or supadd3 like '%" + srch + "%' or " +
+	"supadd4 like '%" + srch + "%' or cperson1 like '%" + srch + "%' " +
+	"order by suppliername";
+	
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.addEventListener("onSelect", new supplb_onSelect());
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("apcode"));
+		kabom.add(kiboo.checkNullString(dpi.get("suppliername")));
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+//---- ENDOF Suppliers selector funcs ----
+
+//---- stock item picker funcs ----
+
+// customize this for other module -- where to put the stock-code and stock-desc
+class stkitem_DClicker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(glob_selected_pri.equals("")) return;
+		selitem = event.getTarget();
+		stkc = lbhand.getListcellItemLabel(selitem,0);
+		stkde = lbhand.getListcellItemLabel(selitem,1);
+
+		// customize these
+		pri_mysoftcode.setValue(stkc);
+		pri_description.setValue(stkde);
+
+		stockitem_popup.close();
+	}
+}
+
+Object[] stkitemlb_headers = 
+{
+	new listboxHeaderWidthObj("StkCode",true,""),
+	new listboxHeaderWidthObj("Item description",true,""),
+};
+
+void loadStockItems()
+{
+	srch = kiboo.replaceSingleQuotes(stk_search.getValue());
+	if(srch.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(stockitem_holder, stkitemlb_headers, "stockitems_lb", 10);
+
+	sqlstm = "select top 50 stock_code,description from stockmasterdetails where " +
+	"stock_code like 'po%" + srch + "%' and description like '%" + srch + "%' order by description";
+
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	//newlb.addEventListener("onSelect", new supplb_onSelect());
+	for(dpi : screcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("stock_code"));
+		kabom.add(kiboo.checkNullString(dpi.get("description")));
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+	dc_obj = new stkitem_DClicker();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+//---- ENDOF stock item picker funcs ----
+
+//---- File uploading funcs
+
+selected_file_id = ""; // global for attach-docu origid
+DOCUMENT_PREFIX = "EPR"; // chg tis for other mods
+
+// onSelect for filleDocumentsList()
+class doculinks_lb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = doculinks_lb.getSelectedItem();
+		selected_file_id = lbhand.getListcellItemLabel(selitem,0);
+
+		updatefiledesc_label.setLabel(lbhand.getListcellItemLabel(selitem,1));
+		update_file_description.setValue(lbhand.getListcellItemLabel(selitem,2));
+	}
+}
+
+void fillDocumentsList(String iorigid)
+{
+	Object[] documentLinks_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("File",true,"file_title",1),
+	new dblb_HeaderObj("Description",true,"file_description",1),
+	new dblb_HeaderObj("D.Created",true,"datecreated",3),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+
+	selected_file_id = ""; // reset
+	duclink = DOCUMENT_PREFIX + iorigid;
+
+	ds_sql = sqlhand.DMS_Sql();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable " +
+	"where docu_link='" + duclink + "' and deleted=0";
+
+	if(useraccessobj.accesslevel == 9) // admin can see everything..
+	{
+		sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable " +
+		"where docu_link='" + duclink + "' ";
+	}
+
+	Listbox newlb = lbhand.makeVWListbox_onDB(documents_holder,documentLinks_lb_headers,"doculinks_lb",10,ds_sql,sqlstm);
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", new doculinks_lb_onSelect());
+	ds_sql.close();
+
+	//if(newlb.getItemCount() > 5) newlb.setRows(10);
+}
+
+void uploadFile()
+{
+	if(glob_selected_pr.equals("")) return;
+	doculink_str = DOCUMENT_PREFIX + glob_selected_pr;
+	docustatus_str = "ACTIVE";
+
+	ftitle = kiboo.replaceSingleQuotes(fileupl_file_title.getValue());
+	fdesc = kiboo.replaceSingleQuotes(fileupl_file_description.getValue());
+
+	if(ftitle.equals(""))
+	{
+		guihand.showMessageBox("Please enter a filename..");
+		return;
+	}
+
+	// dmsfuncs.zs
+	dmshand.uploadFile(useraccessobj.username, useraccessobj.branch, kiboo.todayISODateTimeString(),
+	doculink_str,docustatus_str,ftitle,fdesc);
+	fillDocumentsList(glob_selected_pr);
+	uploadfile_popup.close();
+}
+
+void showUploadPopup()
+{
+	if(glob_selected_pr.equals("")) return;
+	uploadfile_popup.open(uploaddoc_btn);
+}
+
+void viewFile()
+{
+	if(selected_file_id.equals("")) return;
+	theparam = "docid=" + selected_file_id;
+	uniqid = kiboo.makeRandomId("vf");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/viewfile.zul", uniqid, theparam, useraccessobj);
+}
+
+void deleteFile()
+{
+	if(selected_file_id.equals("")) return;
+
+	if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+	sqlstm = "delete from DocumentTable where username='" + useraccessobj.username + "' and origid=" + selected_file_id;
+	if(useraccessobj.accesslevel >= 9) sqlstm = "delete from DocumentTable where origid=" + selected_file_id;
+	dmshand.dmsgpSqlExecuter(sqlstm);
+	fillDocumentsList(glob_selected_pr); // refresh
+}
+
+void updateFileDescription()
+{
+	fdesc = kiboo.replaceSingleQuotes(update_file_description.getValue());
+	sqlstm = "update DocumentTable set file_description='" + fdesc + "' where origid=" + selected_file_id;
+	dmshand.dmsgpSqlExecuter(sqlstm);
+	fillDocumentsList(glob_selected_pr); // refresh
+	updatefiledesc_popup.close();
+}
+
+//---- ENDOF document upload funcs
+
+// Constants/Def
+LEFTSIDE_WIDTH = "500px";
+WORKSPACE_WIDTH = "550px";
+FORM_HEADERCOLOR1 = "#888a85";
+
+]]>
+</zscript>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription()" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile()"  style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<popup id="stockitem_popup">
+<hbox>
+	<label style="font-size:9px">Stock item</label>
+	<textbox id="stk_search" style="font-size:9px" />
+	<button label="Dig" style="font-size:9px" onClick="loadStockItems()" />
+	<label style="font-size:9px">(Max. 50 recs)</label>
+</hbox>
+
+<div id="stockitem_holder" width="500px" />
+
+</popup>
+
+<popup id="suppselect_popup">
+
+<hbox>
+	<label style="font-size:9px">Supplier</label>
+	<textbox id="suppselect_search" style="font-size:9px" />
+	<button label="Dig" style="font-size:9px" onClick="searchSupplier()" />
+	<label style="font-size:9px">(Max. 50 recs)</label>
+</hbox>
+
+<hbox>
+
+<div id="suppsel_holder" width="300px" />
+<separator width="3px" />
+
+<vbox>
+<grid id="suppdet_grid" width="400px" visible="false">
+	<rows>
+		<row spans="1,3">
+			<label value="APCode" style="font-size:9px" />
+			<label id="supp_apcode" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Supplier" style="font-size:9px" />
+			<label id="supp_suppliername" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Addr1" style="font-size:9px" />
+			<label id="supp_addr1" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Addr2" style="font-size:9px" />
+			<label id="supp_addr2" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Addr3" style="font-size:9px" />
+			<label id="supp_addr3" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Addr4" style="font-size:9px" />
+			<label id="supp_addr4" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact" style="font-size:9px" />
+			<label id="supp_cperson1" style="font-size:9px" />
+			<label value="Email" style="font-size:9px" />
+			<label id="supp_email" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Tel" style="font-size:9px" />
+			<label id="supp_phone" style="font-size:9px" />
+			<label value="Fax" style="font-size:9px" />
+			<label id="supp_fax" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+<button label="Select supplier" style="font-size:9px" onClick="selectTheSupplier()" />
+</vbox>
+
+</hbox>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox>
+<div>
+<groupbox mold="3d" width="${LEFTSIDE_WIDTH}">
+	<grid>
+		<rows>
+			<row>
+				<label value="Start date" style="font-size:9px" />
+				<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+				<label value="End date" style="font-size:9px" />
+				<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			</row>
+			<row spans=",,2">
+				<label value="Search" style="font-size:9px" />
+				<textbox id="searhtxt_tb" width="99%" style="font-size:9px" />
+				<hbox>
+				<button label="Load/Find PR" style="font-size:9px" onClick="loadPurchaseReq(1)" />
+				<label style="font-size:9px">(Max. 200 PR per load/find)</label>
+				</hbox>
+			</row>
+			<row spans="4">
+			<hbox>
+				<button id="newpr_butt" label="New PR" style="font-size:9px" onClick="doFunc(self.getId())" />
+				<button id="submit_butt" label="Submit" style="font-size:9px" onClick="doFunc(self.getId())" />
+				<button id="cancel_butt" label="Cancel" style="font-size:9px" onClick="doFunc(self.getId())" />
+				<separator width="20px" />
+				<button id="uploadpo_butt" label="Upload PO" style="font-size:9px" onClick="doFunc(self.getId())" />
+				<button id="setnewpr_butt" label="Set NEW" style="font-size:9px" onClick="doFunc(self.getId())" visible="false" />
+			</hbox>
+			</row>
+			<row spans="4" style="background:#ef2929">
+				<hbox id="adminstuff" visible="false">
+					<button id="hardel_butt" label="HARD Delete" style="font-size:9px" onClick="doFunc(self.getId())" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+
+<div id="pr_holder" width="${LEFTSIDE_WIDTH}" />
+
+</div> <!-- ENDOF left-side -->
+
+<div id="workspace" visible="false">
+
+<groupbox id="approver_stuff" mold="3d" visible="false">
+	<button id="approvepr_butt" label="APPROVE THIS PURCHASE" onClick="doFunc(self.getId())" />
+	<button id="disapprovepr_butt" label="DISAPPROVE" onClick="doFunc(self.getId())" />
+</groupbox>
+
+<hbox>
+
+<tabbox mold="accordion">
+<tabs>
+	<tab id="tab1" label="PR Metadata / Status" />
+	<tab id="tab2" label="Request Items" />
+	<tab id="tab3" label="Supporting documents" />
+</tabs>
+<tabpanels>
+
+<tabpanel> <!-- PR Metadata / Status -->
+
+<grid width="${WORKSPACE_WIDTH}">
+	<rows>
+		<row>
+			<label value="PR No. ${PR_PREFIX}" />
+			<label id="pr_origid" />
+			<label value="Dated" />
+			<label id="pr_datecreated" />
+		</row>
+		<row spans="2,2" style="background:${FORM_HEADERCOLOR1}">
+			<hbox>
+				<label>Supplier</label>
+				<label id="pr_apcode" />
+			</hbox>
+			<button id="getsupplier_butt" label="Get supplier" style="font-size:9px" onClick="suppselect_popup.open(self)" />
+		</row>
+		<row spans="1,3">
+			<label value="Supplier" style="font-size:9px" />
+			<textbox id="pr_suppliername" style="font-size:9px" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Address1" style="font-size:9px" />
+			<textbox id="pr_address1" style="font-size:9px" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Address2" style="font-size:9px" />
+			<textbox id="pr_address2" style="font-size:9px" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Address3" style="font-size:9px" />
+			<textbox id="pr_address3" style="font-size:9px" width="99%" />
+		</row>
+		<row spans="1,3">
+			<label value="Address4" style="font-size:9px" />
+			<textbox id="pr_address4" style="font-size:9px" width="99%" />
+		</row>
+		<row>
+			<label value="Contact" style="font-size:9px" />
+			<textbox id="pr_contact_name" style="font-size:9px" width="99%" />
+			<label value="Email" style="font-size:9px" />
+			<textbox id="pr_supp_email" style="font-size:9px" width="99%" />
+		</row>
+		<row>
+			<label value="Tel" style="font-size:9px" />
+			<textbox id="pr_supp_tel_number" style="font-size:9px" width="99%" />
+			<label value="Fax" style="font-size:9px" />
+			<textbox id="pr_supp_fax" style="font-size:9px" width="99%" />
+		</row>
+
+		<row spans="4" style="background:${FORM_HEADERCOLOR1}">
+		PR details
+		</row>
+		<row>
+			<label value="Priority" style="font-size:9px" />
+			<listbox id="pr_priority" mold="select" style="font-size:9px" />
+			<label value="Must.Appr.By" style="font-size:9px" />
+			<datebox id="pr_duedate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row spans="1,3">
+			<label value="Department" style="font-size:9px" />
+			<listbox id="pr_dept_number" mold="select" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<vbox>
+				<label value="Justification" style="font-size:9px" />
+				<button id="savejustification_butt" label="Update justification" style="font-size:9px" onClick="doFunc(self.getId())" />
+			</vbox>
+			<textbox id="pr_notes" style="font-size:9px" multiline="true" width="99%" height="70px" />
+		</row>
+		<row spans="4">
+			<hbox>
+				<button id="savepr_butt" label="Save purchase-requisition metadata" style="font-size:9px" onClick="doFunc(self.getId())" />
+			</hbox>
+		</row>
+		
+		<row spans="4" style="background:${FORM_HEADERCOLOR1}">
+		APPROVER NOTES - MAIN QUERY
+		</row>
+		
+		<row spans="4">
+			<textbox id="pr_approver_notes" style="font-size:9px" multiline="true" width="99%" height="70px" />
+		</row>
+		
+		<row spans="4">
+			<button id="saveapproverquery" label="SAVE APPROVER QUERY" onClick="doFunc(self.getId())" />
+		</row>
+
+
+
+	</rows>
+</grid>
+
+</tabpanel> <!-- ENDOF PR Metadata / Status -->
+
+<tabpanel> <!-- request items -->
+
+<div id="pritems_holder" width="${WORKSPACE_WIDTH}" />
+<hbox>
+	<label style="font-size:9px">(Stat: NA=NotApprove, AP=Approved)</label>
+	<separator width="220px" />
+	Total
+	<label id="pritems_total" />
+</hbox>
+<separator bar="true" />
+<hbox>
+	<button id="newitem_butt" label="New item" style="font-size:9px" onClick="doFunc_PRItem(self.getId())" />
+	<button id="deleteitem_butt" label="Delete" style="font-size:9px" onClick="doFunc_PRItem(self.getId())" />
+</hbox>
+
+<separator height="3px" />
+<grid width="${WORKSPACE_WIDTH}" >
+	<rows>
+		<row spans="1,2,1">
+			<label value="Code" style="font-size:9px" />
+			<label id="pri_mysoftcode" style="font-size:9px" />
+			<button id="getitem_butt" label="Get item" style="font-size:9px" onClick="stockitem_popup.open(self)" />
+		</row>
+		<row spans="1,3">
+			<label value="Item" style="font-size:9px" />
+			<textbox id="pri_description" style="font-size:9px" multiline="true" width="99%" height="50px" />
+		</row>
+		<row>
+			<label value="Unit price" style="font-size:9px" />
+			<hbox>
+			<listbox id="pri_curcode" style="font-size:9px" mold="select" />
+			<textbox id="pri_unitprice" style="font-size:9px" />
+			</hbox>
+			<label value="Quantity" style="font-size:9px" />
+			<textbox id="pri_quantity" style="font-size:9px" />
+		</row>
+		<row spans="1,3">
+			<label value="Justification" style="font-size:9px" />
+			<textbox id="pri_justification" style="font-size:9px" multiline="true" width="99%" height="50px" />
+		</row>
+		<row spans="4">
+			<hbox>
+				<button id="savepritem_butt" label="Save item details" style="font-size:9px" onClick="doFunc_PRItem(self.getId())" />
+			</hbox>
+		</row>
+		<row spans="4" style="background:#cd2467">
+			<label style="font-size:9px">Individual item approval and such</label>
+		</row>
+		<row spans="4">
+			<hbox>
+				<button id="approveitem_butt" label="Toggle this item approval" onClick="doFunc_PRItem(self.getId())" />
+			</hbox>
+		</row>
+		<row spans="1,3">
+			<vbox>
+				<label value="Approver query" style="font-size:9px" />
+				<button id="approverquery_butt" label="Post query" onClick="doFunc_PRItem(self.getId())" style="font-size:9px" disabled="true" />
+			</vbox>
+			<textbox id="pri_approver_query" style="font-size:9px" multiline="true" width="99%" height="50px" />
+		</row>
+		<row spans="1,3">
+			<vbox>
+				<label value="Response" style="font-size:9px" />
+				<button id="reqresp_butt" label="Reply" onClick="doFunc_PRItem(self.getId())" style="font-size:9px" />
+			</vbox>
+			<textbox id="pri_requester_response" style="font-size:9px" multiline="true" width="99%" height="50px" />
+		</row>
+	</rows>
+</grid>
+
+</tabpanel> <!-- ENDOF request items -->
+
+<tabpanel> <!-- supporting docs -->
+	<hbox>
+		<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup()" />
+		<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+		<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+		<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile()" />
+	</hbox>
+	<separator height="3px" />
+	<div id="documents_holder" />
+</tabpanel> <!-- ENDOF supporting docs -->
+
+</tabpanels>
+</tabbox>
+
+</hbox>
+
+</div> <!-- ENDOF workspace -->
+
+</hbox>
+
+
+<zscript>
+<![CDATA[
+
+void populate_DeptNumber(Listbox iwhat)
+{
+	sqlstm = "select distinct dept_number from pop_detail order by dept_number";
+	kcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(kcs.size() == 0) return;
+	for(dpi : kcs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("dept_number").toString());
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(iwhat,strarray,"false","");
+	}
+	iwhat.setSelectedIndex(0); // set default selected to item 0
+}
+
+luhand.populateListbox_ByLookup(pr_priority, "TASKS_PRIORITY",2);
+luhand.populateListbox_ByLookup(pri_curcode, "currencycode",2);
+populate_DeptNumber(pr_dept_number);
+
+// one and only approver for any purchases..
+if(useraccessobj.username.equals("doc"))
+{
+	approver_stuff.setVisible(true);
+	approverquery_butt.setDisabled(false);
+}
+
+if(useraccessobj.username.equals("haliza") || useraccessobj.username.equals("intan"))
+{
+	setnewpr_butt.setVisible(true);
+}
+
+if(useraccessobj.accesslevel >= 9)
+{
+	adminstuff.setVisible(true);
+	approver_stuff.setVisible(true);
+	approverquery_butt.setDisabled(false);
+	setnewpr_butt.setVisible(true);
+}
+
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

@@ -1,0 +1,1025 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billngtrackmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rws_warehouse/pickBOM_funcs.zs" />
+<zscript src="./contractBillingTrack_funcs.zs" />
+<zscript src="./contBill_assets.zs" />
+<zscript src="./contBill_DO.zs" />
+<zscript src="./contBill_RMA.zs" />
+<zscript src="./contImport_funcs.zs" />
+<zscript src="./LCassReplaceTracker.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "LC Management";
+MYVERSION = "v0.4.6";
+MYPANEL = "billtrkcpan";
+/*
+@Title LC billing tracking and so on
+@Author Victor Wong
+@Since 16/10/2013
+
+08/04/2014: remove gco-transient items
+20/06/2014: batch import from LC defined in i_batch_lc - req by Nurul for MISC mostly
+08/07/2014: toggler super_reminder flag for LC - hilite to remind user
+25/07/2014: nurul req import assets from other LC omit buyout and already GCN
+10/09/2014: farah req add hotswap-flag
+17/09/2014: nurul req to show equip qty, want to update like 1 recrd MSoffice = 16 qty, this will get sum-up in the EVF reports
+22/09/2014: huiping req to add sales_related status .. for watever
+24/09/2014: modif contbill_Assets.replaceLCAsset() to use replaceAssetAuditLog() - terse audit-log for replacements
+27/10/2014: add rw_lc_equips.assigned, user able to set assigned/un for assets
+31/10/2014: helpdesk replacement let BA update the LC record
+06/11/2014: pull in sqlstm from eolmanager.zul to list expire LCs, show also the no. of GCO raised per LC
+07/01/2015: Mahes req, new LC status, REFRESH_COL, refresh collected
+09/01/2015: Farah req import from RDO - the items
+09/03/2015: huping/nurul req, import assets with billable-flag on
+14/05/2015: shopa req, cpy metadata from other LC
+
+*/
+import java.util.*;
+import java.math.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); gridhand = new GridHandler();
+dmshand = new DMSFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+SimpleDateFormat yearonly = new SimpleDateFormat("yyyy");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+global_selected_customerid = global_selected_customername = "";
+
+glob_selected_lc_li = glob_selected_ass_li = glob_lcmeta_rec = null;
+glob_selected_lc = glob_sel_lc_str = "";
+glob_selected_ass = glob_selected_asstag = "";
+glob_sel_customer = "";
+
+last_lc_loadtype = 0;
+Object glob_sel_assetrec = null; // to be used for replacement and other funcs which required to log previous data
+last_list_type = 0;
+
+lc_manager_flag = 1; // used in LCassReplaceTracker.zs to show LB
+
+STATBUTT_WIDTH = "150px";
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	//custr = getFocus_CustomerRec(global_selected_customerid);
+	//i_customer_name.setValue(global_selected_customername);
+	l_fc6_custid.setValue(global_selected_customerid);
+}
+
+String JN_linkcode()
+{
+	if(glob_selected_lc.equals("")) return "";
+	return LC_PREFIX + glob_selected_lc;
+}
+
+String[] ass_colws = { "18px",""		  ,"","" };
+String[] ass_colls = { ""    ,"Asset.Tag" ,"Model/Desc","--" };
+
+String[] do_colws = { "18px",""		  ,"","" };
+String[] do_colls = { ""    ,"DO No." ,"Dated","--" };
+
+String[] rma_colws = { "18px",""		  ,"","" };
+String[] rma_colls = { ""    ,"RMA No." ,"Dated","--" };
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate = kiboo.todayISODateTimeString();
+	refresh = refup = false;
+	msgtext = sqlstm = "";
+
+	if(itype.equals("newroc_b"))
+	{
+		sqlstm = "insert into rw_lc_records (datecreated,username,customer_name,super_reminder) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','UNDEF',0)";
+		refup = true;
+	}
+
+	if(itype.equals("updlcmeta_b"))
+	{
+		if(glob_selected_lc.equals("")) return;
+
+		// 22/09/2014: huiping req sales_related status field
+		Object[] ibx = {
+		i_lc_no, i_rocno, customername, i_remarks, i_rm_month, i_rm_contract, i_order_type, i_product_name,
+		i_qty_dt, i_qty_mt, i_qty_nb, i_qty_pt, i_qty_hs, i_qty_ms, i_prev_lc, i_prev_roc, i_charge_out, i_rwno,
+		i_co_assigned_name, i_co_do_ref, i_co_master_lc, i_fina_ref, i_co_inv_to_financer,
+		i_lstartdate,i_lenddate,i_charge_out_date,
+		i_period, i_charge_out_period, i_fina_amount, i_co_monthly_rental, i_co_instalment_count, i_co_due_date,
+		i_co_deposit, i_co_recv_ex_deposit, i_co_recv_in_deposit, i_co_pv_drawdown,
+		i_co_pv_drawdown_ex_deposit, i_co_assigned_interest,
+		i_inst_type,i_assigned, l_fc6_custid, i_cust_project_id, i_noa_no, i_invoice_date, i_batch_lc,
+		i_sales_related
+		};
+
+		String[] ity = {
+		"str", "str", "str", "str", "fl", "fl", "str", "str",
+		"int", "int", "int", "int", "int", "int", "str", "str", "str", "str",
+		"str", "str", "str", "str", "str",
+		"dt", "dt", "dt",
+		"int", "int", "fl", "fl", "int", "int",
+		"fl", "fl", "fl", "fl",
+		"fl", "fl",
+		"lb", "lbyn", "str", "str", "str", "dt", "str",
+		"str"
+		};
+
+		String[] dth = new String[ibx.length];
+
+		for(i=0;i<ibx.length;i++)
+		{
+			if(ibx[i] instanceof Textbox || ibx[i] instanceof Label)
+			{
+				dth[i] = kiboo.replaceSingleQuotes( ibx[i].getValue().trim() );
+				if(ity[i].equals("int"))
+				{
+					try { kk = Integer.parseInt(dth[i]); } catch (Exception e) { dth[i] = "0"; }
+				}
+				if(ity[i].equals("fl"))
+				{
+					try { kk = Float.parseFloat(dth[i]); } catch (Exception e) { dth[i] = "0.0"; }
+				}
+			}
+
+			try { if(ity[i].equals("dt")) dth[i] = dtf2.format( ibx[i].getValue() ); } catch (Exception e) { dth[i] = "1900-01-01"; }
+			try { if(ity[i].equals("lb")) dth[i] = ibx[i].getSelectedItem().getLabel(); } catch (Exception e) { dth[i] = ""; }
+			try { if(ity[i].equals("lbyn")) dth[i] = (ibx[i].getSelectedItem().getLabel().equals("YES")) ? "1" : "0"; } catch (Exception e) {}
+		}
+
+		// 24/01/2014: quick-hack to remove RWI and put in RW if none
+		kx = dth[17].replaceAll("RWI:","").trim();
+
+		if(kx.indexOf("RW") == -1) { kx = "RW" + kx; }
+		dth[17] = kx.trim();
+		i_rwno.setValue(dth[17]);
+		// 20/01/2014: crazy shit mapped to the array
+		sqlstm = "update rw_lc_records set lc_id='" + dth[0] + "', rocno='" + dth[1] + "', customer_name='" + dth[2] + "'," +
+		"remarks='" + dth[3] + "', rm_month=" + dth[4] + ", rm_contract=" + dth[5] + ", order_type='" + dth[6] + "'," +
+		"product_name='" + dth[7] + "', qty_dt=" + dth[8] + ", qty_mt=" + dth[9] + ", qty_nb=" + dth[10] + "," +
+		"qty_pt=" + dth[11] + ", qty_hs=" + dth[12] + ", qty_ms=" + dth[13] + ", prev_lc='" + dth[14] + "', prev_roc='" + dth[15] + "'," +
+		"charge_out='" + dth[16] + "', rwno='" + dth[17] + "'," +
+		"co_assigned_name='" + dth[18] + "', co_do_ref='" + dth[19] + "', co_master_lc='" + dth[20] + "'," +
+		"fina_ref='" + dth[21] + "', co_inv_to_financer='" + dth[22] + "'," +
+		"lstartdate='" + dth[23] + "', lenddate='" + dth[24] + "', charge_out_date='" + dth[25] + "'," +
+		"period=" + dth[26] + ", charge_out_period=" + dth[27] + ", fina_amount=" + dth[28] + ", co_monthly_rental=" + dth[29] + "," +
+		"co_instalment_count=" + dth[30] + ", co_due_date=" + dth[31] + "," +
+		"co_deposit=" + dth[32] + ", co_recv_ex_deposit=" + dth[33] + ", co_recv_in_deposit=" + dth[34] + "," +
+		"co_pv_drawdown=" + dth[35] + ", co_pv_drawdown_ex_deposit=" + dth[36] + ", co_assigned_interest=" + dth[37] + ", " +
+		"inst_type='" + dth[38] + "', assigned=" + dth[39] + ", fc6_custid='" + dth[40] + "'," + 
+		"cust_project_id='" + dth[41] + "', noa_no='" + dth[42] + "', invoice_date='" + dth[43] + "', batch_lc='" + dth[44] + "'," +
+		"sales_related='" + dth[45] + "' where origid=" + glob_selected_lc;
+
+		refresh = true;
+		//glob_sel_lc_str = lcno; // save for other func
+	}
+
+	if(itype.equals("chkdup_b"))
+	{
+		kx = i_lc_no.getValue().trim();
+		if(kx.equals("")) return;
+		if(existRW_inLCTab(kx))
+		{
+			msgtext = "LC/RWI exist in database.. don't even try..";
+		}
+	}
+
+	if(itype.equals("stactive_b") || itype.equals("sttermin_b") || itype.equals("stextens_b") ||
+	itype.equals("stinerti_b") || itype.equals("stbuyout_b") || itype.equals("stinactive_b") || itype.equals("stpartial_b") ||
+	itype.equals("partret_b") || itype.equals("creditn_b") || itype.equals("refresh_b") || itype.equals("refcoll_b") || itype.equals("termcoll_b") ||
+	itype.equals("legis_b") )
+	{
+		if(glob_selected_lc.equals("")) return;
+		sqlstm = "update rw_lc_records set lstatus='" + iwhat.getLabel() + "' where origid=" + glob_selected_lc;
+		refresh = true;
+		lcsetstat_pop.close();
+	}
+
+	if(itype.equals("shwassets_b"))
+	{
+		//makeLinkThingsGrid(assets_holder,"asset_grid","asset_rows",ass_colws,ass_colls,"background:#97b83a");
+		//assets_func_bar.setVisible(true);
+	}
+
+	if(itype.equals("shwrma_b"))
+	{
+		//rma_func_bar.setVisible(true);
+		//showLC_DO_recs(glob_selected_lc,dorder_rows); // show existing DOs if any..
+	}
+
+	if(itype.equals("shwauditlogs_b"))
+	{
+		showSystemAudit(auditlogs_holder,JN_linkcode(),"");
+		auditlogs_pop.open(iwhat);
+	}
+
+	if(itype.equals("countmonth_b")) // calc months from contract start/end
+	{
+		difm = countMonthYearDiff(1,i_lstartdate,i_lenddate);
+		itp = i_inst_type.getSelectedItem().getLabel();
+		if(itp.equals("QUARTERLY")) difm = difm / 3;
+		i_period.setValue(difm.toString());
+	}
+
+	if(itype.equals("superreminder_b")) // set super_reminder flag
+	{
+		sqlstm = "update rw_lc_records set super_reminder=1-super_reminder where origid=" + glob_selected_lc;
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh)
+	{
+		if(last_list_type == 4) search_txt.setValue(glob_commasep);
+		listROCLC(last_list_type);
+	}
+
+	if(refup) listROCLC(3); // list latest LC -- for new creation
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = refup = false;
+	msgtext = sqlstm = "";
+
+	if(glob_selected_lc.equals("")) return;
+
+	if(itype.equals("dellc_b"))
+	{
+		if(Messagebox.show("HARD DELETE this LC/RW and all its assets", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm  = "delete from rw_lc_equips where lc_parent=" + glob_selected_lc + ";";
+		sqlstm += "delete from rw_lc_records where origid=" + glob_selected_lc + ";";
+
+		refresh = true;
+		mainworkarea.setVisible(false);
+		glob_selected_lc = 0; // reset
+
+		// TODO need to delete JN,Docs and etc later
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listROCLC(last_list_type);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void listHotswaps() // List assets where hotswap flag
+{
+	Object[] cstkhds =
+	{
+		new listboxHeaderWidthObj("No.",true,"40px"),
+		new listboxHeaderWidthObj("LC",true,"50px"),
+		new listboxHeaderWidthObj("Customer",true,""),
+		new listboxHeaderWidthObj("Asset",true,"80px"),
+		new listboxHeaderWidthObj("Start",true,"60px"),
+		new listboxHeaderWidthObj("End",true,"60px"),
+	};
+
+	mwin = ngfun.vMakeWindow(winsholder,"HOTSWAPS List","0","center","650px","");
+	kdiv = new Div(); kdiv.setParent(mwin);
+	Listbox newlb = lbhand.makeVWListbox_Width(kdiv, cstkhds, "chkstock_lb", 3);
+
+	csqlstm = "select lce.asset_tag, lcr.lc_id, lcr.customer_name, lcr.lstartdate, lcr.lenddate " +
+	"from rw_lc_equips lce left join rw_lc_records lcr on lce.lc_parent = lcr.origid " +
+	"where lce.hotswap=1 order by lcr.lenddate, lcr.lc_id, lcr.customer_name";
+
+	r = sqlhand.gpSqlGetRows(csqlstm);
+	if(r.size() == 0) return;
+	newlb.setMold("paging"); newlb.setRows(20);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "lc_id", "customer_name", "asset_tag", "lstartdate", "lenddate" };
+	lnc = 1;
+	for(d : r)
+	{
+		kabom.add(lnc.toString() + "." );
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+		lnc++;
+	}
+	lbhand.setDoubleClick_ListItems(newlb, hotswapdoublecliker);
+}
+
+class hswpdclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		lcid = lbhand.getListcellItemLabel(isel,1);
+		search_txt.setValue("'" + lcid + "'");
+		listROCLC(4); // list by LC-id (contractBillingTrack_funcs.zs)
+	}
+}
+hotswapdoublecliker = new hswpdclik();
+
+BUTT_WIDTH = "125px";
+BUTT_WIDTH2 = "190px";
+
+]]>
+</zscript>
+
+<popup id="copyFromOtherLC_meta_pop">
+	<div sclass="shadowbox" style="background:#204a87">
+		<vbox>
+			<hbox>
+				<label value="Duplicate LC metadata" sclass="k9b" />
+				<textbox id="whichlcid" width="60px" />
+			</hbox>
+			<button label="Dup it" sclass="k9mo" onClick="copyFromOtherLC_meta_pop.close(); copyLCmetadata()" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="report_pop">
+	<div sclass="shadowbox" style="background:#9db91d">
+		<vbox>
+			<button label="Export EVF" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,1)" />
+			<button label="Export EVF(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,3)" />
+			<button label="Export EVF(with specs)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,5)" />
+			<button label="Export equipments/rental" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,2)" />
+			<button label="Export equipments/rental(no location)" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,4)" />
+			<textbox id="userdef_inv" sclass="k9" />
+			<button label="Export multi-LC EVF with grouping" sclass="k9" width="${BUTT_WIDTH2}" onClick="exportAssetsList(glob_selected_lc,6)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="digass_pop">
+	<div sclass="shadowbox" style="background:#1b528c" width="550px" >
+		<div id="dgass_holder" />
+		<separator height="2px" />
+		<button label="Drill" sclass="k9" onClick="drillFoundAssets()" />
+	</div>
+</popup>
+
+<popup id="mangcn_pop">
+	<label value="OLD GCN No" />
+	<textbox id="oldgcnno_tb" />
+	<button id="updoldgcn_b" label="Update" onClick="updManualGCN()" />
+</popup>
+
+<popup id="expasspop">
+	<div id="expass_div" width="700px" />
+</popup>
+
+<popup id="copyasslc_pop">
+	<div sclass="shadowbox" style="background:#204a87;" width="250px" >
+		<vbox>
+			<hbox>
+				<label value="Copy assets from LC" sclass="k9b" />
+				<textbox id="copylcid" />
+			</hbox>
+			<button id="copyassflc_b" label="Copy semua" sclass="k9mo" onClick="assFunc(self)" />
+			<button id="copyassflc_billable_b" label="Sedut semua Billable je" sclass="k9mo" onClick="assFunc(self)" />
+			<button id="copyassflc_filt_b" label="Sedut semua kecuali GCN dan Buyout" sclass="k9mo" onClick="assFunc(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="contcarepop" >
+	<div sclass="shadowbox" style="background:#204a87;" width="600px" >
+		<hbox>
+			<label value="ContractCare LC.No" style="color:#ffffff" />
+			<textbox id="cclcno_tb" />
+			<button label="Dig" onClick="impContractcare()" />
+		</hbox>
+		<separator height="3px" />
+		<div id="ccareqs_holder" />
+		<separator height="3px" />
+		<button id="sedutcontc_b" label="Sedut" onClick="assFunc(self)" />
+	</div>
+</popup>
+
+<popup id="showRMA_pop">
+	<div id="rmarep_holder" width="700px" />
+</popup>
+
+<popup id="adminpop">
+	<button id="dellc_b" label="DELETE" style="font-size:9px;color:#ff0000" onClick="adminFunc(self)" />
+</popup>
+
+<popup id="fleximportfc6_pop">
+	<div sclass="shadowbox" style="background:#5c0404;" width="600px" >
+		<hbox>
+			<label style="color:#ffffff" value="FC6 DO" />
+			<textbox id="flexfc6do_tb" />
+			<button label="Load DO items" onClick='show_FC_DO(newasset_b,2,flexi_impdoass_holder,"flximpfc6dolb")' />
+		</hbox>
+		<separator height="3px" />
+		<label id="flximp_lbl" />
+		<div id="flexi_impdoass_holder" />
+		<separator height="3px" />
+		<button id="flexi_impDOass_b" label="Import them assets" onClick="assFunc(self)" />
+	</div>
+</popup>
+
+<popup id="importdoassets_pop">
+	<div sclass="shadowbox" style="background:#5c0404;" width="600px" >
+		<label id="imp_do_lbl" sclass="subhead" />
+		<separator height="3px" />
+		<div id="impdoass_holder" />
+		<separator height="3px" />
+		<button id="impDOass_b" label="Import from DO" onClick="assFunc(self)" />
+	</div>
+</popup>
+
+<popup id="replaceasset_pop">
+	<div sclass="shadowbox" style="background:#5c0404;" width="600px" >
+		<div style="background:#2e3436;padding:4px" >
+			<separator height="3px" />
+			<grid>
+				<rows>
+					<row style="background:#2e3436;">
+						<label style="color:#ffffff" value="REPLACING" />
+						<label id="currasst_lbl" sclass="subhead2" />
+					</row>
+					<row style="background:#2e3436;">
+						<label style="color:#ffffff" value="REASON" />
+						<textbox id="repass_reason_tb" sclass="k9" width="99%" height="50px" multiline="true" />
+					</row>
+				</rows>
+			</grid>
+		</div>
+		<separator height="3px" />
+		<div id="repassetform_holder" />
+		<separator height="3px" />
+		<button id="repasset_b" label="REPLACE ASSET" style="font-weight:bold" onClick="assFunc(self)" />
+	</div>
+</popup>
+
+<popup id="gcn_trans_pop">
+	<div sclass="shadowbox" style="background:#babdb6;" width="400px" >
+		<label sclass="subhead" value="GCN/O Transient Assets" />
+		<separator height="5px" bar="true" />
+		<label id="gcntrans_lbl" multiline="true" style="font-weight:bold" />
+		<separator height="3px" />
+		<button id="svgcntrans_b" label="Save.." onClick="assFunc(self)" />
+	</div>
+</popup>
+
+<popup id="do_extra_pop">
+	<div sclass="shadowbox" style="background:#555753;" width="600px" >
+		<hbox>
+			<label sclass="subhead" value="DO No. : " />
+			<label sclass="subhead" id="dexp_do_no_lbl" />
+		</hbox>
+		<separator height="3px" />
+	</div>
+</popup> <!-- ENDOF do_extra_pop -->
+
+<popup id="importbom_statpop">
+	<div width="500px" >
+		<label id="importbom_stat_lbl" multiline="true" />
+		<separator height="3px" />
+		<button label="OK" onClick="bomimport_pop.close(); importbom_statpop.close()" />
+	</div>
+</popup> <!-- ENDOF importbom_statpop -->
+
+<popup id="bomimport_pop">
+	<div sclass="shadowbox" style="background:#f9b12d;">
+		<hbox>
+			<div>
+				<label value="IMPORT BOM" style="font-weight:bold;font-size:14px" />
+				<separator height="2px" />
+				<div id="imp_boms_holder" width="600px" />
+				<separator height="2px" />
+				<!-- <button label="View job breakdown" style="font-size:9px" onClick="impBOM_viewJob()" /> -->
+			</div>
+			<div>
+				<label id="impbomselected" value="BUILDS" style="font-weight:bold;font-size:14px" />
+				<separator height="2px" />
+				<div id="bitems_holder" width="350px" />
+				<separator height="2px" />
+				<button id="assimpbom_b" label="Import builds" style="font-weight:bold" onClick="assFunc(self)" />
+			</div>
+		</hbox>
+	</div>
+</popup> <!-- ENDOF bomimport_pop -->
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label sclass="subhead" value="Audit Logs" />
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="pickcustomer_popup">
+	<div sclass="shadowbox" style="background:#f9b12d;">
+		<hbox>
+			<label style="font-size:9px">Customer name</label>
+			<textbox id="searchcust_tb" sclass="k9" />
+			<button label="Find" sclass="k9" onClick="findCustomers()" />
+		</hbox>
+		<separator height="2px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<separator width="5px" />
+			<div width="400px" id="custfound_wa" visible="false" >
+				<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+				<separator height="2px" />
+				<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+				<separator height="3px" />
+				<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+			</div>
+		</hbox>
+		<label id="selectcustid" visible="false" />
+	</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" style="font-size:9px" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,LC_PREFIX,glob_selected_lc)" />
+			<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+		<caption label="Upload a file" />
+			<grid>
+				<rows>
+					<row>
+						<label value="Filename" sclass="k9" />
+						<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+					</row>
+					<row>
+						<label value="Description" sclass="k9" />
+						<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+					</row>
+				</rows>
+			</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,LC_PREFIX,glob_selected_lc)" sclass="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+	</hbox>
+</popup>
+
+<popup id="lcsetstat_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<label id="lcsetstat_lbl" />
+		<vbox>
+			<button id="stactive_b" label="ACTIVE" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="stinactive_b" label="INACTIVE" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="sttermin_b" label="TERMINATED" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="stextens_b" label="EXTENSION" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="stinerti_b" label="INERTIA" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="stbuyout_b" label="BUYOUT" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="stpartial_b" label="PARTIAL" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="partret_b" label="PARTIAL_RET" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="creditn_b" label="CN" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="refresh_b" label="REFRESH" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="refcoll_b" label="REFRESH_COL" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="termcoll_b" label="TERMINATED_COL" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+			<button id="legis_b" label="LEGAL_ISSUE" width="${STATBUTT_WIDTH}" onClick="doFunc(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="fcfuncs_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<vbox>
+			<button label="Import FC6 DOs" sclass="k9" width="${BUTT_WIDTH}" onClick='show_FC_DO(newasset_b,1,impdoass_holder,"impfc6dolb")' />
+			<button label="FlexImport FC6 DO" sclass="k9" width="${BUTT_WIDTH}" onClick="fleximportfc6_pop.open(newasset_b)" />
+			<button label="Sedut Contractcare" sclass="k9" width="${BUTT_WIDTH}" onClick="popOp_suckContractcare(self)" />
+			<button id="getfc6assdet_b" label="TryGet FC6 asset-info" width="${BUTT_WIDTH}" sclass="k9" onClick="assFunc(self)" />
+			<button id="sdtdoaddr_b" label="Sedut DO muntah address" width="${BUTT_WIDTH}" sclass="k9" onClick="assFunc(self)" />
+			<separator bar="true" />
+			<button id="sdtrdo_b" label="Sedut RDO" sclass="k9" width="${BUTT_WIDTH}" onClick="sedutRDOpop.open(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="sedutRDOpop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<hbox>
+			<label value="RDO" sclass="k9" />
+			<textbox id="imprdo_tb" sclass="k9" />
+			<button label="Import RDO" sclass="k9" onClick="importRDO(glob_selected_lc)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="modfuncs_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<vbox>
+			<button label="Copy from LC" sclass="k9" width="${BUTT_WIDTH}" onClick="copyasslc_pop.open(self)" />
+			<button label="Check dup-assets in LC" sclass="k9" width="${BUTT_WIDTH}" onClick="checkAssetDups()" />
+			<separator height="5px" />
+			<button label="Import BOM" sclass="k9" width="${BUTT_WIDTH}" onClick="popImportBOM(self)" />
+			<button label="Source BOM details" sclass="k9" width="${BUTT_WIDTH}" onClick="bomDetailsToLC(glob_selected_ass,glob_selected_asstag)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="gcnfuncs_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<vbox>
+			<button id="markcollect_b" sclass="k9" label="Save for GCO" width="${BUTT_WIDTH}" onClick="assFunc(self)" />
+			<button id="cleargcntrans_b" sclass="k9" label="Clear temp GCO" width="${BUTT_WIDTH}" onClick="assFunc(self)" />
+			<button label="Update manual GCO" sclass="k9" width="${BUTT_WIDTH}" onClick="mangcn_pop.open(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="mpf_pop">
+	<div sclass="shadowbox" style="background:#97b83a;">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#97b83a;">
+					<label value="Monthly rental" sclass="k9" />
+					<textbox id="mthrentmass_tb" width="70px" />
+					<button label="Mass-update rental" sclass="k9" width="${BUTT_WIDTH}" onClick="massUpdateRental(mthrentmass_tb.getValue())" />
+				</row>
+				<row style="background:#97b83a;">
+					<separator />
+					<separator />
+					<button label="Update billable flag" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(1)" />
+				</row>
+				<row style="background:#97b83a;">
+					<separator />
+					<separator />
+					<button label="Update BUYOUT flag" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(2)" />
+				</row>
+				<row style="background:#97b83a;">
+					<separator />
+					<button label="Set HOTSWAP" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(3)" />
+					<button label="Clear HOTSWAP" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(6)" />
+				</row>
+				<row style="background:#97b83a;">
+					<separator />
+					<button label="Set ASSIGNED" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(4)" />
+					<button label="Set UNASSIGNED" sclass="k9" width="${BUTT_WIDTH}" onClick="updateAssetFlags(5)" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<popup id="digauditlog_pop">
+	<div sclass="shadowbox" style="background:#97b83a;" width="700px">
+		<hbox>
+			<label value="What" sclass="k9" />
+			<textbox id="digaudit_tb" sclass="k9" />
+			<button label="Dig" sclass="k9" onClick="digAuditLog( digaudit_tb.getValue().trim() )" /> <!-- contbill_assets.zs -->
+		</hbox>
+		<div id="diglogs_holder" />
+	</div>
+</popup>
+
+<popup id="lilhelp_pop">
+	<div sclass="shadowbox" style="background:#484970" width="200px">
+<label multiline="true" sclass="k9" style="color:#ffffff">
+GCO/N = Goods Collection Order / Number
+Bill = Can bill or Not
+BuyO = Buyout asset
+FrmLC = imported from LC
+Asgn = assigned/non-assigned asset
+</label>
+
+		<separator height="3px" />
+		<label value="COLOR definitions" style="color:#ffffff" />
+		<separator height="3px" />
+
+		<div style="background:#23B3DB" width="100px">
+		BUYOUT
+		</div>
+
+		<div style="background:#AEF26B" width="100px">
+		BILLABLE
+		</div>
+
+		<div style="background:#D11CBE" width="100px">
+		HOTSWAP
+		</div>
+
+		<div style="background:#f77272" width="100px">
+		GCO
+		</div>
+
+	</div>
+</popup>
+
+<popup id="rmareplhelppop">
+	<div sclass="shadowbox" style="background:#2B3B58">
+		<label multiline="true" style="color:#ffffff;font-size:9px">
+I.Asset = original asset-tag in LC record
+Replace = replacement asset-tag
+A.Date = action date
+G.Stat = GCO status
+		</label>
+	</div>
+</popup>
+
+<popup id="rmareplace_pop">
+	<div sclass="shadowbox" style="background:#2B3B58" width="700px">
+		<label sclass="subhead1" value="LC Assets Replacement Track" />
+		<div style="background:#D11A54;padding:3px">
+			<hbox>
+				<button id="rplcsave_b" label="Save for GCO" sclass="k9mo" onClick="lcreplaceDo(self.getId())" />
+				<button id="rpclrgco_b" label="Clear from cache" sclass="k9mo" onClick="lcreplaceDo(self.getId())" />
+				<button label="HELP" sclass="k9" onClick="rmareplhelppop.open(self)" />
+			</hbox>
+		</div>
+		<separator height="3px" />
+		<div id="lcreps_holder" />
+		<separator height="5pxlistROCLC" />
+		<grid>
+			<rows>
+				<row style="background:#2B3B58">
+					<label value="LC.Id" sclass="k9b" />
+					<textbox id="v_lc_id" sclass="k9" />
+					<label value="I.Asset" sclass="k9b" />
+					<textbox id="v_in_assettag" sclass="k9" />
+					<label value="Replace" sclass="k9b" />
+					<textbox id="v_out_assettag" sclass="k9" />
+				</row>
+				<row style="background:#2B3B58" spans="1,5">
+					<label value="A.Date" sclass="k9b" />
+					<datebox id="v_act_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+				</row>
+				<row style="background:#2B3B58" spans="1,5">
+					<label value="Action" sclass="k9b" />
+					<textbox id="v_action" sclass="k9" multiline="true" width="99%" height="70px" />
+				</row>
+			</rows>
+		</grid>
+		<hbox>
+			<button id="updlcrep_b" label="Save/Update" sclass="k9mo" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+			<button id="clrlcrep_b" label="Clear" sclass="k9mo" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+			<button id="updrec_b" label="Record update flag" sclass="k9mo" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+			<button id="remlcrep_b" label="REMOVE" style="font-size:9px;color:#ff0000" onClick="lcrepDo(self.getId(),global_selected_customerid)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="replacementpop">
+	<div sclass="shadowbox" style="background:#2B3B58">
+		<vbox>
+			<button id="chkreplacement_b" label="Replacements by company" sclass="k9mo" onClick="assFunc(self)" />
+			<button id="chkreplall_b" label="Check non-updated replacements" sclass="k9mo" onClick="assFunc(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="lcendlisterpop">
+	<div sclass="shadowbox" style="background:#2B3B58">
+		<label value="Select LC end-date range" sclass="k9b" />
+		<separator height="3px" />
+		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="lcend_startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<label value="End" sclass="k9b" />
+			<datebox id="lcend_enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<separator width="5px" />
+			<button label="Dig 'em" sclass="k9mo" onClick="lcendlisterpop.close(); listROCLC(5)" />
+		</hbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#2e3436">
+
+	<div sclass="shadowbox" style="background:#2e3436;" >
+		<hbox>
+			<grid sclass="GridLayoutNoBorder">
+				<rows>
+					<row style="background:#2e3436;">
+						<label value="Search" sclass="k9b" />
+						<textbox id="search_txt" sclass="k9" />
+						<button label="Find" sclass="k9mo" onClick="listROCLC(1)" />
+						<button label="Load latest" sclass="k9mo" onClick="listROCLC(3)" />
+					</row>
+					<row style="background:#2e3436;">
+						<label value="Ass.Tag" sclass="k9b" />
+						<textbox id="schasset_txt" sclass="k9" />
+						<button label="Dig asset" sclass="k9mo" onClick="digAssets(self)" />
+						<button label="List expiring LCs" sclass="k9mo" onClick="lcendlisterpop.open(self)" />
+					</row>
+				</rows>
+			</grid>
+
+			<grid sclass="GridLayoutNoBorder">
+				<rows>
+					<row style="background:#2e3436;">
+						<hbox>
+							<button id="newroc_b" label="New LC/ROC entry" sclass="k9mo" onClick="doFunc(self)" />
+							<button id="rocsetstat_b" label="Set status" sclass="k9mo" onClick="lcsetstat_pop.open(self)" />
+							<button id="shwauditlogs_b" label="LC/ROC Logs" sclass="k9mo" onClick="doFunc(self)" />
+							<button label="Dig LC/ROC Logs" sclass="k9mo" onClick="digauditlog_pop.open(self)" />
+							<button label="Check dup records" sclass="k9mo" onClick="listDupLC_records(winsholder)" />
+							<button label="Replacements" sclass="k9mo" onClick="replacementpop.open(self)" />
+							<button id="listhotswap_b" label="List HOTSWAPS" sclass="k9" style="color:#729B1D" onClick="listHotswaps()" />
+							<separator width="20px" />
+							<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+						</hbox>
+					</row>
+					<row style="background:#2e3436;">
+						<hbox>
+							<button id="cpyfrmlc_b" label="Duplicate from LC" sclass="k9mo" style="color:#729B1D" onClick="copyFromOtherLC_meta_pop.open(self);" />
+						</hbox>
+					</row>
+				</rows>
+			</grid>
+
+		</hbox>
+		<separator height="3px" />
+		<div id="rocs_holder" />
+	</div>
+	<separator height="2px" />
+
+	<div sclass="shadowbox" style="background:#06333a" id="mainworkarea" visible="false" >
+		<div style="background:#e58512;padding:3px">
+			<label id="recnum_lbl" style="font-size:9px" />
+		</div>
+
+		<tabbox> <!-- WORKAREA accordion -->
+			<tabs>
+				<tab id="tab0" label="LC / ROC Metadata" />
+				<tab id="tab1" label="ASSETS" />
+				<tab id="tab5" label="DOCUS / EMAILS / etc" />
+			</tabs>
+			<tabpanels>
+
+			<tabpanel> <!-- lc-roc meta -->
+				<hbox>
+					<button id="updlcmeta_b" label="Update metadata" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="chkdup_b" label="Check dups" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="imprwie_b" label="Import FC6 RWI" style="font-weight:bold" onClick="impRWI_Extra()" />
+					<button id="countass_b" label="Count assets" style="font-weight:bold" onClick="countAssetsInsertBox()" />
+					<button id="countmonth_b" label="Count months" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="superreminder_b" label="Set super-reminder" style="font-weight:bold" onClick="doFunc(self)" />
+				</hbox>
+				<separator height="5px" />
+				<hbox>
+					<div id="lcrocmeta_formholder" width="700px" />
+
+					<div sclass="shadowbox" style="background:#2e3436;" width="450px" id="jobnotes_div" >
+						<label sclass="subhead1" value="JOB NOTES" />
+						<separator height="3px" />
+						<div id="jobnotes_holder" />
+						<separator height="2px" />
+						<hbox>
+							<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+								onClick="jobNoteFunc(self,JN_linkcode())" />
+						</hbox>
+						<separator height="2px" />
+						<div id="jobnotes_entry_holder">
+							<grid>
+								<rows>
+									<row visible="false">
+										<label value="To" sclass="k9" />
+										<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+									</row>
+									<row>
+										<label value="Subject" sclass="k9" />
+										<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+									</row>
+									<row>
+										<label value="Notes" sclass="k9" />
+										<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+									</row>
+								</rows>
+							</grid>
+							<separator height="2px" />
+							<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+							<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+						</div>
+					</div>
+				</hbox>
+			</tabpanel> <!-- ENDOF lc-roc meta -->
+
+			<tabpanel> <!-- ASSETS -->
+				<div style="background:#2e3436">
+					<hbox>
+						<button id="newasset_b" label="New asset" sclass="k9mo" style="color:#909d2a" onClick="assFunc(self)" />
+						<button id="repasspop_b" label="Replace" sclass="k9mo" style="color:#ff0000" onClick="assFunc(self)" />
+						<button id="remasset_b" label="Remove" sclass="k9mo" style="color:#ff0000" onClick="assFunc(self)" />
+						<separator width="10px" />
+						<button id="chkrma_b" label="Check for RMA" sclass="k9mo" onClick="checkRMA_Reps()" />
+						<button label="FC6/Contractcare related" sclass="k9mo" onClick="fcfuncs_pop.open(self)" />
+						<button label="Module funcs" sclass="k9mo" onClick="modfuncs_pop.open(self)" />
+						<button label="Report" sclass="k9mo" onClick="report_pop.open(self)" />
+						<button label="GCO related" sclass="k9mo" onClick="gcnfuncs_pop.open(self)" />
+						<button label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
+						<button label="HELP" sclass="k9" onClick="lilhelp_pop.open(self)" />
+					</hbox>
+				</div>
+
+				<separator height="3px" />
+				<hbox>
+					<div id="lcasset_holder" width="650px" />
+
+					<vbox id="assbom_holder" visible="false" >
+						<button id="updasset_b" label="Update asset details" style="font-weight:bold" onClick="assFunc(self)" />
+						<div id="assbom_formholder" />
+					</vbox>
+				</hbox>
+			</tabpanel> <!-- ENDOF ASSETS -->
+
+			<tabpanel> <!-- ATTACHMENTS -->
+				<hbox>
+					<button id="uploaddoc_btn" label="Upload file" sclass="k9"
+						onClick="showUploadPopup(LC_PREFIX,glob_selected_lc)" />
+					<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+					<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(self)" />
+					<button id="deletedoc_btn" label="Delete" sclass="k9"
+						onClick="deleteFile(documents_holder,LC_PREFIX,glob_selected_lc)" />
+				</hbox>
+				<separator height="3px" />
+				<div id="documents_holder" />
+			</tabpanel> <!-- ENDOF ATTACHMENTS -->
+
+			</tabpanels>
+		</tabbox>
+	</div>
+
+<div id="winsholder" visible="false" />
+
+<zscript>
+<![CDATA[
+
+lcrocmetaform = dynamicForm(lcrocmeta_formholder, "lcroc_metagrid", "18");
+assbform = dynamicForm(assbom_formholder, "assbom_metgrid", "20");
+replaceassform = dynamicForm(repassetform_holder, "repassbom_metgrid", "26");
+
+class assigncustClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(event.getTarget().getId().equals("assigncustomer_b")) pickcustomer_popup.open(event.getTarget());
+		if(event.getTarget().getId().equals("batchlc_b")) listBatchBillingLC(); // conImport_funcs.zs
+		if(event.getTarget().getId().equals("batchlcsuck_b")) impBatchLCAssets(); // conImport_funcs.zs
+	}
+}
+kbuttcliker = new assigncustClick();
+assigncustomer_b.addEventListener("onClick", kbuttcliker ); // in form-xml
+batchlc_b.addEventListener("onClick", kbuttcliker);
+batchlcsuck_b.addEventListener("onClick", kbuttcliker);
+
+if(useraccessobj.username.equals("shopa"))
+{
+	admin_b.setVisible(true);	
+}
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+/*
+	<label value="RW/LC end between" style="font-size:9px;color:#ffffff" />
+	<datebox id="startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(startdate)" />
+	<label value="and" style="font-size:9px;color:#ffffff" />
+	<datebox id="enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(enddate)" />
+	<button id="loadbydate_b" label="Load by end-date" style="font-size:9px;font-weight:bold" onClick="listROCLC(2)" />
+*/
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

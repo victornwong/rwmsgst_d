@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billingbreakdown_report_mod"?>
+<!--
+
+Version				:
+Coding began date	:
+Developers			: Victor
+
+-->
+
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+<zscript src="../alsglobal/dispatchschedule.zs" />
+
+<zscript src="../alsglobal/alsglobal_birtreport.zs" />
+
+<zscript>
+<![CDATA[
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+/*
+param_branch = Executions.getCurrent().getParameter("mybranch");
+param_startdate = Executions.getCurrent().getParameter("startdate");
+param_enddate = Executions.getCurrent().getParameter("enddate");
+*/
+
+void doBIRT(Div iparentdiv)
+{
+	//sdate = getDateFromDatebox(isdate);
+    //edate = getDateFromDatebox(iedate);
+	//cnm = scustomername.getValue();
+	// dubra = ibranch.getSelectedItem().getLabel();
+	
+	//parameters_makeme = "&StartDate=" + sdate + "&EndDate=" + edate; // + "&customername_inp=" + cnm;
+
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("550px");
+	newiframe.setId("birtframe");
+
+	// Uses AMedia to load the PDF. Can be used to load other stuff too.. check AMedia API ref
+	// URL url = new URL(theurl);
+	
+	// http://alsslws007:18080/BIRT/frameset?__report=test.rptdesign&sample=my+parameter
+	// 2/2/2010: hardcoded now .. check rptdesign filename, acctbase3 for testing, acctbase1 for production
+	
+	thesrc = BIRT_WEBVIEWER + BIRT_BILLING_BREAKDOWN_FILENAME;
+	
+	// thesrc = "http://alsslws007:18080/BIRT/frameset?__report=SRA_v1_acctbase1.rptdesign&jobfolder_id=" + param_jobfolder_id;
+	
+	newiframe.setSrc(thesrc);
+
+	/*
+	AMedia amedia = new AMedia(url,"application/pdf",null);
+	newiframe.setContent(amedia);
+	*/
+
+	newiframe.setParent(iparentdiv);
+	
+	//generatereport_btn.setVisible(false);
+}
+
+void generateReportClicker()
+{
+	if(birt_div.getFellowIfAny("birtframe") != null)
+		birtframe.setParent(null);
+	
+	doBIRT(birt_div);
+}
+
+]]>
+</zscript>
+
+<window id="billingbreakdown_win" width="900px" height="630px" title="Billing Breakdown Report"
+	position="center" mode="overlapped" border="normal" closable="true"
+    onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)"
+>
+
+<div id="birt_div" />
+
+<separator height="3px" />
+<button label="Close window" onClick="globalCloseWindow(myincludeid)" />
+
+<zscript>
+generateReportClicker();
+//populateDropdownListbox(branch_drd, dd_branches);
+</zscript>
+
+</window>
+
+</zk>
+

@@ -1,0 +1,500 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="salescoldcallm"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/checkListHandler.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./quote_funcs/rwQuotationHC_funcs.zs" />
+<zscript src="./salesColdCall_funs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Sales/Marketing Activities";
+MYVERSION = "v0.1.7";
+MYPANEL = "salcolcla";
+/**
+ * @author Victor Wong
+ * @since 05/12/2013
+ *
+ * @notes
+ * 10/03/2014: only James and Mandy can download cold-call listings
+ * 10/04/2014: add search box for customer-name and contact-name
+ * 20/05/2014: additional things req by mandy
+ * 29/05/2014: link to quotations created for cold-call customers
+ * 18/11/2014: some optimization and requests by James
+ * 03/06/2015: Tham req to show Customer-grading on screen. Add button to send notif email when grading done
+ */
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_current_user = glob_sel_acticont = glob_sel_activity = glob_sel_custname = glob_sel_username = "";
+glob_acticont_rec = glob_activ_rec = null;
+last_loadcont = 2;
+
+void contFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = false;
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+	//lnkc = QUOTE_PREFIX + glob_sel_quote;
+
+	if(itype.equals("newcontact_b"))
+	{
+		sqlstm = "insert into rw_activities_contacts (username,datecreated,potential,deleted,cust_name) values " +
+		"('" + useraccessobj.username + "','" + todaydate + "','NEW',0,'NEW CUSTOMER')";
+	}
+	else
+	{
+		if(glob_sel_acticont.equals("")) return;
+	}
+
+	if(itype.equals("updatecont_b"))
+	{
+		// 20/05/2014: add business-ROC, leadsource and campaign
+		Object[] ob = { a_cust_name, a_industry, a_designation, a_cust_address1, a_cust_address2, a_cust_address3, a_cust_address4,
+		a_cust_tel, a_cust_fax, a_cust_email, a_coldcdv, a_businessroc, a_leadsource, a_campaign, a_grading_remarks };
+
+		dt = ngfun.getString_fromUI(ob);
+		cntn = a_cont_temp.getSelectedItem().getLabel() + " " + kiboo.replaceSingleQuotes(a_contact_person.getValue().trim());
+
+		sqlstm = "update rw_activities_contacts set cust_name='" + dt[0] + "', industry='" + dt[1] + "'," +
+		"designation='" + dt[2] + "',cust_address1='" + dt[3] + "',cust_address2='" + dt[4] + "'," +
+		"cust_address3='" + dt[5] + "', cust_address4='" + dt[6] + "', cust_tel='" + dt[7] + "', cust_fax='" + dt[8] + "'," +
+		"cust_email='" + dt[9] + "',call_div='" + dt[10] + "',contact_person='" + cntn + "', businessroc='" + dt[11] + "', leadsource='" + dt[12] + "'," +
+		"campaign='" + dt[13] + "', grading_remarks='" + dt[14] + "' where origid=" + glob_sel_acticont;
+	}
+
+	if(itype.equals("dnusecontact_b")) // mark a contact as DO NOT USE / deleted flag
+	{
+		sqlstm = "update rw_activities_contacts set deleted=1-deleted where origid=" + glob_sel_acticont;
+	}
+
+	if(itype.equals("savecoldcall_b")) // save cold-call records
+	{
+		coldcr = coldcallmform.freezeFormValues();
+		sqlstm = "update rw_activities_contacts set coldcall_rec='" + coldcr + "' where origid=" + glob_sel_acticont;
+		msgtext = "Cold-call data saved..";
+	}
+
+	if(itype.equals("preeval_b")) // send notif email to CC and Tony to perform pre-eval on customer
+	{
+		sqlstm = "update rw_activities_contacts set grade_req='" + todaydate + "' where origid=" + glob_sel_acticont;
+		msgtext = "Pre-pre-evaluation request sent to CC and Tony";
+
+		bizr = a_businessroc.getValue().trim();
+		cstn = a_cust_name.getValue().trim();
+
+		topeople = "creditcontrol@rentwise.com,tony@rentwise.com,thamkl@rentwise.com"; // HARDCODED - change accordingly
+		subj = "Pre-pre-evaluation request by " + unm + " for " + cstn + " (" + bizr + ")";
+		msgb = "Pre-pre-evaluation request for this company:\n" + cstn + " (" + bizr + ")\n\n" +
+		"Please update the customer-grade in RWMS Sales Activities/Cold-Call module ASAP.";
+
+		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
+	}
+
+	if(itype.equals("notifaftergrade_b")) // 03/06/2015: req by Tham, send notif email once graded
+	{
+		sendNotifEmail_aftergrading(glob_sel_acticont);
+	}
+
+	if(itype.equals("updgrade_b")) // update customer grade by CC or Tony
+	{
+		cgd = m_customer_grade.getSelectedItem().getLabel();
+		sqlstm = "update rw_activities_contacts set customer_grade='" + cgd + "' where origid=" + glob_sel_acticont;
+
+		// 01/12/2014: james req to send notif email to requesting-user and himself when grade is updated
+		topeople = "james.thomas@rentwise.com,sales@rentwise.com";
+		ur = sechand.getPortalUser_Rec_username(glob_sel_username);
+		if(ur != null)
+		{
+			uem = kiboo.checkNullString( ur.get("email") );
+			topeople += (uem.equals("")) ? "" : ("," + uem);
+		}
+		cstn = a_cust_name.getValue().trim();
+		subj = "Pre-pre-evaluation grade updated for " + cstn;
+		msgb = "Go check..";
+		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		listActiContacts(last_loadcont,glob_current_user);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void actiFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = false;
+	sqlstm = msgtext = "";
+	//lnkc = QUOTE_PREFIX + glob_sel_quote;
+
+	if(itype.equals("realaddacti_b"))
+	{
+		if(glob_sel_acticont.equals("")) return;
+		Object[] ob = { k_contact_person, k_telephone, k_email, k_act_notes, k_designation, k_act_type, k_act_date };
+		dt = ngfun.getString_fromUI(ob);
+		if(dt[0].equals("")) return;
+		sqlstm = "insert into rw_activities (parent_id,datecreated,contact_person,telephone,email,act_notes," + 
+		"designation,act_type,username,act_date) values " +
+		"(" + glob_sel_acticont + ",'" + todaydate + "','" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "','" + 
+		dt[4] + "','" + dt[5] + "','" + useraccessobj.username + "','" + dt[6] + "')";
+
+		refresh = true;
+		newacti_pop.close();
+	}
+
+	if(itype.equals("delacti_b"))
+	{
+		if(glob_sel_activity.equals("")) return;
+		if (Messagebox.show("Hard delete this activity", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from rw_activities where origid=" + glob_sel_activity;
+		refresh = true;
+	}
+
+	if(itype.equals("updatacti_b"))
+	{
+		if( glob_sel_acticont.equals("") || glob_sel_activity.equals("") ) return;
+
+		Object[] ob = { o_contact_person, o_telephone, o_email, o_act_notes, o_designation, o_act_type, o_act_date };
+		dt = ngfun.getString_fromUI(ob);
+		if(dt[0].equals("")) return;
+		sqlstm = "update rw_activities set contact_person='" + dt[0] + "',telephone='" + dt[1] + "',email='" + dt[2] + "'," +
+		"act_notes='" + dt[3] + "',designation='" + dt[4] + "',act_type='" + dt[5] + "', act_date='" + dt[6] + "' where origid=" + glob_sel_activity;
+		refresh = true;
+		updateactiv_pop.close();
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listActivities(glob_sel_acticont);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/**
+ * Requested by Tham 03/06/2015 to send out email notif after grading. Send to distribution list
+ * @param iwhat selected cold-call contact origid
+ */
+void sendNotifEmail_aftergrading(String iwhat)
+{
+	acr = getActivitiesContact_rec(iwhat);
+
+	custn = kiboo.checkNullString(acr.get("cust_name"));
+	grd = kiboo.checkNullString(acr.get("customer_grade"));
+
+	if(custn.equals("") || grd.equals("")) // no customer-name or grading, do nothing
+	{
+		guihand.showMessageBox("ERR: no customer-name or no grading, cannot send email");
+		return;
+	}
+
+	topeople = "rent@rentwise.com,victor@rentwise.com";
+	subj = "Customer evaluation : " + custn;
+	msgb = "Notification email for customer evaluation." +
+	"\n-----------------------------------------------------------------------" +
+	"\nCustomer: " + custn +
+	"\nRequester: " + kiboo.checkNullString(acr.get("username")) +
+	"\nRequest date: " + kiboo.dtf2.format(acr.get("grade_req")) +
+	"\n\nGRADING: " + grd +
+	"\nREMARKS: " + kiboo.checkNullString( acr.get("grading_remarks") ) + 
+	"\n\nFor any clarification, contact Mr Tham, Tony or Credit-Control department.";
+
+	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
+	guihand.showMessageBox("Graded notification email sent..");
+}
+
+]]>
+</zscript>
+
+<popup id="potenial_pop" style="opacity:0.8;">
+	<vbox>
+		<button label="NEW" width="100px" onClick="setContactPotential(self)" />
+		<button label="LEAD" width="100px" onClick="setContactPotential(self)" />
+		<button label="POTENTIAL" width="100px" onClick="setContactPotential(self)" />
+		<button label="OPPORTUNITY" width="100px" onClick="setContactPotential(self)" />
+	</vbox>
+</popup>
+
+<popup id="updateactiv_pop" style="opacity:0.9" >
+	<div sclass="shadowbox" style="background:#204a87;" >
+		<div style="padding:5px;background:#2e3436">
+			<label sclass="subhead1" value="Activity" />
+		</div>
+		<grid>
+			<rows>
+				<row>
+					<label value="Contact person" />
+					<textbox id="o_contact_person" width="99%" />
+					<label value="Designation" />
+					<listbox id="o_designation" mold="select" />
+				</row>
+				<row>
+					<label value="Tel / HP" />
+					<textbox id="o_telephone" width="99%" />
+					<label value="Email" />
+					<textbox id="o_email" width="99%" />
+				</row>
+				<row>
+					<label value="Activity type" />
+					<listbox id="o_act_type" mold="select" />
+					<label value="Act.date" />
+					<datebox id="o_act_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+				</row>
+				<row spans="1,3">
+					<label value="Activity notes" />
+					<textbox id="o_act_notes" multiline="true" height="70px" width="99%" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<button id="updatacti_b" label="Update it" onClick="actiFunc(self)" />
+	</div>
+</popup>
+
+<popup id="newacti_pop" style="opacity:0.8" >
+	<div sclass="shadowbox" style="background:#204a87" >
+		<div style="padding:5px;background:#2e3436">
+		<label sclass="subhead1" value="Activity" />
+		</div>
+		<grid>
+			<rows>
+				<row>
+					<label value="Contact person" />
+					<textbox id="k_contact_person" width="99%" />
+					<label value="Designation" />
+					<listbox id="k_designation" mold="select" />
+				</row>
+				<row>
+					<label value="Tel / HP" />
+					<textbox id="k_telephone" width="99%" />
+					<label value="Email" />
+					<textbox id="k_email" width="99%" />
+				</row>
+				<row>
+					<label value="Activity type" />
+					<listbox id="k_act_type" mold="select" />
+					<label value="Act.date" />
+					<datebox id="k_act_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+				</row>
+				<row spans="1,3">
+					<label value="Activity notes" />
+					<textbox id="k_act_notes" multiline="true" height="70px" width="99%" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<button id="realaddacti_b" label="Add it" onClick="actiFunc(self)" />
+	</div>
+</popup>
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" sclass="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,COLDCALL_PREFIX,glob_sel_acticont)" />
+			<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+		<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" sclass="k9" />
+					<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+				</row>
+				<row>
+					<label value="Description" sclass="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,COLDCALL_PREFIX,glob_sel_acticont)" sclass="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()"  sclass="k9" />
+	</hbox>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#ea7724">
+
+<div sclass="shadowbox" style="background:#2e3436;" >
+	<hbox>
+		<label value="Start date" sclass="k9b" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+		<label value="End date" sclass="k9b" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+		<button label="by date" sclass="k9" onClick="listActiContacts(3,glob_current_user)" />
+
+		<textbox id="schbox" sclass="k9" />
+		<button label="Dig" sclass="k9" onClick="listActiContacts(1,glob_current_user)" />
+		<button label="List my contacts" sclass="k9" onClick="listActiContacts(2,glob_current_user)" />
+		<button label="List all" sclass="k9" onClick="listActiContacts(1,glob_current_user)" />
+		<button id="newcontact_b" label="New contacts" sclass="k9" onClick="contFunc(self)" />
+		<button id="togpoten_b" label="Set classification" sclass="k9" onClick="potenial_pop.open(self)" />
+		<button id="dnusecontact_b" label="Toggle do-not-use" sclass="k9" onClick="contFunc(self)" />
+		<button id="expdump_b" label="Export dumb list" sclass="k9" onClick="genColdCallDump()" disabled="true" />
+	</hbox>
+	<separator height="3px" />
+	<div id="acticonts_holder" />
+	<label style="font-size:9px;color:#aaaaaa">**(These customers are not linked to FC6)</label>
+	<separator height="3px" />
+
+	<div id="workarea" visible="false" >
+		<tabbox>
+			<tabs>
+				<tab label="Contact details" />
+				<tab label="Activities" />
+				<tab label="Cold-call data" />
+				<tab label="Docu/Attachments" />
+				<tab label="Quotations" />
+			</tabs>
+			<tabpanels>
+				<tabpanel>
+					<div>
+						<hbox>
+							<button id="updatecont_b" label="Update contact details" sclass="k9mo" onClick="contFunc(self)" />
+							<button id="preeval_b" label="Pre-pre-evaluation request" sclass="k9mo" onClick="contFunc(self)" />
+						</hbox>
+						<separator height="3px" />
+						<hbox>
+							<div id="contmeta_holder" width="800px" />
+
+							<vbox>
+								<div sclass="shadowbox" style="background:#DF4A23">
+									<label value="Customer grading:" sclass="subhead1" />
+									<separator height="5px" />
+									<label id="currentcustomergrade_lbl" sclass="subhead1" />
+									<separator height="5px" />
+									<button id="notifaftergrade_b" label="Send email after grading" style="font-weight:bold" onClick="contFunc(self)" disabled="true" />
+								</div>
+
+								<div sclass="shadowbox" style="background:#DF4A23">
+									<hbox>
+										<listbox id="m_customer_grade" mold="select" />
+										<button id="updgrade_b" label="Update grade" style="font-weight:bold" onClick="contFunc(self)" disabled="true" />
+									</hbox>
+									</div>
+							</vbox>
+						</hbox>
+					</div>
+				</tabpanel>
+				<tabpanel>
+					<div>
+						<separator height="3px" />
+						<hbox>
+							<button id="newacti_b" label="New activity" sclass="k9" onClick="clearAddActiFields();newacti_pop.open(self)" />
+							<button id="delacti_b" label="Delete" sclass="k9" onClick="actiFunc(self)" />
+						</hbox>
+						<separator height="5px" />
+						<div id="actis_holder" width="600px" />
+					</div>
+				</tabpanel>
+				<tabpanel style="background:#2e3436" >
+					<button id="savecoldcall_b" label="Save cold-call data" sclass="k9mo" onClick="contFunc(self)" />
+					<separator height="5px" />
+					<div id="coldcall_formholder" width="800px" />
+				</tabpanel>
+				<tabpanel>
+					<div sclass="shadowbox" style="background:#555753" width="600px">
+						<label sclass="subhead1" value="ATTACHMENT / DOCUMENTS" />
+						<separator height="3px" />
+						<hbox>
+							<button id="uploaddoc_btn" label="Upload file" sclass="k9"
+								onClick="showUploadPopup(COLDCALL_PREFIX,glob_sel_acticont)" />
+							<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+							<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(self)" />
+							<button id="deletedoc_btn" label="Delete" sclass="k9"
+								onClick="deleteFile(documents_holder,COLDCALL_PREFIX,glob_sel_acticont)" />
+						</hbox>
+						<separator height="3px" />
+						<div id="documents_holder" />
+					</div>
+					</tabpanel>
+				<tabpanel> <!-- quotations -->
+					<div id="quotelist_holder" width="700px" />
+				</tabpanel>
+			</tabpanels>
+		</tabbox>
+	</div>
+</div>
+
+<!--
+<div id="checks_holder" width="500px" />
+<button label="save checkbox" onClick="saveCheckedbox(testrows1)" />
+-->
+
+<label id="debugbox" multiline="true" />
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(k_designation, "PERSON_DESIGNATION", 2);
+luhand.populateListbox_ByLookup(k_act_type, "ACTIVITIES_TYPE", 2);
+luhand.populateListbox_ByLookup(o_designation, "PERSON_DESIGNATION", 2);
+luhand.populateListbox_ByLookup(o_act_type, "ACTIVITIES_TYPE", 2);
+luhand.populateListbox_ByLookup(m_customer_grade, "CUSTOMER_GRADE", 2);
+
+contmetaform = dynamicForm(contmeta_holder, "contmetaform_grid", "27");
+coldcallmform = dynamicForm(coldcall_formholder, "coldcallmetaform_grid", "28");
+
+glob_current_user = useraccessobj.username;
+//listActiContacts(1,glob_current_user);
+
+//showChecklistItems( checks_holder , 1, "testgrid1" , "testrows1" );
+
+if(sechand.allowedUser(useraccessobj.username,"CAN_UPDATE_GRADE"))
+{
+	updgrade_b.setDisabled(false);
+	notifaftergrade_b.setDisabled(false);
+}
+
+if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james")) // 10/03/2014
+{
+	expdump_b.setDisabled(false);
+}
+
+if(useraccessobj.accesslevel == 9)
+{
+	expdump_b.setDisabled(false);
+}
+
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

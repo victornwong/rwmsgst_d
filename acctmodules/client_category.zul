@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="clientcategory_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.5";
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+Title: Client category - classifying
+Written by : Victor Wong
+
+**NOTES**
+02/04/2012: ported to byte-comp
+02/11/2010: add SALESMAN assigning
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+
+// global vars
+selected_arcode = "";
+selected_customername = "";
+selected_custcat_id = "";
+selected_custcatcode = "";
+selected_custcatdesc = "";
+selected_salesmancode = "";
+
+void clearInputFields()
+{
+	c_category.setValue("");
+	c_cat_desc.setValue("");
+	// reset all global vars
+	selected_custcat_id = "";
+	selected_custcatcode = "";
+	selected_custcatdesc = "";
+	new_cust_category_btn.setLabel("New");
+}
+
+// doubleClicker for showCustomerCategories()
+class custcatsDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(selected_arcode.equals("")) return;
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+		sqlstm = "update customer set category='" + selected_custcatcode + "' where ar_code='" + selected_arcode + "'";
+		sql.execute(sqlstm);
+		sql.close();
+		searchCustomer_clicker(); // refresh
+	}
+}
+
+// onSelect for showCustomerCategories()
+class custcatsLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_custcat_id = lbhand.getListcellItemLabel(selitem,0);
+		selected_custcatcode = lbhand.getListcellItemLabel(selitem,1);
+		selected_custcatdesc = lbhand.getListcellItemLabel(selitem,2);
+
+		c_category.setValue(selected_custcatcode);
+		c_cat_desc.setValue(selected_custcatdesc);
+		new_cust_category_btn.setLabel("Update"); // button tiktok
+	}
+}
+void showCustomerCategories()
+{
+	Object[] custcats_lb_headers = {
+	new dblb_HeaderObj("catid",false,"id",2),
+	new dblb_HeaderObj("Cat.Code",true,"category",1),
+	new dblb_HeaderObj("Cat.Desc",true,"cat_desc",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+if(sql == null) return;
+	sqlstm = "select id,category,cat_desc from customercategory";
+	Listbox newlb = lbhand.makeVWListbox_onDB(customercategories_holder,custcats_lb_headers,"custcats_lb",10,sql,sqlstm);
+	sql.close();
+	newlb.addEventListener("onSelect", new custcatsLB_Listener());
+
+	dc_obj = new custcatsDoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+void updateCustomerCat_clicker()
+{
+	ccode = kiboo.replaceSingleQuotes(c_category.getValue());
+	cdesc = kiboo.replaceSingleQuotes(c_cat_desc.getValue());
+	if(ccode.equals("")) return;
+	sqlstm = "insert into customercategory (category,cat_desc) values ('" + ccode + "','" + cdesc + "')";
+	if(!selected_custcat_id.equals(""))
+		sqlstm = "update customercategory set category='" + ccode + "',cat_desc='" + cdesc + "' where id=" + selected_custcat_id;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+	showCustomerCategories(); // refresh
+}
+
+void deleteCustomerCat_clicker()
+{
+	if(selected_custcat_id.equals("")) return;
+
+	if (Messagebox.show("Delete this customer category: " + selected_custcatcode, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "delete from customercategory where id=" + selected_custcat_id;
+	sql.execute(sqlstm);
+	sql.close();
+	showCustomerCategories(); // refresh
+}
+
+// onSelect for searchCustomer_clicker()
+class customersLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_arcode = lbhand.getListcellItemLabel(selitem,0);
+		selected_customername = lbhand.getListcellItemLabel(selitem,1);
+	}
+}
+void searchCustomer_clicker()
+{
+	Object[] customers_lb_headers = {
+	new dblb_HeaderObj("AR.Code",true,"ar_code",1),
+	new dblb_HeaderObj("Customer",true,"customer_name",1),
+	new dblb_HeaderObj("Category",true,"category",1),
+	new dblb_HeaderObj("Salesman",true,"salesman_code",1),
+	};
+
+	isearch = searchtext.getValue();
+	if(isearch.equals("")) return;
+	isearch = kiboo.replaceSingleQuotes(isearch);
+
+	// reset global vars
+	selected_arcode = "";
+	selected_customername = "";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select top 100 ar_code,customer_name,category,salesman_code from customer where " + 
+	"customer_name like '%" + isearch + "%' or address1 like '%" + isearch + "%' " +
+	"or address2 like '%" + isearch + "%' or address3 like '%" + isearch + "%' or " + 
+	"ar_code like '%" + isearch + "%' order by customer_name";
+	Listbox newlb = lbhand.makeVWListbox_onDB(customers_holder,customers_lb_headers,"customers_lb",29,sql,sqlstm);
+	sql.close();
+	newlb.addEventListener("onSelect", new customersLB_Listener());
+}
+
+// doubleClicker for showSalesManList()
+// Assign salesman to customer = customer.salesman_code
+class salesmanDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(selected_arcode.equals("")) return;
+		selitem = salesman_lb.getSelectedItem();
+		selected_salesmancode = lbhand.getListcellItemLabel(selitem,1);
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+		sqlstm = "update customer set salesman_code='" + selected_salesmancode + "' where ar_code='" + selected_arcode + "'";
+		sql.execute(sqlstm);
+		sql.close();
+		searchCustomer_clicker(); // refresh
+	}
+}
+
+// Show all the salesman->code for picking
+void showSalesManList(Div idiv)
+{
+Object[] sm_lb_headers = {
+	new dblb_HeaderObj("catid",false,"id",2),
+	new dblb_HeaderObj("SM.Code",true,"salesman_code",1),
+	new dblb_HeaderObj("SM.Name",true,"salesman_name",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select id,salesman_code,salesman_name from salesman";
+	Listbox newlb = lbhand.makeVWListbox_onDB(idiv,sm_lb_headers,"salesman_lb",10,sql,sqlstm);
+	sql.close();
+
+	/*
+	newlb.addEventListener("onSelect", new custcatsLB_Listener());
+	*/
+	dc_obj = new salesmanDoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+]]>
+</zscript>
+
+<window id="clientcategory_win" width="800px" height="490px" title="Clients - Category + Salesman Setup ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true"
+sizable="true">
+<div style="padding:2px">
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<hbox>
+	<groupbox mold="3d" width="500px">
+	<caption label="Customer search" />
+	<vbox>
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="searchtext" width="200px" style="font-size:9px" />
+		<button id="search_customer_btn" label="Search" style="font-size:9px" onClick="searchCustomer_clicker()" />
+	</hbox>
+	<separator height="3px" />
+	<div id="customers_holder" />
+	</vbox>
+	</groupbox>
+	<vbox>
+	<groupbox mold="3d" style="padding:2px">
+		<caption label="Customer categories" />
+		<div id="customercategories_holder" />
+		<separator height="2px" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Code" style="font-size:9px" />
+					<textbox id="c_category" width="200px" style="font-size:9px" />
+				</row>
+				<row>
+					<label value="Desc" style="font-size:9px" />
+					<textbox id="c_cat_desc" width="200px" style="font-size:9px" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="2px" />
+		<hbox>
+			<button label="Clear" style="font-size:9px" onClick="clearInputFields()" />
+			<button id="new_cust_category_btn" label="New" style="font-size:9px" onClick="updateCustomerCat_clicker()" />
+			<button id="del_cust_category_btn" label="Delete" style="font-size:9px" visible="false" onClick="deleteCustomerCat_clicker()" />
+		</hbox>
+	</groupbox>
+	<groupbox mold="3d" style="padding:2px">
+		<caption label="Salesman" />
+		<div id="salesman_holder" />
+	</groupbox>
+	</vbox>
+</hbox>
+</div>
+<zscript>
+
+kiboo.setTodayDatebox(hiddendatebox);
+showCustomerCategories();
+showSalesManList(salesman_holder);
+
+if(useraccessobj.accesslevel == 9)
+{
+	del_cust_category_btn.setVisible(true);
+}
+
+</zscript>
+</window>
+</zk>

@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="notifwallmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Notifications";
+MYVERSION = "v0.1";
+MYPANEL = "notifthingpanl";
+/*
+@Title System/Work Notifications wall module
+@Author Victor Wong
+@Since 12/03/2015
+@Notes
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_sel_notif_li = null;
+glob_sel_notif = "";
+
+last_list_type = 1;
+
+class notifClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_notif_li = isel;
+		glob_sel_notif = lbhand.getListcellItemLabel(isel,0);
+
+		notifthing_lb.setValue(glob_sel_notif);
+	}
+}
+thgenotifblick = new notifClick();
+
+class notifDobulcik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		alert("tttt");
+	}
+}
+nofitdoubleclik = new notifDobulcik();
+
+void showNotifs(int itype)
+{
+	Object[] notifhds =
+	{
+		new listboxHeaderWidthObj("ID",true,"50px"),
+		new listboxHeaderWidthObj("Date",true,"70px"),
+		new listboxHeaderWidthObj("Things",true,""),
+		new listboxHeaderWidthObj("Stat",true,"70px"),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox_Width(notifications_holder, notifhds, "notifs_lb", 3);
+	sqlstm = "select origid,datecreated,notif_text,astatus from rw_notifs ";
+
+	switch(itype)
+	{
+		case 1 : // pending notif
+			sqlstm += "where astatus='PENDING' ";
+			break;
+	}
+
+	sqlstm += "order by origid desc;";
+
+	rc = sqlhand.gpSqlGetRows(sqlstm);
+	if(rc.size() == 0) return;
+	newlb.setRows(20); //newlb.setMold("paging");
+	newlb.addEventListener("onSelect", thgenotifblick);
+	String[] fl = { "origid", "datecreated","notif_text","astatus"};
+	ArrayList kabom = new ArrayList();
+	for(d : rc)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb,nofitdoubleclik);
+}
+
+void injectLCend_Notifs()
+{
+	today = kiboo.todayISODateString();
+	unm = useraccessobj.username;
+
+	sqlstm = "select lc_id,customer_name,lenddate,lstatus from rw_lc_records " +
+	"where lenddate between '2015-03-01' and '2015-03-15' " +
+	"and lstatus in ('active','extension','refresh') order by lc_id";
+
+	rc = sqlhand.gpSqlGetRows(sqlstm);
+	if(rc.size() != 0)
+	{
+		injstm = "";
+		for(d : rc)
+		{
+			ntx = "[LC END " + kiboo.dtf2.format(d.get("lenddate")) + "] " + kiboo.checkNullString(d.get("lc_id")) + " " + kiboo.checkNullString(d.get("customer_name"));
+			injstm += "insert into rw_notifs (datecreated,notif_text,poster,astatus) values " +
+			"('" + today + "','" + ntx + "','" + unm + "','PENDING');";
+		}
+		sqlhand.gpSqlExecuter(injstm);
+		alert("LCEND injected");
+	}
+}
+
+void adminFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateString();
+	refresh = false; sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("remnotif_b"))
+	{
+		if(glob_sel_notif.equals("")) return;
+		/*
+		if(Messagebox.show("Hard delete this notif", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+		*/
+		glob_sel_notif_li.setParent(null);
+		sqlstm = "delete from rw_notifs where origid=" + glob_sel_notif;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showNotifs(last_list_type);
+}
+
+]]>
+</zscript>
+
+<popup id="adminjepop">
+	<vbox>
+		<button id="remnotif_b" label="Remove notif" sclass="k9" onClick="adminFunc(self.getId())" />
+		<button label="Inject LC-end notifs" sclass="k9" onClick="injectLCend_Notifs()" />
+	</vbox>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	} 
+</style>
+
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#0C203E">
+
+	<hbox>
+		<!-- <image src="/rwimg/Refresh-button.png" width="25px" onClick="showNotifs(last_list_type)" /> -->
+		<button label="View pending" sclass="k9" onClick="showNotifs(1)" />
+		<button label="View all" sclass="k9" onClick="showNotifs(2)" />
+		<button id="adminje" label="ADMIN" style="font-size:7px;color:#ff2200" visible="false" onClick="adminjepop.open(self)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="notifications_holder" />
+	<separator height="3px" />
+	<div id="notifarea">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#CCB40F">
+					<separator />
+				</row>
+				<row style="background:#86A1BC">
+					<hbox>
+						<label value="Thing :" sclass="k9mo" style="color:#ffffff" />
+						<label id="notifthing_lb" sclass="k9mo" style="color:#ffffff" />
+					</hbox>
+				</row>
+				<row style="background:#86A1BC">
+					<label value="Action" sclass="k9mo" style="color:#ffffff" />
+				</row>
+				<row style="background:#86A1BC">
+					<textbox id="n_action_text" width="99%" height="70px" sclass="k9" multiline="true" />
+				</row>
+				<row style="background:#86A1BC">
+					<button label="Post action" sclass="k9mo" />
+				</row>
+				<row style="background:#CCB40F">
+					<separator />
+				</row>
+				<row style="background:#86A1BC">
+					<hbox>
+						<label value="Repost date" sclass="k9mo" style="color:#ffffff" />
+						<datebox id="repostdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+	</div>
+
+<zscript>
+<![CDATA[
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminje.setVisible(true);
+}
+else
+{
+	showNotifs(last_list_type);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</zk>

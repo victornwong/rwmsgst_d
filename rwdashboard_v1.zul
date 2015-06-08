@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="checklist_mod"?>
+<zk>
+<zscript src="rwglobal/rwglobaldefs.zs" />
+<zscript src="rwglobal/rwsqlfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "RENTWISE DASHBOARD";
+MYVERSION = "v0.1";
+MYPANEL = "rwdashv1";
+/*
+Title		: Rentwise dashboard showing stocks and jobs and etc
+Written by	: Victor Wong
+Dated		: 21/08/2013
+
+11/03/2014: updated to load stock-qtys directly from FC6 - as live as it can get
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+
+void populateTickets()
+{
+	sqlstm = "select count(origid) as ticks, " +
+	"(select count(origid) from rw_helptickets where tstatus='OPEN') as ticks_open, " +
+	"(select count(origid) from rw_helptickets where tstatus='CLOSE') as ticks_close, " +
+	"(select count(origid) from rw_helptickets where os_id <> 'HQ' and os_id<>'SELF' and os_id is not null) as ticks_outs " +
+	"from rw_helptickets where tstatus <> 'NEW' and tstatus is not null";
+
+	tks = sqlhand.gpSqlFirstRow(sqlstm);
+	cl = "color:#ffffff";
+
+	trow = gridhand.gridMakeRow("","background-color:#333333","",tickrows);
+	gridhand.makeLabelToParent("Total",cl,trow);
+	gridhand.makeLabelToParent("OPEN",cl,trow);
+	gridhand.makeLabelToParent("CLOSE",cl,trow);
+	gridhand.makeLabelToParent("OUTS",cl,trow);
+
+	if(tks == null) return;
+	fb = "font-weigth:bold";
+
+	trow = gridhand.gridMakeRow("","","",tickrows);
+	gridhand.makeLabelToParent(tks.get("ticks").toString(),fb,trow);
+	gridhand.makeLabelToParent(tks.get("ticks_open").toString(),fb,trow);
+	gridhand.makeLabelToParent(tks.get("ticks_close").toString(),fb,trow);
+	gridhand.makeLabelToParent(tks.get("ticks_outs").toString(),fb,trow);
+}
+
+Object[] asshds = 
+{
+	new listboxHeaderWidthObj("AssetTag",true,""),
+	new listboxHeaderWidthObj("S/Num",true,""),
+	new listboxHeaderWidthObj("Model",true,""),
+	new listboxHeaderWidthObj("Grd",true,"30px"),
+	new listboxHeaderWidthObj("Pallet",true,""),
+	new listboxHeaderWidthObj("Comment",true,""),
+};
+
+void drillAssets(Object iwhat, String inm)
+{
+	sqlstm = "select assettag,serial,pallet,grade,model,comment from partsall_1 " +
+	"where name='" + inm + "' order by assettag";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(digass_holder, asshds, "digdig_lb", 22);
+	newlb.setMold("paging");
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "assettag", "serial", "model", "grade", "pallet", "comment" };
+	for(d : trs)
+	{
+		popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	digass_lbl.setValue(inm);
+	digdig_ass.open(iwhat);
+}
+
+class itmcliekr implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getTarget();
+		snm = lbhand.getListcellItemLabel(selitem,0);
+		drillAssets(selitem,snm);
+	}
+}
+pricliclker = new itmcliekr();
+
+Object[] stkshds = 
+{
+	new listboxHeaderWidthObj("Item",true,""),
+	new listboxHeaderWidthObj("Qty",true,"30px"),
+};
+
+void showStockSnapshot(String itype, Div iholder, String ilbid)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(iholder, stkshds, ilbid, 22);
+	sqlstm = "select distinct name, sum(qty) as tqty from partsall_1 " +
+	"where item like '" + itype + "'" +
+	"group by name,qty order by name ";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setMold("paging");
+	if(trs.size() < 22) newlb.setRows(trs.size());
+	//newlb.addEventListener("onSelect", pricliclker);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "name", "tqty" };
+	for(d : trs)
+	{
+		popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, pricliclker);
+}
+
+void updateSnapshot_datetime()
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	snapshot_lbl.setValue("Stock snapshot at " + todaydate);
+}
+
+void digFocusStocks()
+{
+	st = kiboo.replaceSingleQuotes( serach_tb.getValue().trim() );
+	if(st.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(search_holder, stkshds, "search_lb", 22);
+	sqlstm = "select distinct name, sum(qty) as tqty from partsall_1 " +
+	"where name like '%" + st + "%'" +
+	"group by name,qty order by name ";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setMold("paging");
+	if(trs.size() < 22) newlb.setRows(trs.size());
+	//newlb.addEventListener("onSelect", doclikor);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "name", "tqty" };
+	for(d : trs)
+	{
+		popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, pricliclker);
+}
+
+void loadAllSnapshots()
+{
+	showStockSnapshot("DT",dt_holder,"dtstk_lb");
+	showStockSnapshot("MT",mt_holder,"mtstk_lb");
+	showStockSnapshot("NB",nb_holder,"nbstk_lb");
+	showStockSnapshot("WS",ws_holder,"wsstk_lb");
+	showStockSnapshot("OTH",oth_holder,"othstk_lb");
+	showStockSnapshot("SPT",spt_holder,"sptstk_lb");
+	showStockSnapshot("PT",pt_holder,"ptstk_lb");
+	showStockSnapshot("SW",sw_holder,"swstk_lb");
+	updateSnapshot_datetime();
+}
+
+BLK_WIDTH = "290px";
+
+]]>
+</zscript>
+
+<style>
+.subhead { font-size:16px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead2 { font-size:24px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px }
+</style>
+
+<popup id="searchstock_pop">
+<div sclass="shadowbox" style="background:#f10c4f;" width="400px">
+<hbox>
+	<label value="What" style="color:#ffffff" />
+	<textbox id="serach_tb" />
+	<button label="Dig" onClick="digFocusStocks()" />
+</hbox>
+<separator height="2px" />
+<div id="search_holder" />
+</div>
+</popup>
+
+<popup id="digdig_ass">
+<div sclass="shadowbox" style="background:#f10c4f;" width="600px" id="digass_holder">
+<label sclass="subhead" id="digass_lbl" />
+<separator height="3px" />
+</div>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#2e3436" >
+
+<hbox style="padding:2px">
+<label sclass="subhead2" id="snapshot_lbl" />
+<separator width="10px" />
+<button label="Refresh" onClick="loadAllSnapshots()" />
+<button label="Find stuff" onClick="searchstock_pop.open(self)" />
+</hbox>
+<separator height="3px" />
+
+<hbox>
+	<div sclass="shadowbox" style="background:#204a87;" id="dt_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="DESKTOPS (DT)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="mt_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="MONITORS (MT)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="nb_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="NOTEBOOKS (NB)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="ws_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="WORKSTATIONS (WS)" />
+	</div>
+</hbox>
+
+<hbox>
+	<div sclass="shadowbox" style="background:#204a87;" id="spt_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="SPARE PARTS (SPT)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="sw_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="SOFTWARE (SW)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="pt_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="PARTS (PT)" />
+	</div>
+
+	<div sclass="shadowbox" style="background:#204a87;" id="oth_holder" width="${BLK_WIDTH}" >
+			<label sclass="subhead" value="OTHERS (OTH)" />
+	</div>
+</hbox>
+
+<!--
+<div style="background:#f57900; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="350px" >
+<label sclass="subhead" value="Customer Service Tickets Stats" />
+<grid>
+	<rows id="tickrows">
+	</rows>
+</grid>
+</div>
+-->
+
+<zscript>
+<![CDATA[
+
+loadAllSnapshots();
+//populateTickets();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

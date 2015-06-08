@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="walllc_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Wall and Lab Comments Manager";
+MYVERSION = "v0.1";
+MYPANEL = "walllc_panel";
+/*
+Title		: Wall and lab-comments manager
+Written by	: Victor Wong
+Dated		: 13/01/2013
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+glob_selected_wall = "";
+glob_selected_lc = "";
+
+WALLWIDTH = "550px";
+LCWIDTH = "550px";
+
+void clearWallBox()
+{
+	posting_tb.setValue("");
+	postnum.setValue("");
+	glob_selected_wall = "";
+	post_btn.setLabel("Post..");
+}
+
+void wallFunc(Component iwhat)
+{
+	itype = iwhat.getId();
+	todate = kiboo.todayISODateString();
+	wpnum = kiboo.replaceSingleQuotes(postnum.getValue()).trim();
+
+	if(itype.equals("loadwallpost_btn"))
+	{
+		sqlstm = "select posting from elb_thewall where origid=" + wpnum;
+		wprec = sqlhand.gpSqlFirstRow(sqlstm);
+		if(wprec != null)
+		{
+			posting_tb.setValue(wprec.get("posting"));
+			glob_selected_wall = wpnum;
+			post_btn.setLabel("Update..");
+		}
+		else
+			guihand.showMessageBox("No such wall posting : " + wpnum);
+	}
+
+	if(itype.equals("post_btn"))
+	{
+		btlbl = iwhat.getLabel();
+		sqlstm = "";
+		tpost = kiboo.replaceSingleQuotes(posting_tb.getValue()).trim();
+
+		if(btlbl.equals("Post.."))
+			sqlstm = "insert into elb_thewall (username,datecreated,posting) values " +
+			"('" + useraccessobj.username + "','" + todate + "','" + tpost + "')";
+
+		if(btlbl.equals("Update.."))
+			sqlstm = "update elb_thewall set posting='" + tpost + "' where origid=" + glob_selected_wall;
+
+		if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+		guihand.showMessageBox("Done updating or posting..");
+	}
+
+	if(itype.equals("delpost_btn"))
+	{
+		if(wpnum.equals("")) return;
+		if (Messagebox.show("Hard delete wall posting #" + wpnum, "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+		{
+			sqlstm = "delete from elb_thewall where origid=" + wpnum;
+			sqlhand.gpSqlExecuter(sqlstm);
+			guihand.showMessageBox("If posting is available -- it'll be deleted!!");
+		}
+	}
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<groupbox mold="3d" >
+<hbox>
+	<grid width="250px">
+		<rows>
+			<row>
+				<label value="Wall post #" style="font-size:9px" />
+				<textbox id="postnum" style="font-size:9px" />
+				<button id="loadwallpost_btn" label="Load" style="font-size:9px" onClick="wallFunc(self)" />
+			</row>
+		</rows>
+	</grid>
+
+	<grid width="${WALLWIDTH}">
+		<columns>
+			<column width="100px" />
+			<column />
+		</columns>
+		<rows>
+			<row>
+				<label multiline="true" style="font-size:9px">
+Your posting
+(lab announcements,
+company news, memos
+and so on)
+				</label>
+				<textbox id="posting_tb" style="font-size:9px" multiline="true" width="99%" height="70px" />
+			</row>
+			<row spans="2">
+				<hbox>
+				<!--
+					<label value="Upload picture" />
+					<fileupload onUpload="postimage.setContent(event.media);postimage.setVisible(true);" />
+				-->
+					<button id="post_btn" label="Post.." onClick="wallFunc(self)" />
+					<button id="delpost_btn" label="DELETE" onClick="wallFunc(self)" />
+					<button label="Clear" onClick="clearWallBox()" />
+				</hbox>
+			</row>
+			<row spans="2">
+				<image id="postimage" width="400px" visible="false" />
+			</row>
+		</rows>
+	</grid>
+
+</hbox>
+</groupbox>
+
+<hbox>
+<groupbox mold="3d" width="${LCWIDTH}" >
+	<div style="background:#a52a2a;padding:2px">
+	<label value="Internal Lab Comments (LC)" style="color:#eeeeee" />
+	</div>
+	<separator height="3px" />
+	<grid id="lcgrid">
+		<rows>
+			<row>
+				<label value="Folder" style="font-size:9px" />
+				<textbox id="lc_folderno_str" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Comment" style="font-size:9px" />
+				<textbox id="lc_thecomment" multiline="true" width="99%" height="50px" style="font-size:9px" />
+			</row>
+			<row spans="2">
+				<hbox>
+					<button label="Submit lab comment" style="font-size:9px" onClick="submitLC()" />
+					<label style="font-size:9px">
+					(SUBMIT ONLY something that make sense to a job-folder)
+					</label>
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+
+<div id="lc_holder" width="${LCWIDTH}" />
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

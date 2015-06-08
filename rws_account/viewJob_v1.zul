@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="viewjobmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "View Job";
+MYVERSION = "v0.1";
+MY_ID = "wiviejobwnq";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<div id="form_holder" visible="false">
+</div>
+
+</div>
+<zscript>
+<![CDATA[
+//value="11S42T1122Z1ZF6L0136XX"
+
+// glob_formmaker = dynamicForm(form_holder, "partmetaform", "1"); // in rwsqlfuncs.zs, need to move somewhere..
+
+/*
+class tbonOK implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		populateItemMetadata();
+	}
+}
+stkcode_t.addEventListener("onOK",new tbonOK());
+*/
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

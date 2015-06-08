@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="client_tracker_trails"?>
+
+<!--
+Title				: folders driller - allow update of sample marking and folders metadata, even delete samples
+Coding began date	:
+Developers			: victor
+-->
+
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript scr="../alsglobal/global_doctrails.zs" />
+
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+
+<zscript>
+<![CDATA[
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+param_arcode = Executions.getCurrent().getParameter("arcode");
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+// Database func: get a rec from DocumentTrack - diff from Doculink thing
+Object get_TrailRecord(String iorig)
+{
+	retval = null;
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	sqlst = "select * from DocumentTrack where origid=" + iorig;
+	retval = sql.firstRow(sqlst);
+	sql.close();
+	return retval;
+}
+
+void clearTrailInputs()
+{
+	trailtype_dd.setSelectedIndex(0);
+	trailstatus_dd.setSelectedIndex(0);
+	
+	trail_deliverymethod_userdef3.setSelectedIndex(0);
+
+	trail_whatever.setValue("");
+	setTodayDatebox(logdatebox);
+
+	airway_userdef1.setValue("");
+	contact_userdef2.setValue("");
+}
+
+void disableTrailInputs()
+{
+	updatetrail_btn.setDisabled(true);
+	removetrail_btn.setDisabled(true);
+	
+	trailtype_dd.setDisabled(true);
+	trailstatus_dd.setDisabled(true);
+	trail_deliverymethod_userdef3.setDisabled(true);
+	
+	trail_whatever.setDisabled(true);
+	logdatebox.setDisabled(true);
+	
+	airway_userdef1.setDisabled(true);
+	contact_userdef2.setDisabled(true);
+}
+
+void enableTrailInputs()
+{
+	updatetrail_btn.setDisabled(false);
+	removetrail_btn.setDisabled(false);
+	trail_deliverymethod_userdef3.setDisabled(false);
+	
+	trailtype_dd.setDisabled(false);
+	trailstatus_dd.setDisabled(false);
+	
+	trail_whatever.setDisabled(false);
+	logdatebox.setDisabled(false);
+	
+	airway_userdef1.setDisabled(false);
+	contact_userdef2.setDisabled(false);
+
+}
+
+// onSelect listener for populateClientTrails(String iarcode) -> makeVWListbox(trails_div, trails_lb_headers, "trails_lb", 5);
+class realtrail_select implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+		iorigid = getListcellItemLabel(lbitem, 0);
+
+		merec = get_TrailRecord(iorigid);
+
+		ilogdate = getListcellItemLabel(lbitem, 5);
+		idoctype = getListcellItemLabel(lbitem, 1);
+		idocstat = getListcellItemLabel(lbitem, 2);
+
+		// update input boxes
+		// NOTES : userdef1 field in DocumentTrack used for airway-bill #
+		if(merec != null)
+		{
+			matchListboxItems(trailtype_dd, idoctype);
+			matchListboxItems(trailstatus_dd, idocstat);
+
+			trail_whatever.setValue(merec.get("whatever"));
+			logdatebox.setValue(merec.get("datelogged"));
+
+			airway_userdef1.setValue(merec.get("userdef1"));
+			contact_userdef2.setValue(merec.get("userdef2"));
+
+			ddmet = merec.get("userdef3");
+			matchListboxItems(trail_deliverymethod_userdef3,ddmet);
+
+			// enable/disable CRUD buttons/inputs depending if user is owner of the trail
+			kuser = merec.get("username");
+
+			if(kuser.equals(useraccessobj.username))
+				enableTrailInputs();
+			else
+				disableTrailInputs();
+
+			// for admin -- enable all
+			if(useraccessobj.accesslevel == 9)
+				enableTrailInputs();
+		}
+	}
+}
+
+Object[] trails_lb_headers = {
+
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("T.Type",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Desc",true),
+	new listboxHeaderObj("User",true),
+	new listboxHeaderObj("Log.Date",true),
+};
+
+// codes same as in client-tracking..
+void populateClientTrails(String iarcode)
+{
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	sqlsta = "select * from DocumentTrack where doculink='" + iarcode + "' and deleted=0";
+	trailrecs = sql.rows(sqlsta);
+	sql.close();
+
+	//Listbox newlb = makeTrails_Listbox(trails_div); // div def in UI below
+	Listbox newlb = makeVWListbox(trails_div, trails_lb_headers, "trails_lb", 5);
+	newlb.addEventListener("onSelect", new realtrail_select());
+
+	if(trailrecs == null || trailrecs.size() == 0) return;
+
+	String[] strarray = new String[6];
+	newlb.setRows(20);
+
+	for(itrail : trailrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(itrail.get("origid").toString());
+		
+		idoctype = itrail.get("docutype");
+		if(idoctype.equals("")) idoctype="-UnD-";
+		kabom.add(idoctype);
+
+		idocstat = itrail.get("docstatus");
+		if(idocstat.equals("")) idocstat="-UnD-";
+		kabom.add(idocstat);
+
+		idesc = trimListitemLabel(itrail.get("whatever"), 25);
+		kabom.add(idesc);
+
+		kabom.add(itrail.get("username"));
+		kabom.add(itrail.get("datelogged").toString().substring(0,10));
+		
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// Add blank trail into DocumentTracking table
+void addTrail()
+{
+	if(param_arcode.equals("")) return;
+	
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	
+	idatecreated = getDateFromDatebox(hiddendatebox);
+
+	/*
+	idocutype = trailtype_dd.getSelectedItem().getLabel();
+	idocstatus = trailstatus_dd.getSelectedItem().getLabel();
+	iwhatever = replaceSingleQuotes(trail_whatever.getValue());
+	iairway = replaceSingleQuotes(airway_userdef1.getValue());
+	*/
+
+	sqlst = "insert into DocumentTrack values ( '" + param_arcode + "','','','', '' ,'" + useraccessobj.username + "','" + idatecreated + "',0,  '', '', '' , '' )";
+
+	sql.execute(sqlst);
+	sql.close();
+	
+	// refresh
+	populateClientTrails(param_arcode);
+}
+
+void removeTrail()
+{
+	if(param_arcode.equals("")) return;
+	if(trails_lb.getSelectedIndex() == -1 ) return;
+	
+	if (Messagebox.show("Remove this trail", "Are you sure?", 
+	Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO)
+		return;
+
+	lbitem = trails_lb.getSelectedItem();
+	iorigid = getListcellItemLabel(lbitem, 0);
+
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	sqlsta = "update DocumentTrack set deleted=1 where origid=" + iorigid;
+	sql.execute(sqlsta);
+	sql.close();
+	
+	// refresh and clear
+	clearTrailInputs();
+	populateClientTrails(param_arcode);
+}
+
+// Update trail record
+void updateTrail()
+{
+	if(param_arcode.equals("")) return;
+	if(trails_lb.getSelectedIndex() == -1 ) return;
+	
+	lbitem = trails_lb.getSelectedItem();
+	iorigid = getListcellItemLabel(lbitem, 0);
+	ilogdate = getDateFromDatebox(logdatebox);
+	
+	idoctype = trailtype_dd.getSelectedItem().getLabel();
+	idocstat = trailstatus_dd.getSelectedItem().getLabel();
+		
+	iwhatever = replaceSingleQuotes(trail_whatever.getValue());
+	iairway = replaceSingleQuotes(airway_userdef1.getValue());
+	icontact = replaceSingleQuotes(contact_userdef2.getValue());
+	
+	iddmethod = trail_deliverymethod_userdef3.getSelectedItem().getLabel();
+
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+
+	sqlst = "update DocumentTrack set docutype='" + idoctype + "', docstatus='" + idocstat + "', datelogged='" + ilogdate + 
+		"', whatever='" + iwhatever + "', userdef1='" + iairway + "', userdef2='" + icontact + "', userdef3='" + iddmethod + "'  where origid=" + iorigid;
+
+	sql.execute(sqlst);
+	sql.close();
+
+	// refresh
+	populateClientTrails(param_arcode);
+}
+
+]]>
+</zscript>
+
+<window id="clientracker_trails_win" width="600px" height="560px" title="Client Trails v.1" position="center" mode="overlapped" border="normal" closable="true"
+    onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+	
+<div style="padding:3px">
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+	<div style="background:#99AA66;padding:3px">
+		<label id="companyname_lbl" style="font-size:12px;font-weight:bold" value="Company" />
+	</div>
+	
+	<div id="trails_div" />
+	<separator height="5px" />
+	<hbox>
+		<button id="addtrail_btn" label="Add trail" onClick="addTrail()" style="font-size:9px" />
+		<button id="removetrail_btn" label="Remove" onClick="removeTrail()" style="font-size:9px" />
+	</hbox>
+		
+	<separator height="5px" />
+	
+	<div style="padding:2px" >
+		<groupbox style="padding:2px" >
+			<caption label="Trail" />
+
+			<hbox>
+				<label value="T.Type" style="font-size:9px" />
+				<separator width="19px" />
+				<listbox id="trailtype_dd" mold="select" rows="1" style="font-size:9px" />
+
+				<label value="Status" style="font-size:9px" />
+				<listbox id="trailstatus_dd" mold="select" rows="1" style="font-size:9px" />
+
+				<label value="Log date" style="font-size:9px" />
+				<datebox id="logdatebox" format="yyyy-MM-dd" style="font-size:9px" />
+			</hbox>
+			<separator height="3px" />
+
+			<hbox>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="trail_whatever" multiline="true" height="60px" width="400px" style="font-size:9px" />
+			</hbox>
+
+			<hbox>
+				<label value="Contact" style="font-size:9px" />
+				<separator width="10px" />
+				<textbox id="contact_userdef2" width="200px" style="font-size:9px" />
+			</hbox>
+
+			<hbox>
+				<label value="D.Method" style="font-size:9px" />
+				<separator width="3px" />
+				<listbox id="trail_deliverymethod_userdef3" mold="select" rows="1" style="font-size:9px" />
+			</hbox>
+
+			<hbox>
+				<label value="Airway bill" style="font-size:9px" />
+				<textbox id="airway_userdef1" width="200px" style="font-size:9px" />
+			</hbox>
+		</groupbox>
+
+		<separator height="5px" />
+
+		<hbox>
+			<button id="updatetrail_btn" label="Update" onClick="updateTrail()" style="font-size:9px" />
+		</hbox>
+	</div>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+icompanyname = getCompanyName(param_arcode);
+companyname_lbl.setValue("[" + param_arcode + "] " + icompanyname);
+
+setTodayDatebox(hiddendatebox);
+
+populateDropdownListbox(trailtype_dd, trail_types);
+populateDropdownListbox(trailstatus_dd, trail_status);
+populateDropdownListbox(trail_deliverymethod_userdef3, lu_DeliveryMethod);
+
+populateClientTrails(param_arcode);
+
+]]>
+</zscript>
+
+</window>
+
+</zk>
+

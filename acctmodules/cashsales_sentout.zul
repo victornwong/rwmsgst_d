@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="cashsales_sentout_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.2";
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+THIS ONE IF FOR CASH-SALES - tblStockCashSalesMaster
+
+Title				: Allow user to update documents-sent status - scan airwaybill #, preprinted barcode or watever
+Developers			: Victor Wong
+
+Code base invoices.zul
+
+02/04/2012: ported to byte-compiled
+
+Uses user-defined fields in MySoft.Invoice table (def 11/01/2010)
+
+Field2 = Date sent = date invoice/documents is sent to client
+Field3 = Consignment no. = courier or whatever tracking number
+Field4 = Delivery method = courier/by-hand/registered-post/normal-post
+Field5 = Recipient = whom the invoice/docs addressed to
+Field6 = document type = invoice only, invoice+coa, coa only, others
+
+Printed = document printed or sent-out (going to use this one 11/01/2010)
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+
+String[] docustatus = { "ALL","Not send out","Invoice/documents sent out" };
+
+// VoucherNo,ChequeNo,VoucherDate,SellTo,Contact,NetTotal,CurCode
+Object[] invdocs_lb_headers = {
+	new listboxHeaderObj("Voucher#",true),
+	new listboxHeaderObj("Date",true),
+	new listboxHeaderObj("Chq/Cash",true),
+	new listboxHeaderObj("Client",true),
+	new listboxHeaderObj("Recipient",true),
+	new listboxHeaderObj("Date.Sent",true),
+	new listboxHeaderObj("Method",true),
+	new listboxHeaderObj("Track#",true),
+	new listboxHeaderObj("DocuType",true)
+};
+
+// Do the search and populate listbox - will search for invoice/documents delivery user-def fields
+void startCashSalesSearch(Datebox startd, Datebox endd, Listbox docstat, Textbox icustomername, Textbox icustomeraddress)
+{
+	tbstat = docstat.getSelectedItem().getLabel();
+	sdate = kiboo.getDateFromDatebox(startd);
+	edate = kiboo.getDateFromDatebox(endd);
+
+	cname = icustomername.getValue();
+	//caddr = icustomeraddress.getValue();
+
+	if(sdate == null || edate == null)
+	{
+		guihand.showMessageBox("Please specify start and end date for search");
+		return;
+	}
+	// bizarre sql statement wrangling here
+	cname_wstring = (cname.equals("")) ? "" :  "and contact like '%" + cname + "%' ";
+	//caddr_wstring = (caddr.equals("")) ? "" : "and (address1 like '%" + caddr + "%' or address2 like '%" + caddr + "%' or address3 like '%" + caddr + "%') ";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+/*	def: 11/01/2010
+"Not send out" = 0
+"Invoice/documents sent out" = 1
+
+Field2 = Date sent = date invoice/documents is sent to client
+Field3 = Consignment no. = courier or whatever tracking number
+Field4 = Delivery method = courier/by-hand/registered-post/normal-post
+Field5 = Recipient = whom the invoice/docs addressed to
+Field6 = document type = invoice only, invoice+coa, coa only, others
+*/
+
+/*
+	docstatstr = "";
+
+	if(tbstat == "Not send out")
+	{
+		docstatstr = "and Printed=0";
+	}
+	else if(tbstat == "Invoice/documents sent out")
+	{
+		docstatstr = "and Printed=1";
+	}
+*/
+
+	sqlstatem = "select top 550 VoucherNo,ChequeNo,VoucherDate,SellTo,Contact,Field2,Field3,Field4,Field5,Field6 " + 
+	"from tblStockCashSalesMaster " +
+	"where VoucherDate between '" + sdate + "' and '" + edate + "' and Cancel=0 " +
+	cname_wstring +	" order by voucherno desc";
+
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+	reccount = tlist.size();
+
+	if(reccount == 0)
+	{
+		guihand.showMessageBox("Cannot find anything..");
+		return;
+	}
+
+	Listbox newlb = lbhand.makeVWListboxWithFooter(searchdiv, invdocs_lb_headers, "invdocs_lb", 30, reccount.toString() + " Cash-Sales");
+	newlb.setContext("billingDocsContext");
+
+	String[] strarray = new String[8];
+	for(ilist : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(ilist.get("VoucherNo"));
+		kabom.add(ilist.get("VoucherDate").toString().substring(0,10));
+		kabom.add(ilist.get("ChequeNo"));
+		kabom.add(ilist.get("Contact"));
+		//kabom.add(ilist.get("CurCode") + " " + ilist.get("NetTotal"));
+		kabom.add(ilist.get("Field5"));
+		kabom.add(ilist.get("Field2"));
+		kabom.add(ilist.get("Field4"));
+		kabom.add(ilist.get("Field3"));
+		kabom.add(ilist.get("Field6"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+} // end of startInvoiceSearch()
+
+void tryNotes()
+{
+	msele = invdocs_lb.getSelectedItem().getLabel();
+	alert("selected this: " + msele);
+}
+
+void playDocsDeliveryDetails()
+{
+	if(invdocs_lb.getSelectedIndex() == -1) return;
+
+	// get item selected in the list-box, testsdrillbit = hardcoded listbox id
+	invno = invdocs_lb.getSelectedItem().getLabel();
+	invstr = "voucherno=" + invno;
+
+	uniqwindowid = kiboo.makeRandomId("csm");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","acctmodules/csales_details.zul", uniqwindowid, invstr,useraccessobj);
+}
+
+]]>
+</zscript>
+
+<menupopup id="billingDocsContext">
+	<menuitem label="Update document delivery details" onClick="playDocsDeliveryDetails()" /> 
+</menupopup>
+
+<div width="1100px">
+<panel id="cashsales_sentout_panel" title="Cash Sales Sent-Out Tracking ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<vbox width="100%">
+
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+
+<hbox>
+	<hbox>
+		<label value="Start date" style="font-size:9px" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+	</hbox>
+	<separator width="10px"/>
+	<hbox>
+		<label value="End date" style="font-size:9px" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+	</hbox>
+	
+	<label value="D.Status" style="font-size:9px" visible="false" />
+	<listbox mold="select" rows="1" id="docsstatus" style="font-size:9px" visible="false" />
+	<zscript>
+		lbhand.populateDropdownListbox(docsstatus,docustatus);
+	</zscript>
+	
+	<button label="Search/Refresh" style="font-size:9px" onClick="startCashSalesSearch(startdate,enddate,docsstatus,customername,customeraddress)" />
+	<button label="Docs delivery details" style="font-size:9px" onClick="playDocsDeliveryDetails()" />
+</hbox>
+
+<hbox>
+	<label value="Customer" style="font-size:9px" />
+	<textbox id="customername" width="200px" style="font-size:9px" />
+
+	<label value="Address" style="font-size:9px" visible="false" />
+	<textbox id="customeraddress" width="200px" style="font-size:9px" visible="false" />
+</hbox>
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+<vbox>
+	<div id="searchdiv" />
+</vbox>
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+</zk>

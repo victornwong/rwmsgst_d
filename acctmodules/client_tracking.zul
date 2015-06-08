@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="client_tracking_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript scr="../alsglobal/global_doctrails.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v2.0";
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+
+Title: Client tracking - all sorta tracking information here
+Developers			: Victor
+
+**NOTES**
+02/04/2012: ported to btye-compuiled
+16/06/2010: codes optimization and extra stuff
+
+*/
+/*
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import java.util.TimeZone;
+import java.util.ArrayList;
+import java.util.List;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+samphand = new SampleReg();
+
+glob_mysoftcode = "";
+
+// TimeZone zone=TimeZone.getTimeZone("GMT+09");
+Date currentDate=new Date();
+DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+String DATE_FORMAT = "yyyy-MM-dd";
+SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT);
+
+Calendar todayDate = Calendar.getInstance();
+todayDate.setTime(currentDate);
+
+String global_doculink = "";
+String global_selected_arcode = "";
+
+// Database func: get a rec from DocumentTrack - diff from Doculink thing
+Object get_TrailRecord(String iorig)
+{
+	retval = null;
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlst = "select * from DocumentTrack where origid=" + iorig;
+	retval = sql.firstRow(sqlst);
+	sql.close();
+	return retval;
+}
+
+// Database func: create a new client-tracker
+void createNewClientTracker(String iar_code)
+{
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	idatecreated = kiboo.getDateFromDatebox(hiddendatebox);
+	sqlst = "insert into CustomerTracking values ('" + iar_code + "','" + useraccessobj.username + "','" + idatecreated + "',0)" ;
+	sql.execute(sqlst);
+	sql.close();
+}
+
+void clearTrailInputs()
+{
+	trailtype_dd.setSelectedIndex(0);
+	trailstatus_dd.setSelectedIndex(0);
+	trail_deliverymethod_userdef3.setSelectedIndex(0);
+
+	trail_whatever.setValue("");
+	kiboo.setTodayDatebox(logdatebox);
+
+	airway_userdef1.setValue("");
+	contact_userdef2.setValue("");
+}
+
+void disableTrailInputs()
+{
+	updatetrail_btn.setDisabled(true);
+	removetrail_btn.setDisabled(true);
+
+	trailtype_dd.setDisabled(true);
+	trailstatus_dd.setDisabled(true);
+	trail_deliverymethod_userdef3.setDisabled(true);
+
+	trail_whatever.setDisabled(true);
+	logdatebox.setDisabled(true);
+
+	airway_userdef1.setDisabled(true);
+	contact_userdef2.setDisabled(true);
+}
+
+void enableTrailInputs()
+{
+	updatetrail_btn.setDisabled(false);
+	removetrail_btn.setDisabled(false);
+	trail_deliverymethod_userdef3.setDisabled(false);
+
+	trailtype_dd.setDisabled(false);
+	trailstatus_dd.setDisabled(false);
+
+	trail_whatever.setDisabled(false);
+	logdatebox.setDisabled(false);
+
+	airway_userdef1.setDisabled(false);
+	contact_userdef2.setDisabled(false);
+}
+
+class realtrail_select implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+		iorigid = lbhand.getListcellItemLabel(lbitem, 0);
+
+		merec = get_TrailRecord(iorigid);
+
+		ilogdate = lbhand.getListcellItemLabel(lbitem, 5);
+		idoctype = lbhand.getListcellItemLabel(lbitem, 1);
+		idocstat = lbhand.getListcellItemLabel(lbitem, 2);
+
+		// update input boxes
+		// NOTES : userdef1 field in DocumentTrack used for airway-bill #
+		if(merec != null)
+		{
+			lbhand.matchListboxItems(trailtype_dd, idoctype);
+			lbhand.matchListboxItems(trailstatus_dd, idocstat);
+
+			trail_whatever.setValue(merec.get("whatever"));
+			logdatebox.setValue(merec.get("datelogged"));
+
+			airway_userdef1.setValue(merec.get("userdef1"));
+			contact_userdef2.setValue(merec.get("userdef2"));
+
+			ddmet = merec.get("userdef3");
+			lbhand.matchListboxItems(trail_deliverymethod_userdef3,ddmet);
+
+			// enable/disable CRUD buttons/inputs depending if user is owner of the trail
+			kuser = merec.get("username");
+
+			if(kuser.equals(useraccessobj.username))
+				enableTrailInputs();
+			else
+				disableTrailInputs();
+
+			// for admin -- enable all
+			if(useraccessobj.accesslevel == 9) enableTrailInputs();
+		}
+	}
+}
+
+Object[] trails_lb_headers = {
+
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("T.Type",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Desc",true),
+	new listboxHeaderObj("User",true),
+	new listboxHeaderObj("Log.Date",true),
+};
+
+// Populate trails list-box
+void populateTrails(String idoculink)
+{
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlsta = "select * from DocumentTrack where doculink='" + idoculink + "' and deleted=0";
+	trailrecs = sql.rows(sqlsta);
+	sql.close();
+
+	//Listbox newlb = makeTrails_Listbox(trails_div); // div def in UI below
+	Listbox newlb = lbhand.makeVWListbox(trails_div, trails_lb_headers, "trails_lb", 5);
+	newlb.addEventListener("onSelect", new realtrail_select());
+
+	if(trailrecs == null || trailrecs.size() == 0) return;
+
+	String[] strarray = new String[6];
+	newlb.setRows(10);
+
+	for(itrail : trailrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(itrail.get("origid").toString());
+
+		idoctype = itrail.get("docutype");
+		if(idoctype.equals("")) idoctype="-UnD-";
+		kabom.add(idoctype);
+
+		idocstat = itrail.get("docstatus");
+		if(idocstat.equals("")) idocstat="-UnD-";
+		kabom.add(idocstat);
+
+		idesc = lbhand.trimListitemLabel(itrail.get("whatever"), 25);
+		kabom.add(idesc);
+
+		kabom.add(itrail.get("username"));
+		kabom.add(itrail.get("datelogged").toString().substring(0,10));
+		
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+// Audit/Document-trails for folders onSelect listener
+// for populateFolders_Listbox()
+class docutrails_select implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+		ifoldno = lbhand.getListcellItemLabel(lbitem, 0);
+		populateTrails(ifoldno);
+
+		global_doculink = ifoldno;
+		global_doculink_lbl.setValue("FolderNo : " + global_doculink);
+
+		// clear trail input boxes
+		clearTrailInputs();
+	}
+}
+
+Object[] folderjobs_lb_headers = {
+
+	new listboxHeaderObj("Folder.No",true),
+	new listboxHeaderObj("Recv.Date",true),
+	new listboxHeaderObj("#.Samp",true),
+	new listboxHeaderObj("Due.Date",true),
+	new listboxHeaderObj("MySoft",true),
+	new listboxHeaderObj("Brnch",true),
+};
+
+// Show all the folders which are registered for the iarcode passed
+void populateFolders_Listbox(String iarcode)
+{
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	userbranch = useraccessobj.branch;
+	branchstr = "and branch='" + userbranch + "' ";
+	if(userbranch.equals("ALL")) branchstr = "";
+
+	sqlstate = "select top 200 origid,ar_code,folderno_str,datecreated,duedate,uploadToMYSOFT,branch from JobFolders " + 
+		"where ar_code='" + iarcode + "' and deleted=0 " + branchstr + " order by origid desc";
+
+	folder_recs = sql.rows(sqlstate);
+	sql.close();
+
+	//Listbox newlb = makeFoldersListbox(clientfolders_div); // div def in UI below
+	Listbox newlb = lbhand.makeVWListbox(clientfolders_div, folderjobs_lb_headers, "folderjobs_lb", 5);
+	newlb.addEventListener("onSelect", new docutrails_select());
+
+	// 17/6/2010: cash-sales customer stuff
+	cashcustomer_info_btn.setVisible(false);
+	cashsales_groupbox.setVisible(false);
+
+	if(folder_recs == null || folder_recs.size() == 0)
+	{
+		folderdet_btn.setVisible(false);
+		return;
+	}
+
+	newlb.setRows(30);
+	folderdet_btn.setVisible(true);
+
+	// 17/6/2010: if iarcode == cash accounts, show the button
+	if(iarcode.equals("CASH") || iarcode.equals("CASH USD"))
+	{
+		cashcustomer_info_btn.setVisible(true);
+		cashsales_groupbox.setVisible(true);
+	}
+
+	String[] strarray = new String[6];
+
+	for( ifolder : folder_recs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		ifolderno = ifolder.get("origid");
+
+		kabom.add(ifolder.get("folderno_str"));
+		kabom.add(ifolder.get("datecreated").toString().substring(0,10));
+
+		numsamples = samphand.getNumberOfSamples_InFolder(ifolderno);
+		kabom.add(numsamples.toString());
+		kabom.add(ifolder.get("duedate").toString().substring(0,10));
+
+		upmysoft = (ifolder.get("uploadToMYSOFT") == 1) ? "Uploaded" : "Pending";
+		kabom.add(upmysoft);
+		kabom.add(ifolder.get("branch"));
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+/*
+// onSelect listener for client-tracker lb
+class customerAR_select implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+
+		iarcode = lbhand.getListcellItemLabel(lbitem, 1);
+		icustname = lbhand.getListcellItemLabel(lbitem, 2);
+
+		clientcode_lbl.setValue(iarcode);
+		clientname_lbl.setValue(icustname);
+
+		populateFolders_Listbox(iarcode);
+
+		// makeFoldersListbox(clientfolders_div);
+
+		// clear trail input boxes and listbox
+		clearTrailInputs();
+
+		global_doculink = "";
+		global_doculink_lbl.setValue("FolderNo : " + global_doculink);
+
+		//makeTrails_Listbox(trails_div);
+		if(trails_div.getFellowIfAny("trails_lb") != null)
+			trails_lb.setParent(null);
+	}
+}
+*/
+
+// 17/6/2010: load customer's folders manually, instead of using the onSelect listener customerAR_select to load all folders once clicked - unnecessary loading
+//lbhand.makeVWListbox(trackclient_div, clienttracker_lb_headers, "trackclient_lb", 10);
+void loadClient_Folders_Clicker()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(trackclient_div,"trackclient_lb")) return;
+
+	selitem = trackclient_lb.getSelectedItem();
+	iarcode = lbhand.getListcellItemLabel(selitem, 1);
+	icustname = lbhand.getListcellItemLabel(selitem, 2);
+
+	clientcode_lbl.setValue(iarcode);
+	clientname_lbl.setValue(icustname);
+
+	populateFolders_Listbox(iarcode);
+	clearTrailInputs(); // clear trail input boxes and listbox
+
+	global_doculink = "";
+	global_doculink_lbl.setValue("FolderNo : ");
+
+	//makeTrails_Listbox(trails_div);
+	if(trails_div.getFellowIfAny("trails_lb") != null) trails_lb.setParent(null);
+}
+
+// Drop listener for ar_code -> client
+class customerAR_drop implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		Component dragged = event.dragged;
+		thearcode = dragged.getLabel();
+		if(lbhand.ExistInListbox(trackclient_lb, thearcode, 1)) return;
+		createNewClientTracker(thearcode);
+		populateClient_Tracker(); // refresh
+	}
+}
+
+Object[] clienttracker_lb_headers = {
+
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("AR Code",true),
+	new listboxHeaderObj("Client.Name",true),
+};
+
+void populateClient_Tracker()
+{
+	//Listbox newlb = makeClientTracker_Listbox(trackclient_div, "trackclient_lb"); // div def in UI
+	Listbox newlb = lbhand.makeVWListbox(trackclient_div, clienttracker_lb_headers, "trackclient_lb", 10);
+	//newlb.addEventListener("onSelect", new customerAR_select());
+	newlb.setDroppable("true");
+	newlb.addEventListener("onDrop", new customerAR_drop());
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	// get all client-trackers for username only and not deleted
+	sqlstate = "select origid,ar_code,username,deleted from CustomerTracking where username='" + useraccessobj.username + "' and deleted=0"; 
+	track_recs = sql.rows(sqlstate);
+	sql.close();
+
+	if(track_recs == null || track_recs.size() == 0 ) return;
+	newlb.setRows(30);
+
+	for( itracker : track_recs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(itracker.get("origid").toString());
+
+		iar_code = itracker.get("ar_code");
+		kabom.add(iar_code);
+
+		icompanyname = "Undefined";
+		if(!iar_code.equals("")) icompanyname = sqlhand.getCompanyName(iar_code);
+		kabom.add(icompanyname);
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+	
+} // end of populateClient_Tracker()
+
+void playAssignCustomerWindow()
+{
+	// if(trackclient_lb.getSelectedIndex() == -1) return;
+	uniqid = kiboo.makeRandomId("assclient");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","dispatch/customer_search_popup.zul", uniqid, "getcust=1",useraccessobj);
+}
+
+void removeClientTracker()
+{
+	if(trackclient_lb.getSelectedIndex() == -1) return;
+
+	lbitm = trackclient_lb.getSelectedItem();
+	custname = lbhand.getListcellItemLabel(lbitm, 2);
+	iorigid = trackclient_lb.getSelectedItem().getLabel();
+
+	if (Messagebox.show("Remove tracker for: " + custname, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+		sqlst = "update CustomerTracking set deleted=1 where origid=" + iorigid;
+		sql.execute(sqlst);
+		sql.close();
+		populateClient_Tracker(); // refresh
+	}
+}
+
+void playFolderDriller(String ifoldno)
+{
+	theparam = "folderno=" + ifoldno;
+	uniqwindowid = kiboo.makeRandomId("xxfoldxx");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+void viewFolderDetails()
+{
+	if(trackclient_lb.getSelectedIndex() == -1) return;
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	playFolderDriller(ifolderno);
+}
+
+void playClientExtraAddress()
+{
+	if(trackclient_lb.getSelectedIndex() == -1) return;
+
+	lbitm = trackclient_lb.getSelectedItem();
+	arcodestr = "ar_code=" + lbhand.getListcellItemLabel(lbitm, 1);
+
+	uniqwindowid = kiboo.makeRandomId("arextra");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","dispatch/cust_addaddress.zul", uniqwindowid, arcodestr,useraccessobj);
+}
+
+// Add blank trail into DocumentTracking table
+void addTrail()
+{
+	if(global_doculink.equals("")) return;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	idatecreated = kiboo.getDateFromDatebox(hiddendatebox);
+
+	/*
+	idocutype = trailtype_dd.getSelectedItem().getLabel();
+	idocstatus = trailstatus_dd.getSelectedItem().getLabel();
+	iwhatever = kiboo.replaceSingleQuotes(trail_whatever.getValue());
+	iairway = kiboo.replaceSingleQuotes(airway_userdef1.getValue());
+	*/
+
+	sqlst = "insert into DocumentTrack values ( '" + global_doculink + "','','','', '' ,'" + useraccessobj.username + "','" + idatecreated + "',0,  '', '', '' , '' )";
+	sql.execute(sqlst);
+	sql.close();
+
+	populateTrails(global_doculink); // refresh
+}
+
+// Update trail record
+void updateTrail()
+{
+	if(global_doculink.equals("")) return;
+	if(trails_lb.getSelectedIndex() == -1 ) return;
+
+	lbitem = trails_lb.getSelectedItem();
+	iorigid = lbhand.getListcellItemLabel(lbitem, 0);
+	ilogdate = kiboo.getDateFromDatebox(logdatebox);
+
+	idoctype = trailtype_dd.getSelectedItem().getLabel();
+	idocstat = trailstatus_dd.getSelectedItem().getLabel();
+
+	iwhatever = kiboo.replaceSingleQuotes(trail_whatever.getValue());
+	iairway = kiboo.replaceSingleQuotes(airway_userdef1.getValue());
+	icontact = kiboo.replaceSingleQuotes(contact_userdef2.getValue());
+
+	iddmethod = trail_deliverymethod_userdef3.getSelectedItem().getLabel();
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	sqlst = "update DocumentTrack set docutype='" + idoctype + "', docstatus='" + idocstat + "', datelogged='" + ilogdate + 
+		"', whatever='" + iwhatever + "', userdef1='" + iairway + "', userdef2='" + icontact + "', userdef3='" + iddmethod + "'  where origid=" + iorigid;
+
+	sql.execute(sqlst);
+	sql.close();
+
+	populateTrails(global_doculink);
+}
+
+void removeTrail()
+{
+	if(global_doculink.equals("")) return;
+	if(trails_lb.getSelectedIndex() == -1 ) return;
+
+	if (Messagebox.show("Remove this trail", "Are you sure?", 
+	Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO)
+		return;
+
+	lbitem = trails_lb.getSelectedItem();
+	iorigid = lbhand.getListcellItemLabel(lbitem, 0);
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlsta = "update DocumentTrack set deleted=1 where origid=" + iorigid;
+	sql.execute(sqlsta);
+	sql.close();
+
+	populateTrails(global_doculink);
+}
+
+// 17/6/2010: let user view cash-sale customer info - if any being entered.
+void viewCashSales_Info_Clicker()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(clientfolders_div,"folderjobs_lb")) return;
+
+	selitem = folderjobs_lb.getSelectedItem();
+	folderno = lbhand.getListcellItemLabel(selitem,0);
+
+	// clear previous stuff before showing motherload
+	cashsales_info_lbl.setValue("-NO CASH-SALE CUSTOMER INFO-");
+
+	csrec = samphand.getCashSalesCustomerInfo_Rec(folderno);
+	if(csrec == null) return;
+
+	cs_motherload = csrec.get("customer_name") + "\n" + csrec.get("address1") + "\n" + csrec.get("address2") + "\n" +
+		csrec.get("zipcode") + " " + csrec.get("city") + " , " + csrec.get("customer_name") + "\n" +
+		csrec.get("country") + "\n" +
+		"Tel: " + csrec.get("telephone") + " Fax: " + csrec.get("fax") + "\n" +
+		"Email: " + csrec.get("email") + "\n" +
+		"Cont.Person: " + csrec.get("contact_person1");
+
+	cashsales_info_lbl.setValue(cs_motherload);
+}
+
+// 17/6/2010: client trails.. extra stuff to talk about the client. haha
+void playClientTrailsWindow()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(trackclient_div,"trackclient_lb")) return;
+
+	selitem = trackclient_lb.getSelectedItem();
+	thearcode = lbhand.getListcellItemLabel(selitem,1);
+
+	parame = "arcode=" + thearcode;
+	uniqid = kiboo.makeRandomId("ctrails");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","acctmodules/client_trails.zul", uniqid, parame,useraccessobj);
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="client_tracking_panel" title="Billing - Client Tracker ${MYVERSION}" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<div>
+
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<borderlayout height="600px">
+	<west title="Clients" size="30%" splittable="true" collapsible="true">
+	<div>
+		<div id="trackclient_div" />
+
+		<vbox style="padding:2px">
+			<hbox>
+				<button label="New client" onClick="playAssignCustomerWindow()" style="font-size:9px" />
+				<button label="Remove tracker" onClick="removeClientTracker()" style="font-size:9px" />
+				<separator width="5px" />
+				<button label="Client trails" style="font-size:9px" onClick="playClientTrailsWindow()" />				
+			</hbox>
+			<hbox>
+				<button label="Load folders" style="font-size:9px" onClick="loadClient_Folders_Clicker()" />
+				<button label="Extra address" onClick="playClientExtraAddress()" style="font-size:9px" />
+			</hbox>
+		</vbox>
+	</div>
+	</west>
+
+	<center>
+		<borderlayout height="500px">
+			<west title="Folders" size="46%" splittable="true" collapsible="true">
+			<div style="padding:2px">
+			
+				<label id="clientcode_lbl" style="font-size:10px; font-weight:bold; background:#404040; color:#ffffff; padding:2px" />
+				<label id="clientname_lbl" style="font-size:10px; font-weight:bold; background:#878740; color:#ffffff; padding:2px" />
+
+				<separator height="3px" />
+				<div id="clientfolders_div" />
+				<separator height="5px" />
+
+				<hbox>
+					<button id="folderdet_btn" label="Folder details" visible="false" style="font-size:9px" onClick="viewFolderDetails()" />
+					<button id="cashcustomer_info_btn" label="Show CASH customer info" visible="false" style="font-size:9px" onClick="viewCashSales_Info_Clicker()" />
+				</hbox>
+				<separator height="5px" />
+				<groupbox id="cashsales_groupbox" style="padding:3px" visible="false">
+					<caption label="Cash-sales customer info" />
+					<label id="cashsales_info_lbl" multiline="true" style="font-size:9px" />
+				</groupbox>
+			</div>
+			</west>
+
+			<center title="Job/Folders Trails">
+				<div style="padding:2px" >
+					<div style="background:#887733;padding:3px">
+						<label id="global_doculink_lbl" style="color:#FFFFFF" />
+					</div>
+					
+					<div id="trails_div" />
+
+					<button id="addtrail_btn" label="Add trail" onClick="addTrail()" style="font-size:9px" />
+					<button id="removetrail_btn" label="Remove" onClick="removeTrail()" style="font-size:9px" />
+					
+					<separator height="5px" />
+
+					<groupbox style="padding:2px" >
+						<caption label="Trail" />
+
+						<hbox>
+							<label value="T.Type" style="font-size:9px" />
+							<separator width="19px" />
+							<listbox id="trailtype_dd" mold="select" rows="1" style="font-size:9px" />
+							
+							<label value="Status" style="font-size:9px" />
+							<listbox id="trailstatus_dd" mold="select" rows="1" style="font-size:9px" />
+							
+							<label value="Log date" style="font-size:9px" />
+							<datebox id="logdatebox" format="yyyy-MM-dd" style="font-size:9px" />
+							
+						</hbox>
+						<separator height="3px" />
+						
+						<hbox>
+							<label value="Description" style="font-size:9px" />
+							<textbox id="trail_whatever" multiline="true" height="60px" width="400px" style="font-size:9px" />
+						</hbox>
+
+						<hbox>
+							<label value="Contact" style="font-size:9px" />
+							<separator width="10px" />
+							<textbox id="contact_userdef2" width="200px" style="font-size:9px" />
+						</hbox>
+						
+						<hbox>
+							<label value="D.Method" style="font-size:9px" />
+							<listbox id="trail_deliverymethod_userdef3" mold="select" rows="1" style="font-size:9px" />
+						</hbox>
+
+						<hbox>
+							<label value="Airway bill" style="font-size:9px" />
+							<textbox id="airway_userdef1" width="200px" style="font-size:9px" />
+						</hbox>
+
+					</groupbox>
+
+					<hbox>
+						<button id="updatetrail_btn" label="Update" onClick="updateTrail()" style="font-size:9px" />
+					</hbox>
+
+				</div>
+			</center>
+			
+		</borderlayout>
+	</center>
+	
+	<south>
+	<div>
+	</div>
+	</south>
+
+</borderlayout>
+
+</div>
+
+</panelchildren>
+</panel>
+</div>
+
+<zscript>
+
+kiboo.setTodayDatebox(hiddendatebox);
+kiboo.setTodayDatebox(logdatebox);
+
+populateClient_Tracker();
+
+lbhand.populateDropdownListbox(trailtype_dd, trail_types);
+lbhand.populateDropdownListbox(trailstatus_dd, trail_status);
+lbhand.populateDropdownListbox(trail_deliverymethod_userdef3, lu_DeliveryMethod);
+
+//makeClientTracker_Listbox(trackclient_div, "trackclient_lb");
+
+</zscript>
+
+</zk>
+

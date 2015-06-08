@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="viewfile_win"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title: Open any type of documents in a new window
+Written by: Victor Wong
+25/08/2011 -- knockoff from qc/viewlinkingdocument.zul
+*/
+
+import org.zkoss.util.media.AMedia;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+sqlhand = new SqlFuncs();
+guihand = new GuiFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+docid = Executions.getCurrent().getParameter("docid");
+
+void viewTheDocument(Div iparentdiv)
+{
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("550px");
+
+	ds_sql = sqlhand.DMS_Sql();
+	if(ds_sql == null) return;
+	sqlst = "select * from DocumentTable where origid=" + docid;
+	krec = ds_sql.firstRow(sqlst);
+	ds_sql.close();
+
+	kfilename = krec.get("file_name");
+	ktype = krec.get("file_type");
+	kexten = krec.get("file_extension");
+	kblob = krec.get("file_data");
+	kbarray = kblob.getBytes(1,(int)kblob.length());
+	// alert(kfilename + " : " + ktype + " : " + kexten + " : " + kbarray.toString());
+	AMedia am_doc = new AMedia(kfilename, kexten, ktype, kbarray);
+	newiframe.setContent(am_doc);
+	newiframe.setParent(iparentdiv);
+
+	//noaccess.setValue(ktype + " :: " + kexten);
+	
+}
+
+]]>
+</zscript>
+
+<window id="viewlinking_document_box" width="800px" height="630px" title="View file" position="center" mode="overlapped" border="normal" closable="true" sizable="true">
+<button label="X Close window" style="font-size:9px" onClick="guihand.globalCloseWindow(mainPlayground,myincludeid)" />
+<separator height="3px" />
+<div id="viewdoc_div" />
+<label id="noaccess" style="font-size:18px" />
+<zscript>
+viewTheDocument(viewdoc_div);
+</zscript>
+</window>
+</zk>

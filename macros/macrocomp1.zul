@@ -1,0 +1,7 @@
+
+<div style="${arg.bstyle}" width="${arg.bwidth}" height="${arg.bheight}" >
+	<hbox>
+	<div style="background:#eeeeee" width="30px" />
+	<label value="${arg.words}" />
+	</hbox>
+</div>

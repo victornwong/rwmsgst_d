@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="viewfile_win"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+
+/*
+Title: Open any type of documents in a new window
+Written by: Victor Wong
+
+NOTES:
+For security-wise, can view only files in tmp folder
+
+24/07/2013 -- knockoff from viewfile.zul to show local file -- non-db
+25/08/2011 -- knockoff from qc/viewlinkingdocument.zul
+*/
+import java.io.*;
+import org.zkoss.util.media.AMedia;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+sqlhand = new SqlFuncs();
+guihand = new GuiFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+//docid = Executions.getCurrent().getParameter("docid");
+p_fname = Executions.getCurrent().getParameter("pfn");
+
+TEMPFILEFOLDER = "tmp/";
+
+void viewTheDocument(Div iparentdiv)
+{
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("550px");
+	infname = session.getWebApp().getRealPath(TEMPFILEFOLDER + p_fname);
+	File file = new File(infname);
+	fis = new FileInputStream(file);
+	AMedia am_doc = new AMedia(infname, "pdf", "application/pdf", fis);
+	newiframe.setContent(am_doc);
+	newiframe.setParent(iparentdiv);
+	//noaccess.setValue(kbarray.length.toString());
+}
+
+]]>
+</zscript>
+
+<window id="lvdwin" width="800px" height="630px" title="View file" position="center" mode="overlapped" border="normal" closable="true" sizable="true">
+<button label="X Close window" style="font-size:9px" onClick="guihand.globalCloseWindow(mainPlayground,myincludeid)" />
+<separator height="3px" />
+<div id="viewdoc_div" />
+<label id="noaccess" style="font-size:18px" />
+<zscript>
+viewTheDocument(viewdoc_div);
+</zscript>
+</window>
+</zk>

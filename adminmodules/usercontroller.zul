@@ -1,0 +1,738 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="admin_usercontroller_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/als_lookuptree.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title: e-LabMan User Control Center
+Date: 17/9/2010
+Written by: Victor Wong
+**NOTES**
+Recode some of the stuff splitted in multiple modules
+07/10/2011: added stock_cat and groupcode to portaluser table - for use in the system during release-results and etc.
+*/
+
+MYTITLE = "User Controller";
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+if(useraccessobj.accesslevel != 9)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+kiboo = new Generals();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+selected_user_userstatus = 0;
+selected_user_origid = global_user_oldpassword = selected_username = selected_usergroup = "";
+sel_usergroup_lbitem = null;
+
+last_search_type = 0;
+
+void showDepartmentDetails(Tree wTree)
+{
+    selectedname = wTree.getSelectedItem().getLabel();
+    sqlstm = "select * from lookups where name='" + selectedname + "'";
+    therec = sqlhand.gpSqlFirstRow(sqlstm);
+	selected_usergroup = therec.get("idlookups"); // for later use
+	dpInputBoxes.idlookups = therec.get("idlookups");
+
+    usergroup_name.setValue(therec.get("name"));
+    usergroup_zzdisptext.setValue(therec.get("disptext"));
+
+	iexpired = therec.get("expired");
+	wexpi = false;
+	if(iexpired == 1) wexpi = true;
+
+    usergroup_expired.setChecked(wexpi);
+
+	zzval = 0;
+    if(therec.get("intval") != null) zzval = (int)therec.get("intval");
+    usergroup_intval.setValue(zzval);
+
+    usergroup_hodname_value1.setValue(therec.get("value1"));
+    usergroup_hodextno_value2.setValue(therec.get("value2"));
+    usergroup_hodtel_value3.setValue(therec.get("value3"));
+    usergroup_hodemail_value4.setValue(therec.get("value4"));
+
+} // end of showDepartmentDetails()
+
+
+void showUserDetails(String iorigid)
+{
+	urec = sechand.getUsername_Rec(iorigid);
+	if(urec == null) return;
+
+	user_username.setDisabled(false);
+	// deactivate for now, allow admin to change username - user with care - 18/11/2010
+	//if(!kkb.equals("")) user_username.setDisabled(true); // if got username di, cannot edit this field
+	user_username.setValue(urec.get("username"));
+	user_password.setValue("");
+	global_user_oldpassword = urec.get("password");
+	user_fullname.setValue(urec.get("fullname"));
+	user_designation.setValue(urec.get("designation"));
+	user_email.setValue(urec.get("email"));
+	user_handphone.setValue(urec.get("handphone"));
+	selected_user_userstatus = urec.get("locked");
+	kkk = (selected_user_userstatus == 1) ? "Unlock account" : "Lock account";
+
+	locktiktok.setLabel(kkk); // hardcoded at the UI for "Lock account" button
+	kkk = urec.get("accesslevel").toString();
+	if(kkk.equals("9")) kkk = "God-like";
+	lbhand.matchListboxItems(user_accesslevel,kkk);
+/*
+	tstockcat = (urec.get("stock_cat") == null) ? "0" : urec.get("stock_cat");
+	tgroupcode = (urec.get("groupcode") == null) ? "0" : urec.get("groupcode");
+	matchListboxItems(user_stockcat,tstockcat);
+	matchListboxItems(user_groupcode,tgroupcode);
+*/
+	lbhand.matchListboxItems(user_branch_drd,urec.get("branch"));
+}
+
+void clearUserDetails()
+{
+	selected_user_origid = "";
+	if(lbhand.check_ListboxExist_SelectItem(acl_holder,"accessthing_lb")) accessthing_lb.setParent(null);
+
+	Object[] ob = {	acl_username_lbl, user_username, user_password, user_fullname, user_designation,
+	user_email,	user_handphone, user_accesslevel, user_branch_drd };
+	clearUI_Field(ob);
+	locktiktok.setLabel("Lock account");
+}
+
+// ----- ACL related ------
+
+// acl_accesslevel(def in UI) onSelect listener
+class acl_lvl_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(sel_usergroup_lbitem == null) return;
+		alvl = event.getReference().getLabel();
+		if(alvl.equals("God-like")) alvl = "9";
+		lbhand.setListcellItemLabel(sel_usergroup_lbitem,1,alvl);
+	}
+}
+
+class usergroupaccesslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		sel_usergroup_lbitem = event.getReference();
+		iusergroup = lbhand.getListcellItemLabel(sel_usergroup_lbitem,0);
+		acl_usergroup.setValue(iusergroup);
+		ilevel = lbhand.getListcellItemLabel(sel_usergroup_lbitem,1);
+		if(ilevel.equals("9")) tacl = "God-like";
+		lbhand.matchListboxItems(acl_accesslevel,ilevel);
+	}
+}
+
+// accessthing listbox onDrop listener
+class Accessthing_droplistener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		Component dragged = event.dragged;
+		// no username selected.. don't capture drop..
+		if(selected_user_origid.equals("")) return;
+		iusergroup = dragged.getLabel();
+
+		// check if usergroup already in the listbox
+		if(lbhand.ExistInListbox(accessthing_lb, iusergroup, 0)) return;
+
+		accessthing_lb.setRows(8); // incase first-time no usergroup def for user - rows=5
+
+		String[] strarray = new String[2];
+		strarray[0] = iusergroup;
+		strarray[1] = "0";
+		lbhand.insertListItems(accessthing_lb,strarray,"false","");
+	}
+}
+
+void populateAccessthing_LB(Div mDiv, String un_origid)
+{
+	Object[] accessthing_lb_headers = {
+	new listboxHeaderObj("Usergroup",true),
+	new listboxHeaderObj("Lvl",true),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox(mDiv, accessthing_lb_headers, "accessthing_lb", 5);
+	sel_usergroup_lbitem = null; // reset
+
+	newlb.setDroppable("treedrop"); // def in als_lookuptree.zs
+	newlb.addEventListener("onDrop", new Accessthing_droplistener());
+	newlb.addEventListener("onSelect", new usergroupaccesslb_Listener());
+
+	sqlstatem = "select usergroup_code,accesslevel from " + TABLE_PORTALGROUPACCESS + " where user_origid=" + un_origid;
+	tlist = sqlhand.gpSqlGetRows(sqlstatem);
+	if(tlist.size() == 0) return;
+	newlb.setRows(8);
+	acl_accesslevel.addEventListener("onSelect", new acl_lvl_Listener());
+
+	String[] strarray = new String[2];
+	for(ilist : tlist)
+	{
+		strarray[0] = ilist.get("usergroup_code");
+		strarray[1] = ilist.get("accesslevel").toString();
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+// Remove usergroup assigned to user
+void removeUsergroup()
+{
+	torem = acl_usergroup.getValue();
+	if(torem.equals("")) return;
+
+	lbitemc = accessthing_lb.getItemCount();
+	if(lbitemc == 0) return;
+
+	for(i=0; i<lbitemc; i++)
+	{
+		iusg = accessthing_lb.getItemAtIndex(i).getLabel();
+
+		if(torem.equals(iusg))
+		{
+			accessthing_lb.removeItemAt(i);
+			// reset the input box and 
+			acl_usergroup.setValue("");
+			acl_accesslevel.setSelectedIndex(0);
+			break;
+		}
+	}
+
+} // end of removeUsergroup()
+	
+void removeACLFromDatabase(String un_origid)
+{
+	sqlstatem = "delete from " + TABLE_PORTALGROUPACCESS + "  where user_origid=" + un_origid;
+	sqlhand.gpSqlExecuter(sqlstatem);
+}
+
+// Save ACL (accessthing listbox) to database table portalGroupAccess
+void saveACL()
+{
+	if(selected_user_origid.equals("")) return;
+	sqlstm = "";
+	// remove all ACL from table for the user before putting new ones
+	sqlstm = "delete from " + TABLE_PORTALGROUPACCESS + "  where user_origid=" + selected_user_origid + ";";
+	// if nothing in the accessthing_lb, no need to proceed
+	lbitemc = accessthing_lb.getItemCount();
+	if(lbitemc != 0)
+	{
+		// loop through what's in the listbox and save	
+		for(i=0; i<lbitemc; i++)
+		{
+			selitem = accessthing_lb.getItemAtIndex(i);
+			// chils = accessthing_lb.getItemAtIndex(i).getChildren();
+			usergp = lbhand.getListcellItemLabel(selitem,0);
+			iaclvl = lbhand.getListcellItemLabel(selitem,1);
+			sqlstm += "insert into " + TABLE_PORTALGROUPACCESS + " (user_origid,usergroup_code,accesslevel) " + 
+			"values (" + selected_user_origid + ",'" + usergp + "'," + iaclvl + ");";
+		}
+	}
+	sqlhand.gpSqlExecuter(sqlstm);
+	populateAccessthing_LB(acl_holder, selected_user_origid); // refresh;
+}
+
+// ----- end of ACL related ------
+
+// ----- Users related ------
+
+// username listbox onSelect event routine
+class usernamelb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_user_origid = lbhand.getListcellItemLabel(selitem,0);
+		selected_username = lbhand.getListcellItemLabel(selitem,1);
+		showUserDetails(selected_user_origid);
+		acl_username_lbl.setValue("Username: " + selected_username);
+		populateAccessthing_LB(acl_holder, selected_user_origid); // show ACL
+	}
+}
+usnamecliker = new usernamelb_Listener();
+// itype: 1=only active, 2=all, 3=locked users
+void startUsername_Search(int itype)
+{
+	Object[] users_lb_headers = {
+	new listboxHeaderObj("Origid",false),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Full.Name",true),
+	new listboxHeaderObj("Lvl",true),
+	new listboxHeaderObj("Brh",true),
+	new listboxHeaderObj("Stat",true),
+	new listboxHeaderObj("Del",true),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox(users_holder, users_lb_headers, "username_lb", 5);
+	last_search_type = itype;
+
+	sqlstm = "select origid,username,fullname,locked,accesslevel,branch,deleted from " + TABLE_PORTALUSER;
+	postfix = " order by username";
+	switch(itype)
+	{
+		case 1: sqlstm += " where locked=0";
+		break;
+
+		case 3: sqlsqm += " where locked=1";
+		break;
+	}
+
+	sqlstm += postfix;	
+	tlist = sqlhand.gpSqlGetRows(sqlstm);
+	if(tlist == null) return;
+	newlb.setRows(22);
+	newlb.addEventListener("onSelect", usnamecliker);
+	ArrayList kabom = new ArrayList();
+
+	for(ilist : tlist)
+	{
+		kabom.add(ilist.get("origid").toString());
+		usname = ilist.get("username");
+		usname = (usname.equals("")) ? "-undefined-" : usname;
+		kabom.add(usname);
+		funame = ilist.get("fullname");
+		funame = (funame.equals("")) ? "-undefined-" : funame;
+		kabom.add(funame);
+		aclvl = ilist.get("accesslevel");
+		aclvl = (aclvl == 0) ? "---" : aclvl.toString();
+		kabom.add(aclvl);
+		kabom.add(ilist.get("branch"));
+		istatus = ilist.get("locked");
+		icompstr = (istatus == 1) ? "Locked" : "Access";
+		kabom.add(icompstr);
+		delflag = ilist.get("deleted");
+		delflag = (delflag == 1) ? "-D-" : "---";
+		kabom.add(delflag);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+} // end of startUsername_Search()
+
+// Lock or unlock user account
+void lockUserAccount()
+{
+	if(selected_user_origid.equals("")) return;
+	kkk = (selected_user_userstatus == 0) ? "1" : "0";
+	sqlstm = "update " + TABLE_PORTALUSER + " set locked=" + kkk + " where origid=" + selected_user_origid;
+	sqlhand.gpSqlExecuter(sqlstm);
+	startUsername_Search(last_search_type);
+}
+
+// Insert new user into table - PortalUser (TABLE_PORTALUSER def in securityfuncs.zs)
+void createNewUser()
+{
+	sqlstm = "insert into " + TABLE_PORTALUSER + 
+	" (username,password,fullname,designation,email,handphone,accesslevel,deleted,locked,branch,stock_cat,groupcode) " +
+	"values ('','','','','','',0,0,0,'','','')";
+	sqlhand.gpSqlExecuter(sqlstm);
+	startUsername_Search(last_search_type);
+} // end of createNewUser()
+
+void updateUsernameDetails()
+{
+	if(selected_user_origid.equals("")) return;
+	/*
+	sqlstm = "select username from portaluser where username='" + iusername + "'";
+	ckrec = sql.firstRow(sqlstm);
+	if(ckrec != null)
+	{
+		guihand.showMessageBox("Username is already defined in user-list, select a different username");
+		sql.close();
+		return;
+	}
+	*/
+
+	Object[] ob = { user_username, user_fullname, user_designation, user_email, user_handphone, user_accesslevel, user_branch_drd,
+	user_password };
+
+/*
+istockcat = user_stockcat.getSelectedItem().getLabel();
+igroupcode = user_groupcode.getSelectedItem().getLabel();
+*/
+	dt = getString_fromUI(ob);
+
+	if(dt[5].equals("God-like")) dt[5] = "9";
+
+	sqlstm = 
+	"update " + TABLE_PORTALUSER + " set username='" + dt[0] + "',fullname='" + dt[1] + "'," + 
+	"designation='" + dt[2] + "',email='" + dt[3] + "',handphone='" + dt[4] + 
+	"', accesslevel=" + dt[5] + ", branch='" + dt[6] + "'" ; //, stock_cat='" + istockcat + "',groupcode='" + igroupcode + "' ";
+
+	if(global_user_oldpassword.equals(""))
+		sqlstm += ",password='" + sechand.als_MD5_Encrypter(dt[7]) + "'";
+
+	sqlstm += " where origid=" + selected_user_origid;
+	sqlhand.gpSqlExecuter(sqlstm);
+	startUsername_Search(last_search_type);
+	guihand.showMessageBox("User details updated");
+}
+
+// Encrypt and update password for user
+void resetPassword()
+{
+	if(selected_user_origid.equals("")) return;
+	ipassword = user_password.getValue();
+	if(ipassword.equals("")) return;
+	encrypt_password = sechand.als_MD5_Encrypter(ipassword);
+	sqlstm = "update " + TABLE_PORTALUSER + " set password='" + encrypt_password + "' where origid=" + selected_user_origid;
+	sqlhand.gpSqlExecuter(sqlstm);
+	guihand.showMessageBox(selected_username + " : Password reset");
+}
+
+// Set deleted flag in table - won't delete account permanently
+void deleteUsername()
+{
+	if(selected_user_origid.equals("")) return;
+	if (Messagebox.show("Toggle delete-flag : " + selected_username, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+	sqlstm = "update " + TABLE_PORTALUSER + " set deleted=1 where origid=" + selected_user_origid;
+	sqlhand.gpSqlExecuter(sqlstm);
+	startUsername_Search(last_search_type); // refrsh
+}
+
+void hardDeleteUser_clicker()
+{
+	if(selected_user_origid.equals("")) return;
+
+	if (Messagebox.show("Hard delete : " + selected_username, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+	sqlstm = "delete from " + TABLE_PORTALGROUPACCESS + "  where user_origid=" + selected_user_origid + ";";
+	sqlstm += "delete from portaluser where origid=" + selected_user_origid + ";";
+	sqlhand.gpSqlExecuter(sqlstm);
+
+	clearUserDetails();
+	startUsername_Search(last_search_type); // refrsh
+}
+
+// ----- end of Users related ------
+
+// ----- Usergroup related -----
+void verifyDelete(Tree itypetree, lookupInputs winputs)
+{
+    if (Messagebox.show("This is a hard-delete, you know what you are doing right? You sure you want to it?", "Delete",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) == Messagebox.YES)
+	{
+		// play safe - if expired = false, set to true, won't delete completely at first
+		if(winputs.expired.isChecked() == false)
+		{
+			winputs.expired.setChecked(true);
+			updateLookupItem(itypetree,winputs);
+		}
+		else
+		{
+			// if already checked as expired, do a hard-delete
+			deleteLookupItem(itypetree,winputs);
+			winputs.clearValues();
+		}
+	}
+}
+
+// ----- end of Usergroup related -----
+
+// 07/10/2011: stock_cat dropdown - can be used in other module, change listbox id and div
+void populateStockCat_dropdown(Div idiv)
+{
+	Object[] sm_lb_headers = {
+	new dblb_HeaderObj("stockcat",true,"stock_cat",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+    if(sql == null) return;
+	sqlstm = "select distinct stock_cat from stockmasterdetails order by stock_cat";
+	Listbox newlb = lbhand.makeVWListbox_onDB(idiv,sm_lb_headers,"user_stockcat",8,sql,sqlstm);
+	sql.close();
+	//newlb.setMold("select");
+	newlb.setStyle("font-size:9px");
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+}
+
+void populateGroupCode_dropdown(Div idiv)
+{
+	Object[] sm_lb_headers = {
+	new dblb_HeaderObj("groupcode",true,"groupcode",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+    if(sql == null) return;
+	sqlstm = "select distinct groupcode from stockmasterdetails order by groupcode";
+	Listbox newlb = lbhand.makeVWListbox_onDB(idiv,sm_lb_headers,"user_groupcode",8,sql,sqlstm);
+	sql.close();
+	newlb.setStyle("font-size:9px");
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+}
+
+void showSetupStockGroup_pop()
+{
+	if(selected_user_origid.equals("")) return;
+
+	populateStockCat_dropdown(stockcat_hold);
+	populateGroupCode_dropdown(groupcode_hold);
+	
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select stock_cat,groupcode from portaluser where origid=" + selected_user_origid;
+	sgrec = sql.firstRow(sqlstm);
+	sql.close();
+
+	if(sgrec != null)
+	{
+		if(sgrec.get("stock_cat") != null) luhand.findAndTick(user_stockcat,sgrec.get("stock_cat"),",");
+		if(sgrec.get("groupcode") != null) luhand.findAndTick(user_groupcode,sgrec.get("groupcode"),",");
+	}
+
+	setupstockgroup_pop.open(stockgroup_btn);
+}
+
+void saveStockGroup()
+{
+	if(selected_user_origid.equals("")) return;
+	setupstockgroup_pop.close();
+	stkstr = "";
+	for(dpi : user_stockcat.getSelectedItems())
+	{
+		stkstr += dpi.getLabel() + ",";
+	}
+	try { stkstr = stkstr.substring(0,stkstr.length()-1); } catch (Exception e) { stkstr = ""; }
+
+	grpstr = "";
+	for(dpi : user_groupcode.getSelectedItems())
+	{
+		grpstr += dpi.getLabel() + ",";
+	}
+	try { grpstr = grpstr.substring(0,grpstr.length()-1); } catch (Exception e) { grpstr = ""; }
+
+	sqlstm = "update portaluser set stock_cat='" + stkstr + "', groupcode='" + grpstr + "' where origid=" + selected_user_origid;
+	sqlhand.gpSqlExecuter(sqlstm);
+}
+
+]]>
+</zscript>
+
+<popup id="setupstockgroup_pop" >
+<div width="350px">
+	<hbox>
+		<div id="stockcat_hold" />
+		<div id="groupcode_hold" />
+	</hbox>
+	<separator height="2px" />
+	<button label="Save stock/group ticks" sclass="k9" onClick="saveStockGroup()" />
+</div>
+</popup>
+<style src="/real-world.css" />
+<style>
+.subhead0 { font-size:14px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+</style>
+
+<div width="1200px">
+<panel id="adminusercontroller_panel" title="${MYTITLE}" border="normal" collapsible="true" closable="true">
+<panelchildren style="background:#2e3436">
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox>
+
+<div sclass="shadowbox" style="background:#909d2a" width="420px" >
+<label sclass="subhead0" value="Usergroup Tree" />
+<tree id="depart_tree" zclass="z-dottree" rows="15" onSelect="showDepartmentDetails(depart_tree)" >
+<treecols>
+	<treecol label="Usergroup" />
+	<treecol label="Description" />
+</treecols>
+</tree>
+<separator height="3px" />
+<groupbox>
+	<caption label="Usergroup Metadata" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Usergroup code" sclass="k9" />
+			<textbox id="usergroup_name" sclass="k9" />
+			<label value="Code Integer" sclass="k9" />
+			<intbox id="usergroup_intval" sclass="k9" />
+		</row>
+		<row>
+			<label value="Description" sclass="k9" />
+			<textbox id="usergroup_zzdisptext" sclass="k9" />
+			<label value="Expired" sclass="k9" />
+			<checkbox id="usergroup_expired" />
+		</row>
+		<row>
+			<label value="HOD Name" sclass="k9" />
+			<textbox id="usergroup_hodname_value1" sclass="k9" />
+			<label value="Email" sclass="k9" />
+			<textbox id="usergroup_hodemail_value4" sclass="k9" />
+		</row>
+		<row>
+			<label value="Telephone" sclass="k9" />
+			<textbox id="usergroup_hodtel_value3" sclass="k9" />
+			<label value="Ext No" sclass="k9" />
+			<textbox id="usergroup_hodextno_value2" sclass="k9" />
+		</row>
+		</rows>
+	</grid>
+</groupbox>
+
+<div id="usergroup_crubbuttons" style="padding:2px" >
+    <hbox>
+        <button label="Clear" sclass="k9" onClick="dpInputBoxes.clearValues()" />
+        <button label="Insert" sclass="k9" onClick="insertLookupItem(depart_tree,dpInputBoxes)" />
+        <button label="Update" sclass="k9" onClick="updateLookupItem(depart_tree,dpInputBoxes)" />
+        <button label="Delete" sclass="k9" onClick="verifyDelete(depart_tree,dpInputBoxes)" />
+		<textbox id="hiddenbox" visible="false" />
+    </hbox>
+</div>
+</div>
+<!-- end of usergroup boxes -->
+
+<!-- usergroup to users boxes -->
+<div sclass="shadowbox" style="background:#909d2a" width="300px" >
+<label sclass="subhead0" value="ACL" />
+
+<div style="background:#885577;padding:2px">
+<label id="acl_username_lbl" style="color:#ffffff" />
+</div>
+
+<div id="acl_holder" />
+<separator height="3px" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Usergroup" sclass="k9" />
+			<textbox id="acl_usergroup" disabled="true" width="80px" sclass="k9" />
+		</row>
+		<row>
+			<label value="Level" sclass="k9" />
+			<listbox id="acl_accesslevel" mold="select" sclass="k9" />
+		</row>
+		</rows>
+	</grid>
+
+	<separator height="3px" />
+	<hbox>
+		<button label="Save ACL" sclass="k9" onClick="saveACL()" />
+		<button label="Remove usergroup" sclass="k9" onClick="removeUsergroup()" />
+	</hbox>
+</div>
+
+<!-- end of usergroup to users boxes -->
+
+<!-- user boxes -->
+<div sclass="shadowbox" style="background:#909d2a" width="420px" >
+<label sclass="subhead0" value="Users" />
+
+<div id="users_holder" />
+<separator height="3px" />
+<groupbox>
+	<caption label="User details" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Username" sclass="k9" />
+			<textbox id="user_username" sclass="k9" />
+			<label value="Password" sclass="k9" />
+			<textbox id="user_password" sclass="k9" />
+		</row>
+		<row>
+			<label value="Fullname" sclass="k9" />
+			<textbox id="user_fullname" sclass="k9" />
+			<label value="Designation" sclass="k9" />
+			<textbox id="user_designation" sclass="k9" />
+		</row>
+		<row>
+			<label value="Email" sclass="k9" />
+			<textbox id="user_email" sclass="k9" />
+			<label value="Phone" sclass="k9" />
+			<textbox id="user_handphone" sclass="k9" />
+		</row>
+		<row>
+			<label value="Access level" sclass="k9" />
+			<listbox id="user_accesslevel" mold="select" sclass="k9" />
+			<label value="Branch" sclass="k9" />
+			<listbox id="user_branch_drd" mold="select" sclass="k9" />
+		</row>
+		<!--
+			<label value="StockCat" sclass="k9" />
+			<div id="userstockcat_holder" />
+			<label value="GroupCode" sclass="k9" />
+			<div id="usergroupcode_holder" />
+			-->
+		</rows>
+	</grid>
+	<button id="stockgroup_btn" label="Assign stock/groupcode" sclass="k9" onClick="showSetupStockGroup_pop()" />
+</groupbox>
+
+<separator height="3px" />
+<div style="padding:2px">
+<hbox>
+<button label="New user" sclass="k9" onClick="createNewUser()" />
+<button label="Update" sclass="k9" onClick="updateUsernameDetails()" />
+<button label="Reset password" sclass="k9" onClick="resetPassword()" />
+<button id="locktiktok" label="Lock account" sclass="k9" onClick="lockUserAccount()" />
+<button id="deluser_btn" label="Delete user" sclass="k9" visible="false" onClick="hardDeleteUser_clicker()" />
+</hbox>
+</div>
+
+</div>
+<!-- end of user boxes -->
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+// make sure
+theuname = useraccessobj.username;
+if(theuname.equals("padmin") || theuname.equals("toymaker"))
+{
+	deluser_btn.setVisible(true);
+}
+
+//setTodayDatebox(hiddendatebox);
+//lbhand.populateDropdownListbox(user_accesslevel, dd_accesslevel);
+//lbhand.populateDropdownListbox(user_branch_drd, dd_branches);
+//lbhand.populateDropdownListbox(acl_accesslevel, dd_accesslevel);
+
+luhand.populateListbox_ByLookup(user_accesslevel,"dd_accesslevel",2);
+luhand.populateListbox_ByLookup(user_branch_drd,"dd_branches",2);
+luhand.populateListbox_ByLookup(acl_accesslevel,"dd_accesslevel",2);
+
+//populateStockCat_dropdown(userstockcat_holder);
+//populateGroupCode_dropdown(usergroupcode_holder);
+
+dpInputBoxes = new lookupInputs(usergroup_name,usergroup_zzdisptext,usergroup_expired,usergroup_intval,
+    usergroup_hodname_value1, usergroup_hodextno_value2, usergroup_hodtel_value3, usergroup_hodemail_value4,
+    hiddenbox, hiddenbox, hiddenbox, hiddenbox,
+    "DEPARTMENTS",depart_tree);
+
+showLookupTree("DEPARTMENTS",depart_tree);
+startUsername_Search(1);
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -1,0 +1,999 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="jobmakers_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/internaltasksf_v1.zs" />
+<zscript src="../rws_sales/stockitemSelector.zs" />
+<zscript src="./jobmakerf/jm_import_FC6.zs" />
+<zscript src="./jobMaker_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Job Maker (ROC/SO/etc)";
+MYVERSION = "v2.0";
+MYPANEL = "jobmakeapanr";
+/*
+@Title Job maker - to manage ROC,SO,RMA or anything else
+@Author Victor Wong
+@Dated 22/08/2013
+
+03/03/2014: if job is for new equips, add task-notif for PR div.
+			List equips name/qty from focus6 instead of stkmstdet
+10/03/2014: some codes optimization
+19/03/2014: mod job-listing to use grid instead of listbox
+16/04/2014: Lai req to see MRN which linked to T.GRN
+24/06/2014: import meta and items from ROC and SO FC6
+26/09/2014: chg rw_jobs.items to NTEXT to store unlimited items
+16/10/2014: bump to version 2. Linking to new modules and UI redesign
+
+*/
+import java.util.*;
+import java.text.*;
+import java.lang.*;
+import java.math.BigDecimal;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
+import groovy.sql.Sql;
+import org.zkoss.zul.*;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+param_jobid = Executions.getCurrent().getParameter("jb");
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs(); gridhand = new GridHandler();
+ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
+global_selected_customername = "";
+glob_sel_job = glob_sel_custname = glob_sel_fc6 = glob_sel_status = glob_sel_pickup = glob_sel_rocno = "";
+glob_sel_complete = glob_sel_jobtype = glob_sel_bomid = glob_sel_picklist = glob_sel_prn = glob_sel_grn = glob_sel_mrn = "";
+ljob_myname = "";
+ljob_reqnewpurchase = ljob_rmaonly = false;
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = custr.get("address1yh") + ",\n" + custr.get("address2yh") + ",\n" +
+		custr.get("address3yh") + ",\n" + custr.get("address4yh");
+
+	//locstr = locstr.replaceAll(", ,",",");
+	j_deliver_address.setValue(locstr); // HARDCODED in form
+	j_fc6_custid.setValue(global_selected_customerid);
+	j_prepayment.setValue( kiboo.checkNullString(custr.get("code")) );
+
+	//global_selected_customername = kiboo.checkNullString( custr.get("name") ); // save for later use
+	//customer_name.setValue( kiboo.checkNullString( custr.get("name")) );
+}
+
+String JN_linkcode()
+{
+	if(glob_sel_job.equals("")) return "";
+	return JOBS_PREFIX + glob_sel_job;
+}
+
+int jobitems_gridRows()
+{
+	retv = 0;
+	if(items_holder.getFellowIfAny("items_grid") != null)
+	{
+		retv = items_rows.getChildren().size();
+	}
+	return retv;
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = refreshmeta = viewstuff = false;
+	lnkc = JOBS_PREFIX + glob_sel_job;
+
+	if(itype.equals("newjob_b"))
+	{
+		sqlstm = "insert into rw_jobs (datecreated,username,jobtype,status,priority,customer_name,eta,etd) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','UNDEF','NEW','NORMAL','UNDEF','" + todaydate + "','" + todaydate + "')";
+		refresh = true;
+	}
+
+	if(itype.equals("submitjob_b"))
+	{
+		if(glob_sel_job.equals("")) return;
+		if(glob_sel_jobtype.equals("UNDEF")) { msgtext = "Please specify a JOB-TYPE"; }
+		else
+		if(glob_sel_status.equals("PICK") || glob_sel_status.equals("COMP")) { msgtext = "Job is in WIP or completed"; }
+		else
+		{
+			if(jobitems_gridRows() == 0) // check if any items entered
+			{
+				msgtext = "Please enter some items to start the job..";
+			}
+			else
+			{
+				sqlstm = "update rw_jobs set status='SUBMIT' where origid=" + glob_sel_job;
+				refresh = true;
+
+				toggleButts(itype,true);
+				toggleButts("workarea_butts",true);
+
+				// Send email notif to approvers
+				topeople = luhand.getLookups_ConvertToStr("JOB_APPROVER_EMAILS",2,",");
+				emailsubj = "RE: New " + lnkc + " submitted";
+				emailmsg = "A new job has been submitted. Pending approval, your action required.";
+				//gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
+
+				ojtyp = j_jobtype.getSelectedItem().getLabel();
+				oty = kiboo.replaceSingleQuotes( j_order_type.getValue().trim() );
+
+				if(oty.equals("NEW")) // if order-type=NEW, send notif to procurement
+				{
+					topeople = "laikw@rentwise.com,satish@rentwise.com,sangeetha@rentwise.com";
+					emailsubj = "RE: New " + lnkc + " submitted which required NEW EQUIPMENTS";
+					emailmsg = "A new job has been submitted which required NEW EQUIPMENTS purchase." +
+					"Do take the appropriate action ASAP.";
+					gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
+
+					// 03/03/2014: inject task TODO HARDCODED
+					String[] tsku = { "sangeetha","satish","laikw" };
+					for(i=0; i<tsku.length; i++)
+					{
+						injInternalTask(useraccessobj.username, tsku[i], emailsubj, lnkc, "URGENT");
+					}
+				}
+
+				if(ojtyp.equals("RMA")) // send noti to RMA-technician and so on
+				{
+					//topeople = "rma@rentwise.com,helpdesk@rentwise.com";
+					topeople = "victor@rentwise.com";
+					emailsubj = "RE: New " + lnkc + " submitted for RMA";
+					emailmsg = "A new job has been submitted for RMA. Do take the appropriate action ASAP.";
+					gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
+				}
+				// TODO check if some-docs avail. else cannot submit
+			}
+		}
+	}
+
+	if(itype.equals("pickjob_b"))
+	{
+		if(glob_sel_job.equals("")) return;
+		/* disabled 26/11/2013 - can pickup even no approval
+		if(!checkBPM_fullapproval(lnkc))
+		{
+			msgtext = "Job is not approved. Cannot pick-up";
+		}
+		else
+		{
+			sqlstm = "update rw_jobs set status='WIP', pickup_date='" + todaydate + "'," + 
+			"pickup_by='" + useraccessobj.username + "' where origid=" + glob_sel_job;
+			refresh = true;
+
+			toggleButts(itype,true);
+			toggleButts("workarea_butts",true);
+
+			// TODO send email-noti if req when job pickup
+		}
+		*/
+
+			sqlstm = "update rw_jobs set status='WIP', pickup_date='" + todaydate + "'," + 
+			"pickup_by='" + useraccessobj.username + "' where origid=" + glob_sel_job;
+			refresh = true;
+
+			toggleButts(itype,true);
+			toggleButts("workarea_butts",true);
+	}
+
+	if(itype.equals("compjob_b")) // complete the job - TODO clickable by certain ppl only
+	{
+		msgtext = "Undecided yet how to mark things as completed";
+	}
+
+	if(itype.equals("updatejob_b"))
+	{
+		if(glob_sel_job.equals("")) return;
+		
+		Object[] oib = { customername, j_jobtype, j_quote_no_old, j_rwroc, j_cust_ref, j_prepayment,
+		j_priority, j_contact, j_contact_tel, j_contact_email, j_deliver_address,
+		j_eta, j_etd, j_do_notes, j_order_type, j_debit_note, j_whoscode, j_contract_start, j_fc6_custid };
+
+		jim = ngfun.getString_fromUI(oib);
+
+		if(!jim[18].equals("")) jim[18] = ",fc6_custid=" + jim[18];
+		if(!jim[17].equals("")) jim[17] = ",contract_start='" + jim[17] + "'";
+
+		sqlstm = "update rw_jobs set customer_name='" + jim[0] + "', jobtype='" + jim[1] + "', quote_no_old='" + jim[2] + "'," +
+		"rwroc='" + jim[3] + "', cust_ref='" + jim[4] + "', prepayment='" + jim[5] + "',priority='" + jim[6] + "'," +
+		"contact='" + jim[7] + "',contact_tel='" + jim[8] + "',contact_email='" + jim[9] + "',deliver_address='" + jim[10] + "', " +
+		"eta='" + jim[11] + "', etd='" + jim[12] + "', do_notes='" + jim[13] + "', " +
+		"order_type='" + jim[14] + "', debit_note='" + jim[15] + "', whoscode='" + jim[16] + "' " +
+		jim[17] + jim[18] +
+		"where origid=" + glob_sel_job;
+
+		jobItems(ji_save_b); // save the items too when save job metadata
+
+		refresh = refreshmeta = true;
+		injectApprovers(lnkc, jim[1]);
+	}
+
+	if(itype.equals("viewbom_b")) // view any BOMs assigned
+	{
+		if(glob_sel_bomid.equals("")) return;
+		jobmakeapanr.setOpen(false);
+
+		bms = glob_sel_bomid.split(",");
+		for(i=0;i<bms.length;i++)
+		{
+			try {
+			activateModule(mainPlayground,"workbox","rws_warehouse/showBOMWindow_v1.zul",kiboo.makeRandomId("vbm"),
+			"bom=" + bms[i], useraccessobj);
+			} catch (Exception e) {}
+		}
+	}
+
+	if(itype.equals("viewpick_b")) // view pick-lists if any
+	{
+		if(glob_sel_picklist.equals("")) return;
+		jobmakeapanr.setOpen(false);
+
+		pms = glob_sel_picklist.split(",");
+		for(i=0;i<pms.length;i++)
+		{
+			try {
+			activateModule(mainPlayground,"workbox","rws_warehouse/showPickListWindow_v1.zul",kiboo.makeRandomId("vpl"),
+			"ppl=" + pms[i], useraccessobj);
+
+			} catch (Exception e) {}
+		}
+	}
+
+	if(itype.equals("listmyjob_b"))
+	{
+		ljob_myname = useraccessobj.username;
+		showJobs();
+	}
+
+	if(itype.equals("jreqnewequip_b"))
+	{
+		ljob_reqnewpurchase = true;
+		showJobs();
+	}
+
+	if(itype.equals("jlistrma_b"))
+	{
+		ljob_rmaonly = true;
+		showJobs();
+	}
+
+	kaki = null;
+	wopme = 0;
+
+	if(itype.equals("viewgrn_b"))
+	{
+		if(glob_sel_grn.equals("")) return;
+		kaki = glob_sel_grn;
+		wopme = 1;
+		viewstuff = true;
+	}
+
+	if(itype.equals("viewpo_b"))
+	{
+		if(glob_sel_prn.equals("")) return;
+		kaki = glob_sel_prn;
+		wopme = 2;
+		viewstuff = true;
+	}
+	
+	if(itype.equals("viewmrn_b"))
+	{
+		if(glob_sel_mrn.equals("")) return;
+		kaki = glob_sel_mrn;
+		wopme = 3;
+		viewstuff = true;
+	}
+
+	if(viewstuff)
+	{
+		xp = kaki.split(",");
+		for(i=0; i<xp.length; i++)
+		{
+			try
+			{
+				if(!xp[i].equals("") && wopme != 0)
+				{
+					wtit = "T.GRN: ";
+					switch(wopme)
+					{
+						case 2:
+							wtit = "PO: ";
+							break;
+						case 3:
+							wtit = "MRN: ";
+							break;
+					}
+					wtit += xp[i];
+					kwin = vMakeWindow(windsholder, wtit, "normal", "center", "450px", "");
+					mdv = new Div();
+					mdv.setParent(kwin);
+					switch(wopme)
+					{
+						case 1:
+						showGRNitems(xp[i], "1281", mdv); // T.GRN
+						break;
+						case 2:
+						showPOitems(xp[i], mdv);
+						break;
+						case 3:
+						showGRNitems(xp[i], "1280", mdv); // MRN
+						break;
+					}
+				}
+			}
+			catch (Exception e) {}
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showJobs();
+	if(refreshmeta) showJobMetadata(glob_sel_job);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void jobItems(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = "";
+	refresh = statflash = false;
+	
+	bstyle = "font-weight:bold;";
+	k9 = "font-size:9px";
+
+	if(itype.equals("ji_insert_b"))
+	{
+		cmid = glob_icomponents_counter.toString();
+
+		checkMakeItemsGrid();
+		irow = gridhand.gridMakeRow("IRW" + cmid ,"","",items_rows);
+
+		gpMakeCheckbox(irow,"CBX" + cmid, cmid + ".",k9);
+
+		desb = gpMakeTextbox(irow,"IDE" + glob_icomponents_counter.toString(),"",bstyle + k9,"99%");
+		desb.setMultiline(true);
+		desb.setHeight("70px");
+		desb.setDroppable("true");
+		desb.addEventListener("onDrop",dropMname);
+
+		gpMakeTextbox(irow,"ICL" + cmid ,"",bstyle,"99%"); // color
+		gpMakeTextbox(irow,"IQT" + cmid,"",bstyle,"99%"); // qty
+		gpMakeTextbox(irow,"IRP" + cmid,"",bstyle,"99%"); // rental-period
+		gpMakeTextbox(irow,"IRU" + cmid,"",bstyle,"99%"); // rental per unit
+
+		gpMakeLabel(irow,"MON" + cmid,"",bstyle); // per month total
+		gpMakeLabel(irow,"RTO" + cmid,"",bstyle); // rental all total
+
+		glob_icomponents_counter++;
+
+		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
+		statflash = false;
+	}
+
+	if(itype.equals("ji_remove_b"))
+	{
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+			bci = "CBX" + cmi; // HARDCODED checkbox-prefix
+			icb = items_grid.getFellowIfAny(bci);
+			if(icb != null)
+			{
+				if(icb.isChecked())
+				{
+					rwi = "IRW" + cmi;
+					rwo = items_grid.getFellowIfAny(rwi);
+					if(rwo != null) rwo.setParent(null);
+				}
+			}
+		}
+		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
+		statflash = false;
+	}
+
+	if(itype.equals("ji_save_b"))
+	{
+		if(glob_sel_job.equals("")) return;
+		if(glob_icomponents_counter == 1) return; // nothing to do huh..
+
+		items = ""; qtys = "";
+		colors = ""; rental_periods = "";
+		rent_perunits = "";
+
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+			dsbi = "IDE" + cmi;
+			dsb = items_grid.getFellowIfAny(dsbi);
+			if(dsb != null) // if found desc box, others shud be there
+			{
+				des = kiboo.replaceSingleQuotes( dsb.getValue().trim() ).replaceAll("::"," "); // incase user enter the delimiter
+				items += des + "::";
+
+				cli = items_grid.getFellowIfAny("ICL" + cmi);
+				cls = kiboo.replaceSingleQuotes( cli.getValue().trim() ).replaceAll("::"," ");
+				colors += cls + "::";
+
+				qti = items_grid.getFellowIfAny("IQT" + cmi);
+				qts = kiboo.replaceSingleQuotes( qti.getValue().trim() ).replaceAll("::"," ");
+				qtys += qts + "::";
+
+				rpi = items_grid.getFellowIfAny("IRP" + cmi);
+				rps = kiboo.replaceSingleQuotes( rpi.getValue().trim() );
+				rps = rps.replaceAll("::"," ");
+				rental_periods += rps + "::";
+
+				rpu = items_grid.getFellowIfAny("IRU" + cmi);
+				rus = kiboo.replaceSingleQuotes( rpu.getValue().trim() ).replaceAll("::"," ");
+				rent_perunits += rus + "::";
+			}
+		}
+		
+		try {
+		items = items.substring(0,items.length()-2);
+		colors = colors.substring(0,colors.length()-2);
+		qtys = qtys.substring(0,qtys.length()-2);
+		rental_periods = rental_periods.substring(0,rental_periods.length()-2);
+		rent_perunits = rent_perunits.substring(0,rent_perunits.length()-2);
+		} catch (Exception e) {}
+
+		sqlstm = "update rw_jobs set items='" + items + "',qtys='" + qtys + "',colors='" + colors + "'" + 
+		",rental_periods='" + rental_periods + "',rent_perunits='" + rent_perunits + "' " +
+		"where origid=" + glob_sel_job;
+
+		jobItems(ji_calc_b); // Do items total/rental calcs
+		statflash = true;
+	}
+
+	if(itype.equals("ji_calc_b"))
+	{
+		totmonthly = 0;
+		grandtot = 0;
+
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+
+			qti = items_grid.getFellowIfAny("IQT" + cmi);
+			qts = qti.getValue();
+
+			rpi = items_grid.getFellowIfAny("IRP" + cmi);
+			rps = rpi.getValue();
+
+			rpu = items_grid.getFellowIfAny("IRU" + cmi);
+			rus = rpu.getValue().trim();
+
+			try { permonth = Float.parseFloat(qts) * Float.parseFloat(rus); } catch (Exception e) { permonth = 0; }
+			try { renttotal = permonth * Float.parseFloat(rps); } catch (Exception e) { renttotal = 0; }
+
+			pmco = items_grid.getFellowIfAny("MON" + cmi);
+			pmco.setValue(nf3.format(permonth));
+			totmonthly += permonth;
+
+			rtot = items_grid.getFellowIfAny("RTO" + cmi);
+			rtot.setValue(nf3.format(renttotal));
+			grandtot += renttotal;
+		}
+
+		grandmonthly.setValue("MYR " + nf3.format(totmonthly));
+		grandtotal.setValue("MYR " + nf3.format(grandtot));
+		grandtotalbox.setVisible(true);
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	saved_label.setVisible(statflash);
+	//if(refresh) showJobs();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	adminpopup.close();
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = sts = "";
+	refresh = true;
+	lnkc = JOBS_PREFIX + glob_sel_job;
+
+	if(glob_sel_job.equals("")) return;
+
+	updjstr = "update rw_jobs set ";
+	wherestr = "where origid=" + glob_sel_job;
+
+	if(itype.equals("chgtkdate_b")) sqlstm = updjstr + "datecreated='" + todaydate + "' " + wherestr;
+	if(itype.equals("clrpickup_b")) sqlstm = updjstr + "pickup_date=null, pickup_by=null " + wherestr;
+
+	if(itype.equals("setnew_b")) sts = "NEW";
+	if(itype.equals("setsubmit_b")) sts = "SUBMIT";
+	if(itype.equals("setspickup_b")) sts = "WIP";
+	if(!sts.equals("")) sqlstm = updjstr + "status='" + sts + "' " + wherestr;
+
+	if(itype.equals("deljob_b"))
+	{
+		if (Messagebox.show("HARD delete this JOB..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm =  "delete from rw_jobs " + wherestr;
+		sqlstm += ";delete from bpm_actions where assigner='" + lnkc + "'"; // remove approval-things too
+
+		workarea.setVisible(false);
+		//bpm_area.setVisible(false);
+		glob_sel_job = "";
+	}
+
+	if(itype.equals("clrlinkqt_b")) // clear linking QT 17/10/2014
+	{
+		sqlstm = "update rw_jobs set quote_id=null where origid=" + glob_sel_job;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showJobs();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void showMiniHelp(Object ibutt)
+{
+	kid = ibutt.getId();
+	ktx = "";
+
+	if(kid.equals("jobshelp_b"))
+	{
+		ktx = "help on jobs module..";
+	}
+
+	helptext.setValue(ktx);
+	minihelp_pop.open(ibutt);
+}
+
+void trysendgmail()
+{
+	String[] ifnames = { session.getWebApp().getRealPath("tmp/AIQON_CAPITAL_S_SOA_Sep2013.xls") };
+	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, "victor@rentwise.com","RE: TESTING gmailsend","Just testing..");
+}
+
+void trytask()
+{
+	injInternalTask(useraccessobj.username, "padmin", "BUY 200 BigMac", JN_linkcode(), "URGENT");
+}
+
+]]>
+</zscript>
+
+<popup id="adminpopup">
+	<div sclass="shadowbox" style="background:#BE1313">
+		<vbox>
+			<datebox id="adm_datechg" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" visible="false" />
+			<button id="chgtkdate_b" label="Set to-date" sclass="k9" onClick="adminFunc(self)" />
+			<button id="setnew_b" label="set New" sclass="k9" onClick="adminFunc(self)" />
+			<button id="setsubmit_b" label="set Submit" sclass="k9" onClick="adminFunc(self)" />
+			<button id="setspickup_b" label="set Pickup" sclass="k9" onClick="adminFunc(self)" />
+			<button id="clrlinkqt_b" label="Clear linked QT" sclass="k9" onClick="adminFunc(self)" />
+			<button id="clrpickup_b" label="clr Pickup.Date.By" sclass="k9" onClick="adminFunc(self)" />
+			<button label="showfellows" onClick="alert(job_metaform.getFellows())" />
+			<button label="try send gmail" onClick="trysendgmail()" />
+			<button label="inject task" onClick="trytask()" />
+			<button id="deljob_b" label="DELETE" style="color:#ff0000" onClick="adminFunc(self)" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="minihelp_pop">
+	<div sclass="shadowbox" style="background:#1b4583" width="400px" >
+		<label sclass="subhead1">Mini-help</label>
+		<separator height="8px" bar="true" />
+		<label id="helptext" multiline="true" style="color:#ffffff" />
+	</div>
+</popup>
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="pickcustomer_popup">
+	<div sclass="shadowbox" style="background:#f9b12d">
+		<hbox>
+			<label sclass="k9">Customer name</label>
+			<textbox id="searchcust_tb" sclass="k9" />
+			<button label="Find" sclass="k9" onClick="findCustomers()" />
+		</hbox>
+		<separator height="2px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<separator width="5px" />
+			<div width="400px" id="custfound_wa" visible="false" >
+				<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+				<separator height="2px" />
+				<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+				<separator height="3px" />
+				<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+			</div>
+		</hbox>
+		<label id="selectcustid" visible="false" />
+	</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" sclass="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,JOBS_PREFIX,glob_sel_job)" />
+			<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" sclass="k9" />
+					<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+				</row>
+				<row>
+					<label value="Description" style="font-size:9px" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,JOBS_PREFIX,glob_sel_job)" sclass="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+	</hbox>
+	</popup>
+
+	<popup id="improc_pop">
+	<div sclass="shadowbox" style="background:#5568A3">
+		<hbox>
+			<textbox id="improc_tb" width="80px" />
+			<button label="Import ROC" sclass="k9" onClick="improc_pop.close(); impFC6_SOROC(1,improc_tb)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="impso_pop">
+	<div sclass="shadowbox" style="background:#5568A3">
+		<hbox>
+			<textbox id="impso_tb" width="80px" />
+			<button label="Import SO" sclass="k9" onClick="impso_pop.close(); impFC6_SOROC(2,impso_tb)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="impqt_pop">
+	<div sclass="shadowbox" style="background:#5568A3">
+		<hbox>
+			<textbox id="impqt_tb" width="80px" />
+			<button label="Import QT" sclass="k9" onClick="impqt_pop.close(); impRWMS_QT(impqt_tb.getValue().trim());" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="impcsv_pop">
+	<div sclass="shadowbox" style="background:#5568A3">
+		<hbox>
+			<textbox id="impcsv_tb" width="80px" />
+			<button label="Import CSV" sclass="k9" onClick="impcsv_pop.close(); impRWMS_CSV(impcsv_tb.getValue().trim());" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="getstkitems_pop">
+	<div sclass="shadowbox" style="background:#204a87;" width="400px" >
+		<grid>
+			<rows>
+				<row>
+					<label value="Desktop model" sclass="k9" />
+					<textbox id="gstkdtm_tb" sclass="k9" width="95%" />
+					<button label="Find" onClick="showStockSelection(SELECT_DESKTOP, gstkdtm_tb.getValue() )" />
+				</row>
+				<row>
+					<label value="Monitor model" sclass="k9" />
+					<textbox id="gstkmtm_tb" sclass="k9" width="95%" />
+					<button label="Find" onClick="showStockSelection(SELECT_MONITOR, gstkmtm_tb.getValue() )" />
+				</row>
+				<row>
+					<label value="Notebook model" sclass="k9" />
+					<textbox id="gstknbm_tb" sclass="k9" width="95%" />
+					<button label="Find" onClick="showStockSelection(SELECT_NOTEBOOK, gstknbm_tb.getValue() )" />
+				</row>
+				<row>
+					<label value="Parts" sclass="k9" />
+					<textbox id="gstkptm_tb" sclass="k9" width="95%" />
+					<button label="Find" onClick="showStockSelection(SELECT_PARTS, gstkptm_tb.getValue() )" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#BC4426" >
+
+	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
+		<hbox id="datboxgrid">
+			<label value="Start" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="searhtxt_tb" width="100px" sclass="k9" />
+			<label value="Job-id" sclass="k9b" />
+			<textbox id="jobid_tb" width="50px" sclass="k9" />
+			<button label="Load/Find" sclass="k9mo" onClick="showJobs()" />
+
+			<button id="listmyjob_b" sclass="k9mo" label="List my jobs" onClick="doFunc(self)" />
+			<button id="jreqnewequip_b" sclass="k9mo" label="Jobs require new purchase" onClick="doFunc(self)" />
+			<button id="jlistrma_b" sclass="k9mo" label="RMA jobs" onClick="doFunc(self)" />
+		</hbox>
+		<!-- <label id="searchtitle" sclass="subhead2" value="JOB MAKER" visible="false" /> -->
+	</div> <!-- ENDOF main-top div   -->
+	<separator height="3px" />
+
+	<div sclass="shadowbox" style="background:#3465a4" id="listdocu_div" >
+		<div id="listappr_div" >
+			<hbox>
+				<button id="newjob_b" label="New job" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="submitjob_b" label="Submit job" sclass="k9mo" onClick="doFunc(self)" />
+				<separator width="10px" />
+				<button id="pickjob_b" label="Pickup" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="compjob_b" label="Complete" sclass="k9mo" onClick="doFunc(self)" />
+				<separator width="20px" />
+				<button id="viewbom_b" label="View BOM" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="viewpick_b" label="View Pick-list" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="viewpo_b" label="View PO" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="viewgrn_b" label="View GRN" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="viewmrn_b" label="View MRN" sclass="k9mo" onClick="doFunc(self)" />
+				<button id="admin_b" label="Admin" visible="false" sclass="k9mo" style="color:#EC1B1B" onClick="adminpopup.open(self)" />
+				<separator width="20px" />	
+				<button id="jobshelp_b" label="HELP" sclass="k9" onClick="showMiniHelp(self)" />
+			</hbox>
+			<separator height="3px" />
+			<div id="jobs_holder" />
+		</div>
+	</div> <!-- ENDOF jobs-list and docu div -->
+	<separator height="3px" />
+
+	<div sclass="shadowbox" style="background:#2e3436;" id="workarea" visible="false" > <!-- jobs meta and workarea -->
+		<tabbox>
+			<tabs>
+				<tab label="Job Metadata" />
+				<tab label="Items" />
+				<tab label="Documents" />
+				<tab label="Approval" />
+			</tabs>
+			<tabpanels>
+				<tabpanel> <!-- job metadata -->
+					<hbox>
+						<button id="asscust_b" label="Assign customer" sclass="k9mo" onClick="pickcustomer_popup.open(self)" />
+						<button id="updatejob_b" label="Update/Save" sclass="k9mo" onClick="doFunc(self)" />
+						<separator width="10px" />
+						<button id="impquote_b" label="Import Quotation" sclass="k9mo" onClick="impqt_pop.open(self)" />
+						<button id="improc_b" label="Import ROC" sclass="k9mo" onClick="improc_pop.open(self)" />
+						<button id="impso_b" label="Import SO" sclass="k9mo" onClick="impso_pop.open(self)" />
+						<button id="impcsv_b" label="Import CSV" sclass="k9mo" onClick="impcsv_pop.open(self)" />
+					</hbox>
+					<separator height="3px" />
+
+					<hbox>
+						<div id="jobmetaform_holder" width="700px" />
+
+						<div sclass="shadowbox" style="background:#555753;" width="450px" id="jobnotes_div" visible="false" >
+							<label sclass="subhead1">JOB NOTES</label>
+							<separator height="3px" />
+							<div id="jobnotes_holder" />
+							<separator height="2px" />
+							<hbox>
+								<button id="deletejobn_b" label="Delete" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+							</hbox>
+							<separator height="2px" />
+							<div id="jobnotes_entry_holder">
+								<grid>
+									<rows>
+										<row visible="false">
+											<label value="To" sclass="k9"  />
+											<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+										</row>
+										<row>
+											<label value="Subject" sclass="k9"  />
+											<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+										</row>
+										<row>
+											<label value="Notes" sclass="k9"  />
+											<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+										</row>
+									</rows>
+								</grid>
+								<separator height="2px" />
+								<button id="postjobn_b" label="Post" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+								<button id="clearjobn_b" label="Clear" sclass="k9mo" onClick="jobNoteFunc(self,JN_linkcode())" />
+							</div>
+						</div>
+					</hbox>
+				</tabpanel>
+
+				<tabpanel> <!-- items -->
+					<div sclass="shadowbox" style="background:#555753;" >
+						<hbox>
+							<label sclass="subhead1" value="JOB ITEMS" />
+							<separator width="20px" />
+							<button id="ji_insert_b" label="Insert" sclass="k9" onClick="jobItems(self)" />
+							<button id="ji_remove_b" label="Remove" sclass="k9" onClick="jobItems(self)" />
+							<button id="ji_calc_b" label="Calc" sclass="k9" onClick="jobItems(self)" />
+					
+							<separator width="20px" />
+							<button id="ji_save_b" label="Save items" style="font-weight:bold" onClick="jobItems(self)" />
+							<label id="saved_label" value="SAVED.." style="color:#ffffff;text-decoration:blink;font-weight:bold" visible="false" />
+
+							<separator width="20px" />
+							<button label="Get stock-item" sclass="k9" onClick="getstkitems_pop.open(self)" />
+
+						</hbox>
+						<separator height="3px" />
+						<hbox>
+							<div id="items_holder" />
+							<vbox>
+							<hbox id="grandtotalbox" visible="false" >
+								<vbox>
+									<label value="Total monthly rental" style="color:#eeeeee;font-weight:bold" />
+									<separator bar="true" />
+									<label value="Job Grand Total" style="color:#eeeeee;font-weight:bold" />
+									<separator bar="true" />
+								</vbox>
+								<vbox>
+									<label id="grandmonthly" sclass="subhead2" />
+									<label id="grandtotal" sclass="subhead2" style=";text-decoration:underline" />
+								</vbox>
+							</hbox>
+							<!-- <label value="NOTI.ME" style="font-size:80px;color:#eb531a;font-weight:bold" /> -->
+							</vbox>
+						</hbox>
+					</div>
+				</tabpanel>
+
+				<tabpanel> <!-- documents -->
+					<div sclass="shadowbox" style="background:#555753;" width="600px" >
+						<label sclass="subhead1">ATTACHMENT / DOCUMENTS</label>
+						<separator height="3px" />
+						<hbox>
+							<button id="uploaddoc_btn" label="Upload file" style="font-size:9px"
+								onClick="showUploadPopup(JOBS_PREFIX,glob_sel_job)" />
+							<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+							<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(self)" />
+							<button id="deletedoc_btn" label="Delete" style="font-size:9px"
+								onClick="deleteFile(documents_holder,JOBS_PREFIX,glob_sel_job)" />
+						</hbox>
+						<separator height="3px" />
+						<div id="documents_holder" />
+					</div>
+				</tabpanel>
+
+				<tabpanel> <!-- approvals -->
+					<div sclass="shadowbox" style="background:#555753;" width="600px" >
+						<div style="background:#555753;padding:2px">
+							<label value="JOB APPROVAL" sclass="subhead1" />
+							<button label="Logs" sclass="k9" onClick="viewBPM_logs(JOBS_PREFIX + glob_sel_job, self)" />
+						</div>
+						<div id="approvers_box" />
+					</div>
+				</tabpanel>
+
+			</tabpanels>
+		</tabbox>
+	</div> <!-- ENDOF jobs meta and workarea -->
+
+<div id="workarea_2" />
+<div id="windsholder" />
+<div id="winsholder" />
+
+<zscript>
+<![CDATA[
+
+glob_formmaker = dynamicForm(jobmetaform_holder, "job_metaform", "5");
+j_fc6_custid.setVisible(false); // hide fc6-custid
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+	impso_tb.setValue("SO04993");
+}
+
+if(param_jobid != null)
+{
+	glob_sel_job = param_jobid;
+	showJobMetadata(glob_sel_job);
+	toggleButts("all", true);
+
+	// 03/09/2013: if view job only -- hide search and jobs-list
+	maintop_div.setVisible(false);
+	listdocu_div.setVisible(false);
+
+	// show other linkings to this job -- insightfull for user
+}
+else
+	showJobs();
+
+/*
+showRentableItems(digdesktop_holder,"dtmodels_lb","DT","");
+showRentableItems(dignotebook_holder,"nbmodels_lb","NB","");
+showRentableItems(digmonitor_holder,"mtmodels_lb","MT","");
+showRentableItems(digram_holder,"rams_lb","","RAM");
+showRentableItems(dighdd_holder,"hdds_lb","","HDD");
+
+<button id="blind_desktop" label="Desktops" style="font-weight:bold" onClick="dtstock_popup.open(self)" />
+<button id="blind_notebook" label="Notebooks" style="font-weight:bold" onClick="nbstock_popup.open(self)" />
+<button id="blind_monitor" label="Monitor" style="font-weight:bold" onClick="mtstock_popup.open(self)" />
+<button id="blind_ram" label="RAM" style="font-weight:bold" onClick="ramstock_popup.open(self)" />
+<button id="blind_hdd" label="HDD" style="font-weight:bold" onClick="hddstock_popup.open(self)" />
+<popup id="dtstock_popup">
+	<div id="digdesktop_holder" width="400px" />
+</popup>
+
+<popup id="nbstock_popup">
+	<div id="dignotebook_holder" width="400px" />
+</popup>
+
+<popup id="mtstock_popup">
+	<div id="digmonitor_holder" width="400px" />
+</popup>
+
+<popup id="ramstock_popup">
+	<div id="digram_holder" width="400px" />
+</popup>
+
+<popup id="hddstock_popup">
+	<div id="dighdd_holder" width="400px" />
+</popup>
+*/
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

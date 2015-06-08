@@ -1,0 +1,1124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="dodispatch_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./DODispatch_funcs.zs" />
+<zscript src="./pickBOM_funcs.zs" />
+<zscript src="./assignPickList_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "DO / Dispatch Manifest";
+MYVERSION = "v0.2";
+MYPANEL = "disdopanle";
+/*
+Title		: DO/Dispatch scheduling to manage them DO and dispatcher
+Written by	: Victor Wong
+
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+dmshand = new DMSFuncs();
+
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+
+glob_sel_do = "";
+glob_sel_stat = "";
+glob_sel_approve = "";
+glob_sel_customername = "";
+glob_sel_bomid = "";
+glob_sel_picklist = "";
+
+last_list_manifest = 0;
+glob_sel_manif = "";
+glob_sel_manif_dos = "";
+glob_sel_manif_stat = "";
+
+void toogleDOButts(int itype, boolean iwhat)
+{
+	Object[] submittogs = { submitdo_b, importbom_b, assignpl_b, updatedo_b };
+	Object[] otogs = { submitdo_b };
+	cops = null;
+
+	switch(itype)
+	{
+		case 0 : // all
+			cops = mergeArray(submittogs,otogs);
+			break;
+
+		case 1 : // submit-togs
+			cops = submittogs;
+			break;
+	}
+
+	if(cops != null)
+	{
+		for(i=0;i<cops.length;i++)
+		{
+			cops[i].setDisabled(iwhat);
+		}
+	}
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = "";
+	refresh = false;
+	refreshmanif = false;
+	msgtext = "";
+	lnkc = DO_PREFIX + glob_sel_do;
+
+	if(itype.equals("newdo_b"))
+	{
+		sqlstm = "insert into rw_deliveryorder (datecreated,username,do_status,customer_name) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','NEW','UNDEF')";
+
+		refresh = true;
+	}
+
+	if(itype.equals("updatedo_b"))
+	{
+		if(glob_sel_do.equals("")) return;
+		cnt = kiboo.replaceSingleQuotes(d_contact.getValue().trim());
+		cntel = kiboo.replaceSingleQuotes(d_contact_tel.getValue().trim());
+		dadr = kiboo.replaceSingleQuotes(d_delivery_address.getValue().trim());
+		dnot = kiboo.replaceSingleQuotes(d_notes.getValue().trim());
+
+		sqlstm = "update rw_deliveryorder set contact='" + cnt + "',contact_tel='" + cntel + "',delivery_address='" + dadr + "', " +
+		"do_notes='" + dnot + "' where origid=" + glob_sel_do;
+
+		//msgtext = "Delivery details updated..";
+	}
+
+	if(itype.equals("submitdo_b"))
+	{
+		if(glob_sel_do.equals("")) return;
+		// before submit DO for approval, chk any BOM or PPL linked
+		if(glob_sel_bomid.equals("") && glob_sel_picklist.equals("")) { msgtext = "This DO is not linking to anything.. why submit?"; }
+		else
+		{
+			sqlstm = "update rw_deliveryorder set do_status='SUBMIT' where origid=" + glob_sel_do;
+			refresh = true;
+
+			injectApprovers(lnkc, DO_PREFIX); // BPM_funcs.zs
+			showApprovalThing(lnkc, "DO", approvers_box );
+			toogleDOButts(1, true);
+
+			// TODO send noti-email
+		}
+	}
+
+	if(itype.equals("assignjob_b"))
+	{
+	}
+
+	if(itype.equals("assignbom_b")) // assign BOM to DO
+	{
+		// some glob vars def in pickBOM_funcs.zs
+		if(glob_sel_do.equals("")) return;
+		if(boms_lb.getSelectedIndex() == -1) return;
+
+		if(!glob_sel_bom_doid.equals("")) { msgtext = "BOM already assigned to DO" + glob_sel_bom_doid; }
+		else
+		if(glob_sel_importbom_jobid.equals("")) { msgtext = "BOM is not assigned to any JOB, cannot deliver.."; }
+		else
+		if( glob_sel_customername.equals(glob_sel_bom_customername) || glob_sel_customername.equals("UNDEF") )
+		{
+			br = getBOM_rec(glob_sel_importbom);
+			if(br == null) { msgtext = "ERR: Cannot access BOM record.."; }
+			else
+			{
+				jbi = br.get("job_id");
+				if(jbi != null)
+				{
+					jrec = getRWJob_rec(jbi.toString());
+					if(jrec != null)
+					{
+						dadr = kiboo.checkNullString(jrec.get("deliver_address"));
+						contact = kiboo.checkNullString(jrec.get("contact"));
+						contactel = kiboo.checkNullString(jrec.get("contact_tel"));
+						jdonot = kiboo.checkNullString(jrec.get("do_notes"));
+
+						sqlstm = "update stockrentalitems set do_id=" + glob_sel_do + " where origid=" + glob_sel_importbom + ";";
+						glob_sel_customername = glob_sel_bom_customername;
+
+						sqlstm += "update rw_deliveryorder set customer_name='" + glob_sel_customername + "'," + 
+						"delivery_address='" + dadr + "', contact='" + contact + "', contact_tel='" + contactel + "', " +
+						"do_notes='" + jdonot + "' " +
+						"where origid=" + glob_sel_do;
+
+						refresh = true;
+						bomimport_pop.close();
+					}
+				}
+			}
+		}
+		else
+		{
+			msgtext = "Assign BOM to DO for same customer only..";
+		}
+	}
+
+	if(itype.equals("importppl_b")) // assign pick-list to DO
+	{
+		if(glob_sel_do.equals("")) return;
+		if(picklist_lb.getSelectedIndex() == -1) return;
+		if(!glob_sel_imppl_doid.equals("")) { msgtext = "Pick-list already assigned to DO" + glob_sel_imppl_doid; }
+		else
+		if(glob_sel_imppl_jobid.equals("")) { msgtext = "Pick-list is not assigned to any JOB, how to deliver??"; }
+		else
+		if( glob_sel_customername.equals(glob_sel_imppl_customername) || glob_sel_customername.equals("UNDEF") )
+		{
+			jrec = getRWJob_rec(glob_sel_imppl_jobid);
+			if(jrec == null) { msgtext = "ERR: Cannot access JOB record.."; }
+			else
+			{
+				dadr = kiboo.checkNullString(jrec.get("deliver_address"));
+				contact = kiboo.checkNullString(jrec.get("contact"));
+				contactel = kiboo.checkNullString(jrec.get("contact_tel"));
+				jdonot = kiboo.checkNullString(jrec.get("do_notes"));
+
+				sqlstm = "update rw_pickpack set do_id=" + glob_sel_do + " where origid=" + glob_sel_imp_picklist;
+				glob_sel_customername = glob_sel_imppl_customername;
+
+				sqlstm += "update rw_deliveryorder set customer_name='" + glob_sel_customername + "'," +
+				"delivery_address='" + dadr + "', contact='" + contact + "', contact_tel='" + contactel + "', " +
+				"do_notes='" + jdonot + "' " +
+				"where origid=" + glob_sel_do;
+
+				refresh = true;
+				plimport_pop.close();
+			}
+		}
+		else
+		{
+			msgtext = "Assign pick-list to DO for same customer only..";
+		}
+	}
+
+	if(itype.equals("viewpl_b")) // view pick-lists assigned to DO
+	{
+		if(glob_sel_picklist.equals("")) return;
+		disdopanle.setOpen(false);
+		ppls = glob_sel_picklist.split(",");
+		for(i=0;i<ppls.length;i++)
+		{
+			try {
+				activateModule(mainPlayground,"workbox","rws_warehouse/showPickListWindow_v1.zul",kiboo.makeRandomId("vpl"),
+				"ppl=" + ppls[i], useraccessobj);
+			} catch (Exception e) {}
+		}
+	}
+
+	if(itype.equals("viewbom_b"))
+	{
+		if(glob_sel_bomid.equals("")) return;
+		disdopanle.setOpen(false);
+		bms = glob_sel_bomid.split(",");
+		for(i=0;i<bms.length;i++)
+		{
+			try {
+			activateModule(mainPlayground,"workbox","rws_warehouse/showBOMWindow_v1.zul",kiboo.makeRandomId("vbm"),
+			"bom=" + bms[i], useraccessobj);
+			} catch (Exception e) {}
+		}
+	}
+
+	if(itype.equals("newmanif_b"))
+	{
+		sqlstm = "insert into rw_dispatchmanif (datecreated,username,status,transporter) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','NEW','SELF')";
+
+		refreshmanif = true;
+	}
+
+	if(itype.equals("assdo2manif_b")) // assign DO to manifest
+	{
+		if(dos_lb.getSelectedCount() == 0) return;
+		if(glob_sel_manif.equals("")) return;
+
+		if(glob_sel_approve.equals("NO")) { msgtext = "DO must be approved before send out"; }
+		else
+		{
+			assignDOToManifest(glob_sel_manif, dos_lb.getSelectedItems());
+		}
+	}
+
+	if(itype.equals("upmanif_b")) // update manifest
+	{
+		if(glob_sel_manif.equals("")) return;
+		tsp = m_transporter.getSelectedItem().getLabel();
+		mex = kiboo.replaceSingleQuotes(m_manif_notes.getValue());
+		sqlstm = "update rw_dispatchmanif set transporter='" + tsp + "', manif_notes='" + mex + "' where origid=" + glob_sel_manif;
+		refreshmanif = true;
+	}
+
+	if(itype.equals("upmanifstat_b")) // update manifest status
+	{
+		if(glob_sel_manif.equals("")) return;
+		updateDOWaybillStatus(manf_items_holder);
+	}
+
+	if(itype.equals("commitmanif_b"))
+	{
+		if(glob_sel_manif.equals("")) return;
+		if(glob_sel_manif_dos.equals("")) { msgtext = "No DOs assigned, why commit?"; }
+		else
+		{
+			sqlstm = "update rw_dispatchmanif set status='WIP' where origid=" + glob_sel_manif;
+			refreshmanif = true;
+
+			// disable buttons when manif is committed
+			commitmanif_b.setDisabled(true);
+			upmanif_b.setDisabled(true);
+		}
+	}
+
+	if(itype.equals("printmanif_b"))
+	{
+		if(glob_sel_manif.equals("")) return;
+		/*
+		if(!glob_sel_manif_stat.equals("WIP")) { msgtext = "Please commit the manifest inorder to print/export it"; }
+		else
+		{
+			genDispatchManifestPrint(glob_sel_manif);
+		}
+		*/
+		genDispatchManifestPrint(glob_sel_manif);
+	}
+
+	if(itype.equals("manifdeliv_b"))
+	{
+	}
+
+	if(itype.equals("printdo_b"))
+	{
+		if(glob_sel_do.equals("")) return;
+		// TODO check DO if approved.. then can print glob_sel_approve
+		genDOPrint(glob_sel_do);
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listDO(last_listdo_type);
+	if(refreshmanif) listManifest(last_list_manifest);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+// Generate dispatch manifest worksheet - uses Excel-template
+void genDispatchManifestPrint(String imanf)
+{
+	sqlstm = "select rwdo.origid as dono, rwdo.customer_name, rwdo.delivery_address, rwdo.contact, rwdo.contact_tel, rwdo.do_notes " +
+	"from rw_deliveryorder rwdo where rwdo.manif_id=" + imanf + " order by rwdo.origid, rwdo.customer_name";
+
+	mrcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(mrcs.size() == 0) { guihand.showMessageBox("ERR: No DO(s) assigned to this manifest -- nothing to print!"); return; }
+
+	startadder = 0;
+	rowcount = 2 + startadder;
+
+	templatefn = "rwimg/dmanifestTemplate_1.xls";
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	HSSFSheet sheet = excelWB.getSheetAt(0);
+	//HSSFSheet sheet = excelWB.createSheet("THINGS");
+
+	Font wfont = excelWB.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+
+	// insert manifest header
+	mfr = getDispatchManifest_rec(imanf);
+	if(mfr != null)
+	{
+		dets1 =
+		"MANIFEST ID: " + DISP_PREFIX + " " + imanf +
+		"\nDATE: " + dtf2.format(mfr.get("datecreated")) +
+		"\nTRANSPORTER: " + mfr.get("transporter");
+
+		excelInsertString(sheet,0,0, dets1 );
+
+		dets2 =
+		"NOTES: " + kiboo.checkNullString( mfr.get("manif_notes") );
+
+		excelInsertString(sheet,0,3, dets2 );
+	}
+
+	dcount = 1;
+
+	String[] khed = { "No.","DO.No","Customer","Address","Contact","Telephone","Notes","Chop/Sign" };
+	for(i=0;i<khed.length;i++)
+	{
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, i, khed[i] ),wfont,true,"");
+	}
+	rowcount++;
+	
+	for(d : mrcs)
+	{
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 0, dcount.toString() + "." ),wfont,true,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 1, DO_PREFIX + " " + d.get("dono").toString() ),wfont,true,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, kiboo.checkNullString(d.get("customer_name")) ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 3, kiboo.checkNullString(d.get("delivery_address")) ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 4, kiboo.checkNullString(d.get("contact")) ),wfont,true,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 5, kiboo.checkNullString(d.get("contact_tel")) ),wfont,true,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 6, kiboo.checkNullString(d.get("do_notes")) ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 7, "" ),wfont,false,"");
+
+		dcount++;
+		rowcount++;
+	}
+
+	tfname = DISP_PREFIX + imanf + "_outp.xls";
+	outfn = session.getWebApp().getRealPath("sharedocs/" + tfname);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+	downloadFile(kasiexport,tfname,outfn);
+	//alert("ding ding..");
+}
+
+String getCustomerRefFromJob(String doid)
+{
+	retv = "";
+
+	sqlstm = "select distinct jb.cust_ref from stockrentalitems sri " +
+	"left join rw_jobs jb on sri.job_id = jb.origid " +
+	"left join rw_pickpack ppl on ppl.job_id = jb.origid " +
+	"where sri.do_id=" + doid + " or ppl.do_id=" + doid;
+
+	crf = sqlhand.gpSqlGetRows(sqlstm);
+
+	for(d : crf)
+	{
+		kop = kiboo.checkNullString( d.get("cust_ref") );
+		if(!kop.equals("")) retv += kop + ",";
+	}
+
+	try {
+	retv = retv.substring(0,retv.length()-1);
+	} catch (Exception e) {}
+
+	return retv;
+}
+
+// Generate DO printout, template MS-Excel. Can be converted to export list for internal use.
+void genDOPrint(String idid)
+{
+	startadder = 0;
+	rowcount = 2 + startadder;
+
+	templatefn = "rwimg/doTemplate_1.xls";
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	HSSFSheet sheet = excelWB.getSheetAt(0);
+	//HSSFSheet sheet = excelWB.createSheet("THINGS");
+
+	Font wfont = excelWB.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+
+	// insert the DO header details
+	dor = getDO_rec(idid);
+	if(dor != null)
+	{
+		try {
+		daddr = kiboo.checkNullString(dor.get("delivery_address")).replaceAll(",,",",");
+		} catch (Exception e) {}
+
+		dets1 =
+		"DELIVER TO:\n" + kiboo.checkNullString(dor.get("customer_name")) + "\n" +
+		daddr +
+		"\n\nATTENTION: " + kiboo.checkNullString(dor.get("contact")) + "\nTEL: " + kiboo.checkNullString(dor.get("contact_tel"));
+
+		excelInsertString(sheet,0,0, dets1 );
+		tsp = "";
+		try {
+			mfr = getDispatchManifest_rec( dor.get("manif_id").toString() );
+			tsp = mfr.get("transporter");
+		} catch (Exception e) {}
+
+		// TODO "MFT REF" might link to customer PO number later
+		dets2 =
+		"DO No: " + idid + "\n" +
+		"DATE: " + dtf2.format(dor.get("datecreated")) + "\n" +
+		"TRANSPORTER: " + tsp + "\n\n" +
+		//"MFT REF: " + ( ( dor.get("manif_id") == null ) ? "" : ( DISP_PREFIX + " " + dor.get("manif_id").toString() ) ) + "\n" +
+		"YOUR REF: " + getCustomerRefFromJob(idid) + "\n\n" +
+		"NOTES:\n" + kiboo.checkNullString(dor.get("do_notes")) ;
+
+		excelInsertString(sheet,0,3, dets2 );
+	}
+
+/*
+	bomsqlstm = "select srid.parent_id as bomid,srid.bomtype,srid.asset_tag,srid.description," +
+	"srid.ram,srid.ram2,srid.ram3,srid.ram4,srid.hdd,srid.hdd2,srid.hdd3,srid.hdd4," +
+	"srid.battery,srid.poweradaptor,srid.gfxcard,srid.monitor," +
+	"srid.osversion, srid.coa1, srid.coa2, srid.offapps, srid.coa3, srid.coa4 " +
+	"from stockrentalitems_det srid left join stockrentalitems sri on srid.parent_id = sri.origid " +
+	"left join rw_deliveryorder rwdo on sri.do_id = rwdo.origid " +
+	"where rwdo.origid=" + idid + " order by srid.parent_id";
+*/
+	bomsqlstm = "select srid.parent_id as bomid,srid.bomtype,srid.asset_tag,srid.description " +
+	"from stockrentalitems_det srid left join stockrentalitems sri on srid.parent_id = sri.origid " +
+	"left join rw_deliveryorder rwdo on sri.do_id = rwdo.origid " +
+	"where rwdo.origid=" + idid + " order by srid.parent_id";
+
+	bmrcs = sqlhand.gpSqlGetRows(bomsqlstm);
+	if(bmrcs.size() != 0)
+	{
+/* full-fields for BOM builds -- useful for internal-use
+		String[] bomhds = { "BOMID","TYPE","ASSET_TAG","MODEL",
+		"RAM1","RAM2","RAM3","RAM4",
+		"HDD1","HDD2","HDD3","HDD4",
+		"BATT","PWRADP","GFX","MT",
+		"OS","COA1","COA2",
+		"OFF","COA3","COA4" };
+		
+		String[] bomflds = { "bomtype","asset_tag","description",
+		"ram","ram2","ram3","ram4",
+		"hdd","hdd2","hdd3","hdd4",
+		"battery","poweradaptor","gfxcard","monitor",
+		"osversion","coa1","coa2",
+		"offapps","coa3","coa4" };
+*/
+		String[] bomhds = { "BOMID","TYPE","ASSET_TAG","MODEL / DESCRIPTIO" };
+		String[] bomflds = { "bomtype","asset_tag","description" };
+
+		for(i=0;i<bomhds.length;i++)
+		{
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, i, bomhds[i] ),wfont,true,"");
+		}
+
+		rowcount++;
+
+		lastbom = "";
+		for(d : bmrcs)
+		{
+			if(!lastbom.equals( BOM_PREFIX + d.get("bomid").toString() ) )
+			{
+				lastbom = BOM_PREFIX + d.get("bomid").toString();
+				POI_CellSetAllBorders(excelWB,excelInsertString( sheet,rowcount + startadder, 0, lastbom ),wfont,true,"");
+			}
+
+			for(i=0; i<bomflds.length; i++)
+			{
+				POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, i+1, kiboo.checkNullString( d.get(bomflds[i])) ),
+				wfont,true,"");
+			}
+			rowcount++;
+		}
+	}
+
+	pplsqlstm = "select ppl.origid as picklist, ppli.stock_cat,ppli.groupcode,ppli.classcode,ppli.class2code, " + 
+	"ppli.qty, ppli.pick_items " +
+	"from rw_pickpack_items ppli left join rw_pickpack ppl on ppli.parent_id = ppl.origid " +
+	"left join rw_deliveryorder rwdo on ppl.do_id = rwdo.origid " + 
+	"where rwdo.origid=" + idid + " order by ppl.origid";
+
+	rowcount += 2;
+
+	plrcs = sqlhand.gpSqlGetRows(pplsqlstm);
+	if(plrcs.size() != 0)
+	{
+		String[] plhds = { "P.LIST","CATEGORY / STOCK-CODE" };
+		for(i=0;i<plhds.length;i++)
+		{
+			sheet.addMergedRegion(new CellRangeAddress( rowcount + startadder, rowcount + startadder, 1,3));
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, i, plhds[i] ),wfont,true,"");
+		}
+		sheet.addMergedRegion(new CellRangeAddress( rowcount + startadder, rowcount + startadder, 1,3));
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, "" ),wfont,false,"");
+		POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 3, "" ),wfont,false,"");
+
+		rowcount++;
+
+		lastppl = "";
+		for(d : plrcs)
+		{
+			if(!lastppl.equals( PICKLIST_PREFIX + d.get("picklist").toString() ) )
+			{
+			}
+
+			lastppl = PICKLIST_PREFIX + d.get("picklist").toString();
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet,rowcount + startadder, 0, lastppl ),wfont,true,"");
+
+			cts = 
+			kiboo.checkNullString( d.get("stock_cat") ) + " > " +
+			kiboo.checkNullString_RetWat( d.get("groupcode"),"0" ) + " > " +
+			kiboo.checkNullString_RetWat( d.get("classcode"),"0" ) + " > " +
+			kiboo.checkNullString_RetWat( d.get("class2code"),"0" ) +
+			" (QTY: " + d.get("qty").toString() + ")";
+
+			sheet.addMergedRegion(new CellRangeAddress( rowcount + startadder, rowcount + startadder, 1,3));
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 1, cts ),wfont,false,"");
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, "" ),wfont,false,"");
+			POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 3, "" ),wfont,false,"");
+
+			rowcount++;
+
+			itms = kiboo.checkNullString( d.get("pick_items") ).split("::");
+			itc = 1;
+			for(i=0; i < (int)d.get("qty"); i++)
+			{
+				POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 1, itc.toString() + "." ),wfont,true,"");
+
+				try {
+				POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, itms[i]),wfont,false,"");
+				} catch (Exception e) {
+				POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, ""),wfont,false,"");
+				}
+
+				itc++;
+				rowcount++;
+			}
+
+			rowcount++;
+		}
+	}
+
+	rowcount += 2;
+	/*
+	// insert last remarks and chop/sign
+	sheet.addMergedRegion(new CellRangeAddress( rowcount + startadder, rowcount + startadder, 0,2) );
+	//POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 1, "" ),wfont,false,"");
+	//POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 2, "" ),wfont,false,"");
+	
+	nts1 = 
+	"*NOTE*:\n" +
+	"The Renter accepts that the terms and conditions\n" +
+	"of the Leasing Contract/Rental Contract and\n" +
+	"Master Agreement/Master Rental Agreement\n" +
+	"shall be applicable and binding upon\n" +
+	"acknowledgement of receipt of the items in this\n" +
+	"Delivery Order.";
+	
+	*NOTE*:
+The Renter accepts that the terms and conditions
+of the Leasing Contract/Rental Contract and
+Master Agreement/Master Rental Agreement
+shall be applicable and binding upon
+acknowledgement of receipt of the items in this
+Delivery Order.
+
+	POI_CellSetAllBorders(excelWB,excelInsertString( sheet, rowcount + startadder, 0, nts1 ),wfont,false,"");
+	*/
+
+	tfname = DO_PREFIX + idid + "_outp.xls";
+	outfn = session.getWebApp().getRealPath("sharedocs/" + tfname );
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+
+	downloadFile(kasiexport,tfname,outfn);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = "";
+	sqlstm = "";
+	refresh = false;
+	refreshmanif = false;
+	
+	if(!glob_sel_do.equals(""))
+	{
+		if(itype.equals("getcustref_b"))
+		{
+			crf = getCustomerRefFromJob(glob_sel_do);
+			msgtext = "cust-ref: " + crf;
+		}
+
+		if(itype.equals("chgtkdate_b"))
+		{
+			sqlstm = "update rw_deliveryorder set datecreated='" + todaydate + "' where origid=" + glob_sel_do;
+		}
+
+		if(itype.equals("clrbomdo_b"))
+		{
+			sqlstm = "update stockrentalitems set do_id=null where do_id=" + glob_sel_do;
+		}
+
+		if(itype.equals("clrpicklistdo_b"))
+		{
+			sqlstm = "update rw_pickpack set do_id=null where do_id=" + glob_sel_do;
+		}
+
+		if(itype.equals("setdonew_b"))
+		{
+			sqlstm = "update rw_deliveryorder set do_status='NEW' where origid=" + glob_sel_do;
+		}
+
+		if(itype.equals("clrmnf_b"))
+		{
+			sqlstm = "update rw_deliveryorder set manif_id=null where origid=" + glob_sel_do;
+		}
+
+		if(itype.equals("clrapprove_b"))
+		{
+			sqlstm = "update rw_deliveryorder set approve=null where origid=" + glob_sel_do;
+		}
+		
+		if(itype.equals("harddeldo_b"))
+		{
+			if (Messagebox.show("This will be a hard delete..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+			sqlstm  = "update stockrentalitems set do_id=null where do_id=" + glob_sel_do + ";";
+			sqlstm += "update rw_pickpack set do_id=null where do_id=" + glob_sel_do + ";";
+			sqlstm += "delete from rw_deliveryorder where origid=" + glob_sel_do + ";";
+			glob_sel_do = ""; // reset
+		}
+
+		refresh = true;
+	}
+
+	if(!glob_sel_manif.equals(""))
+	{
+		if(itype.equals("clrmft_delivered_b"))
+		{
+			if(!glob_sel_manif_dos.equals(""))
+			{
+				sqlstm = "update rw_deliveryorder set complete_date=null, complete_by=null where origid in (" + glob_sel_manif_dos + ");";
+				sqlstm += "update rw_dispatchmanif set deliverdate=null where origid=" + glob_sel_manif + ";";
+				refreshmanif = true;
+				refresh = true;
+			}
+		}
+
+		if(itype.equals("chgmft_date_b"))
+		{
+			sqlstm = "update rw_dispatchmanif set datecreated='" + todaydate + "' where origid=" + glob_sel_manif;
+			refreshmanif = true;
+		}
+		
+		if(itype.equals("setmanifnew_b"))
+		{
+			sqlstm = "update rw_dispatchmanif set status='NEW' where origid=" + glob_sel_manif;
+			refreshmanif = true;
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listDO(last_listdo_type);
+	if(refreshmanif) listManifest(last_list_manifest);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+	adminpopup.close();
+}
+
+void showMiniHelp(Object ibutt)
+{
+	kid = ibutt.getId();
+	ktx = "";
+
+	if(kid.equals("disphelp_b"))
+	{
+		ktx = "D.Date = Delivery date\nDO = Delivery Order link to this manifest\nDO.Q = Qty of DOs linked\nDLV = DOs already delivered";
+	}
+
+	if(kid.equals("dohelp_b"))
+	{
+		ktx = "MFT = Dispatch manifest id\nAPP = approval stat\nBOM = BOM link to DO\nP.Lst = Pick-lists link to DO\n\n";
+	}
+
+	helptext.setValue(ktx);
+	minihelp_pop.open(ibutt);
+}
+
+]]>
+</zscript>
+
+<popup id="minihelp_pop">
+<div style="background:#1b4583; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="400px" >
+
+<label sclass="subhead1">Mini-help</label>
+<separator height="8px" bar="true" />
+<label id="helptext" multiline="true" style="color:#ffffff" />
+</div>
+</popup>
+
+<popup id="adminpopup">
+<div width="400px">
+<button id="chgtkdate_b" label="Set to-date" onClick="adminFunc(self)" />
+<button id="setdonew_b" label="set NEW" onClick="adminFunc(self)" />
+<button id="clrmnf_b" label="clr manifest-ID" onClick="adminFunc(self)" />
+<button id="clrbomdo_b" label="clr BOM's DO" onClick="adminFunc(self)" />
+<button id="clrpicklistdo_b" label="clr pick-list's DO" onClick="adminFunc(self)" />
+<button id="clrapprove_b" label="clr approval" onClick="adminFunc(self)" />
+<button id="harddeldo_b" label="HARD del DO" onClick="adminFunc(self)" />
+<separator height="5px" bar="true" />
+<button id="chgmft_date_b" label="set M.date" onClick="adminFunc(self)" />
+<button id="setmanifnew_b" label="set M.stat new" onClick="adminFunc(self)" />
+<button id="clrmft_delivered_b" label="clr M.delivered_qty" onClick="adminFunc(self)" />
+<button id="getcustref_b" label="get cust-ref" onClick="adminFunc(self)" />
+</div>
+</popup>
+
+<popup id="linkjobs_popup">
+<div style="background:#1b4583; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="400px" >
+
+<label id="linkjobs_header" sclass="subhead1" value="Jobs Linkage" />
+<separator height="2px" />
+<div id="joblinkage_holder" />
+
+</div>
+</popup>
+
+<popup id="ajob_popup">
+<div style="background:#3465a4;padding:2px">
+	<label sclass="subhead1">Jobs</label>
+</div>
+<separator height="2px" />
+<div id="jobs_holder" />
+</popup>
+
+<popup id="auditlogs_pop">
+<div style="background:#ef2929; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="500px" >
+<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+<separator height="3px" />
+<div id="auditlogs_holder" />
+<separator height="3px" />
+<button label="Ok" style="font-size:9px" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<!-- Pick-List import popup -->
+<popup id="plimport_pop">
+<div style="background:#f9b12d; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<div id="imp_picklist_holder" width="600px" />
+<separator height="2px" />
+<button id="importppl_b" label="Assign pick-list to DO" style="font-weight:bold" onClick="doFunc(self)" />
+<button label="View pick-list details" style="font-size:9px;font-weight:bold" onClick="impViewPickListDetails()" />
+<button label="View job breakdown" style="font-size:9px" onClick="impPickList_viewJob()" />
+
+</div>
+</popup> <!-- ENDOF plimport_pop -->
+
+<!-- BOM import popup -->
+<popup id="bomimport_pop">
+<div style="background:#f9b12d; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+	<hbox>
+	<div>
+		<label value="ASSIGN BOM to DO" style="font-weight:bold;font-size:14px" />
+		<separator height="2px" />
+		<div id="imp_boms_holder" width="680px" />
+		<separator height="2px" />
+		<hbox>
+			<button id="assignbom_b" label="Assign BOM to DO" style="font-weight:bold" onClick="doFunc(self)" />
+			<button label="View BOM details" style="font-size:9px;font-weight:bold" onClick="impViewBOMDetails()" />
+			<button label="View job breakdown" style="font-size:9px;font-weight:bold" onClick="impBOM_viewJob()" />
+		</hbox>
+	</div>
+<!--
+	<div>
+		<label id="impbomselected" value="BUILDS" style="font-weight:bold;font-size:14px" />
+		<separator height="2px" />
+		<div id="bitems_holder" width="350px" />
+		<separator height="2px" />
+	</div>
+-->
+	</hbox>
+</div>
+</popup> <!-- ENDOF bomimport_pop -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,DISP_PREFIX,glob_sel_manif)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,DISP_PREFIX,glob_sel_manif)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+
+<style>
+.subhead2 {	font-size:24px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead1 { font-size:18px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<hbox>
+	<button id="blind_datebox" label="-" onClick="blindTings_withTitle(self,datboxgrid,search_header)" style="font-weight:bold" />
+
+	<hbox id="datboxgrid" >
+		<grid  >
+			<rows>
+				<row>
+					<label value="Start date" style="font-size:9px" />
+					<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+					<label value="End date" style="font-size:9px" />
+					<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+					<label value="Search" style="font-size:9px" />
+					<hbox>
+						<textbox id="searhtxt_tb" width="200px" style="font-size:9px" />
+						<button label="Search/Load" style="font-size:9px" onClick="listDO(0)" />
+					</hbox>
+
+					<label value="DO#" style="font-size:9px" />
+					<hbox>
+						<textbox id="donumber_tb" style="font-size:9px" />
+						<button label="by DO" style="font-size:9px" onClick="listDO(2)" />
+					</hbox>
+
+				</row>
+			</rows>
+		</grid>
+	</hbox>
+
+	<label id="search_header" sclass="subhead2" value="SEARCH / LOAD" visible="false" />
+</hbox>
+
+</div>
+
+<separator height="2px" />
+
+<div style="background:#888a85; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" id="listingdiv" >
+
+<hbox>
+	<button id="blind_list" label="-" onClick="blindTings_withTitle(self,doslistdiv,dolisttitle)" style="font-weight:bold" />
+	<div id="doslistdiv">
+		<hbox>
+			<div>
+				<hbox>
+					<button id="newdo_b" label="New DO" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="submitdo_b" label="Submit" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="printdo_b" label="Print" style="font-weight:bold" onClick="doFunc(self)" />
+					<separator width="10px" />
+					<button id="importbom_b" label="Link BOM" style="font-weight:bold" onClick="popImportBOM(glob_sel_do_li)" />
+					<button id="assignpl_b" label="Link PickList" style="font-weight:bold" onClick="popImportPickList(glob_sel_do_li)" />
+					<separator width="20px" />
+					<button id="adminb1" visible="false" label="ADMIN" style="font-weight:bold;color:#ff0000" onClick="adminpopup.open(self)" />
+<!--
+					<button id="viewbom_b" label="View BOM" style="font-weight:bold" onClick="doFunc(self)" />
+					<button id="viewpl_b" label="View PickList" style="font-weight:bold" onClick="doFunc(self)" />
+-->
+				</hbox>
+				<separator height="2px" />
+				<div style="background:#3465a4;padding:2px">
+					<label sclass="subhead1">Delivery Order</label>
+					<button id="dohelp_b" label="?" onClick="showMiniHelp(self)" />
+				</div>
+				<separator height="2px" />
+				<hbox>
+				<div id="do_holder" width="700px" />
+				<vbox>
+					<div id="doform_holder" width="450px" />
+					<button id="updatedo_b" label="Update DO details" style="font-weight:bold" onClick="doFunc(self)" />
+					<separator height="2px" />
+					<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+					box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+						<div style="background:#555753;padding:2px">
+							<label value="DO APPROVAL" sclass="subhead1" />
+							<button label="Logs" style="font-size:9px" onClick="viewBPM_logs(DO_PREFIX + glob_sel_do, self)" />
+						</div>
+						<div id="approvers_box" />
+					</div>
+
+				</vbox>
+				</hbox>
+			</div>
+		</hbox>
+		<separator height="2px" />
+		<button id="assdo2manif_b" image="/rwimg/downarrow1.png" label="Assign DO to Manifest" style="font-weight:bold" onClick="doFunc(self)" />
+	</div>
+	<label id="dolisttitle" sclass="subhead2" value="Delivery Orders" visible="false" />
+</hbox>
+</div>
+<separator height="3px" />
+
+<div style="background:#888a85; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
+
+<hbox>
+	<button id="bl3" label="-" onClick="blindTings_withTitle(self,manifdiv,disptit)" style="font-weight:bold" />
+
+	<div id="manifdiv">
+		<hbox>
+			<grid>
+				<rows>
+					<row spans="1,1,1,2">
+						<label value="Start date" style="font-size:9px" />
+						<datebox id="mftstartdate" format="yyyy-MM-dd" style="font-size:9px" />
+						<label value="End date" style="font-size:9px" />
+						<datebox id="mftenddate" format="yyyy-MM-dd" style="font-size:9px" />
+						<button label="List ALL" style="font-size:9px" onClick="listManifest(1)" />
+					</row>
+					<row>
+						<listbox id="bydispatcher_lb" mold="select" style="font-size:9px" rows="1" />
+						<button label="by Dispatcher" style="font-size:9px" onClick="listManifest(4)" />
+						<button label="by Delivered" style="font-size:9px" onClick="listManifest(2)" />
+						<button label="by Incomplete" style="font-size:9px" onClick="listManifest(3)" />
+					</row>
+				</rows>
+			</grid>
+
+			<!-- tobeused to search DO by customer-name later
+			<textbox id="manifsearch_tb" style="font-size:9px" />
+			<button label="Search" style="font-size:9px" />
+			-->
+			<separator width="10px" />
+
+			<button id="newmanif_b" label="New manifest" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="commitmanif_b" label="Commit" style="font-weight:bold" onClick="doFunc(self)" />
+			<button id="printmanif_b" label="Print" style="font-weight:bold" onClick="doFunc(self)" />
+			<separator width="20px" />
+			<button id="adminb2" visible="false" label="ADMIN" style="font-weight:bold;color:#ff0000" onClick="adminpopup.open(self)" />
+
+			<!-- <button id="manifdeliv_b" label="DELIVERED" style="font-weight:bold" onClick="doFunc(self)" /> -->
+
+		</hbox>
+		<separator height="2px" />
+		<div style="background:#3465a4;padding:2px">
+			<hbox>
+				<label sclass="subhead1">Logistic/Dispatch Manifest</label>
+				<button id="disphelp_b" label="?" onClick="showMiniHelp(self)" />
+			</hbox>
+		</div>
+		<separator height="2px" />
+		<hbox>
+			<vbox width="600px">
+				<div id="manifest_holder" />
+
+				<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+				box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" id="docholder" visible="false" >
+					<label sclass="subhead1">ATTACHMENT / DOCUMENTS</label>
+					<separator height="3px" />
+					<hbox>
+						<button id="uploaddoc_btn" label="Upload file" style="font-size:9px"
+							onClick="showUploadPopup(DISP_PREFIX,glob_sel_manif)" />
+						<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+						<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(self)" />
+						<button id="deletedoc_btn" label="Delete" style="font-size:9px"
+							onClick="deleteFile(documents_holder,DISP_PREFIX,glob_sel_manif)" />
+					</hbox>
+					<separator height="3px" />
+					<div id="documents_holder" />
+				</div>
+			</vbox>
+
+			<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+				box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" id="manifmetaholder" visible="false" >
+
+				<label sclass="subhead1">MANIFEST METADATA</label>
+
+				<div id="manf_metaform_holder" width="450px" />
+				<separator height="3px" />
+				<button id="upmanif_b" label="Update manifest" style="font-weight:bold" onClick="doFunc(self)" />
+				<separator height="3px" />
+				<div id="manf_items_holder" />
+				<separator height="3px" />
+				<button id="upmanifstat_b" label="Update status" style="font-weight:bold" onClick="doFunc(self)" />
+
+				<label id="debugbox" multiline="true" />
+
+			</div>
+
+		</hbox>
+	</div>
+
+	<label id="disptit" sclass="subhead2" value="Logistic/Dispatch Manifest" visible="false" />
+</hbox>
+
+</div>
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(startdate);
+kiboo.setTodayDatebox(enddate);
+kiboo.setTodayDatebox(mftstartdate);
+kiboo.setTodayDatebox(mftenddate);
+
+luhand.populateListbox_ByLookup(bydispatcher_lb,"TRANSPORTER_COURIER",2);
+
+//kiboo.setTodayDatebox(admchg_date);
+
+do_formmaker = dynamicForm(doform_holder, "do_metaform", "9");
+manif_formmaker = dynamicForm(manf_metaform_holder, "manif_metaform", "10");
+
+listDO(0);
+showJobs();
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminb1.setVisible(true);
+	adminb2.setVisible(true);
+}
+
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

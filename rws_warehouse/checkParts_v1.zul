@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chkpartswin"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Check Parts Inventory";
+MYVERSION = "v0.1";
+MY_ID = "chkpartswnq";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+prev_s = "";
+
+void populateItemMetadata()
+{
+	istkcode = kiboo.replaceSingleQuotes( stkcode_t.getValue().trim() );
+	if(istkcode.equals("")) return;
+	if(prev_s.equals(istkcode)) return;
+
+	skr = getStockItem_rec(istkcode);
+	if(skr == null) { guihand.showMessageBox("Not found!!"); return; }
+	
+	prev_s = istkcode;
+
+	DecimalFormat nf = new DecimalFormat("#");
+	DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+	stock_code.setValue(skr.get("Stock_Code"));
+	entrydate.setValue(skr.get("EntryDate"));
+	brandname.setValue(kiboo.checkNullString(skr.get("BrandName")));
+	description.setValue(kiboo.checkNullString(skr.get("Description")));
+	description2.setValue(kiboo.checkNullString(skr.get("Description2")));
+	qty_in_stock.setValue(nf.format(skr.get("Qty_In_Stock")));
+	qty_reorder.setValue(nf.format(skr.get("Qty_Reorder")));
+	last_purchase_date.setValue(skr.get("Last_Purchase_Date"));
+	last_purchase_price.setValue(nf2.format(skr.get("Last_Purchase_Price")));
+
+	palletno.setValue(kiboo.checkNullString(skr.get("palletno")));
+	lbhand.matchListboxItems(itemgrade,kiboo.checkNullString(skr.get("itemgrade")));
+
+	bcrm = skr.get("Stock_Cat") + " > " + skr.get("GroupCode") + " > " + skr.get("ClassCode") + " > " + skr.get("class2code");
+	stockheader.setValue(bcrm);
+
+	supplier_part_number.setValue(kiboo.checkNullString(skr.get("Supplier_Part_Number")));
+
+	bomid = (skr.get("bom_id") != null) ? BOM_PREFIX + skr.get("bom_id").toString() : "";
+	bom_id.setValue(bomid);
+	bom_date.setValue( kiboo.checkNullDate(skr.get("bom_date"),"") );
+	isactive.setValue( (skr.get("IsActive") == null) ? "NO" : ( (skr.get("IsActive")) ? "YES" : "NO" ) );
+
+	rmaid = (skr.get("rma_id") != null) ? LOCALRMA_PREFIX + skr.get("rma_id").toString() : "";
+	rma_id.setValue(rmaid);
+	
+	pickid = (skr.get("pick_id") != null) ? PICKLIST_PREFIX + skr.get("pick_id").toString() : "";
+	pick_id.setValue(pickid);
+
+	
+	form_holder.setVisible(true);
+}
+
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<hbox>
+<label value="Stock-code" />
+<separator width="5px" />
+<textbox id="stkcode_t" width="200px" style="font-weight:bold" />
+<separator width="5px" />
+<div style="background:#2e3436;padding:3px;" onClick="populateItemMetadata()" >
+<label style="font-weight:bold;color:#ffffff">Check</label>
+</div>
+</hbox>
+
+<separator height="10px" />
+
+<div id="form_holder" visible="false">
+<div style="background:#2e3436;padding:2px">
+<label id="stockheader" style="color:#ffffff" />
+</div>
+
+</div>
+
+</div>
+<zscript>
+<![CDATA[
+//value="11S42T1122Z1ZF6L0136XX"
+
+glob_formmaker = dynamicForm(form_holder, "partmetaform", "1"); // in rwsqlfuncs.zs, need to move somewhere..
+
+class tbonOK implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		populateItemMetadata();
+	}
+}
+stkcode_t.addEventListener("onOK",new tbonOK());
+
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

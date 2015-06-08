@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="printpr_win"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_birtreport.zs" />
+<zscript>
+<![CDATA[
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+/*
+param_startdate = Executions.getCurrent().getParameter("startdate");
+param_enddate = Executions.getCurrent().getParameter("enddate");
+*/
+
+param_prnumber = Executions.getCurrent().getParameter("prno");
+
+void doBIRT(Div iparentdiv)
+{
+	parameters_makeme = "&prnum=" + param_prnumber;
+
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("600px");
+	newiframe.setId("birtframe");
+	thesrc = BIRT_WEBVIEWER + BIRT_PURCHASE_REQ + parameters_makeme;
+	newiframe.setSrc(thesrc);
+	newiframe.setParent(iparentdiv);
+}
+
+]]>
+</zscript>
+
+<window id="print_pr_box" width="800px" height="630px" title="Print Purchase-Requisition" position="center" mode="overlapped" border="normal" closable="true" sizable="true"
+onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)" >
+<div>
+<button label="X Close window" onClick="globalCloseWindow(myincludeid)" />
+<separator height="3px" />
+<div id="birt_div" />
+
+</div>
+
+<zscript>
+doBIRT(birt_div);
+</zscript>
+
+</window>
+</zk>

@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="menueditor_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/portalmenu.zs" />
+<zscript src="../alsglobal/als_lookuptree.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript>
+MYTITLE = "Menu Editor";
+MYVERSION = "v1.2";
+<![CDATA[
+/*
+Title		: Main menu editor
+Written by	: Victor Wong
+Revisions:
+10/10/2011: started
+17/03/2014: optimize abit
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+kiboo = new Generals(); lbhand = new ListboxHandler();
+sqlhand = new SqlFuncs(); guihand = new GuiFuncs();
+menuhand = new MenuFuncs(); luhand = new LookupFuncs();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+/*
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+*/
+String[] guiType = { "PANEL","REPORT","REPORT_EXT","WINDOW","SEPARATOR", "EX_MOD" };
+selected_menuid = selected_guitype = selected_usergroup = "";
+copied_menuid = "";
+Object selectedMenuTreeItem;
+String lastSelectedMenuTreeStyle;
+
+// itype: 1=menu tab, 2=menu item
+void insertSomemenu(int itype)
+{
+	if(itype == 1)
+		menuhand.insertNewMenu("MAINMENU","0");
+	else
+	{
+		if(selected_menuid.equals("")) return;
+		menuhand.insertNewMenu("MENUITEM",selected_menuid);
+	}
+
+	showMenuTree("MAINMENU", menu_tree); // refresh
+}
+
+void showMenuMetadata(String iorigid)
+{
+	mi_modal_flag.setChecked(false); // always set unchecked
+	mi_disabled.setChecked(false);
+
+	mrec = menuhand.getMenuRec(iorigid);
+	if(mrec == null) return;
+
+	String[] fl = { "menulabel", "module_fn", "parameters", "image_fn", "label_style", "menutooltip", "limited_users", "guitype",
+	"modal_flag", "disabled", "usergroup", "position" };
+
+	Object[] ob = { mi_menulabel, mi_module_fn, mi_parameters, mi_image_fn, mi_label_style, mi_menutooltip,
+	mi_limited_users, mi_guitype, mi_modal_flag, mi_disabled, mi_usergroup, mi_position };
+
+	ngfun.populateUI_Data(ob,fl,mrec);
+
+	kkk = (mrec.get("accesslevel") == 9) ? "God-like" : mrec.get("accesslevel").toString();
+	lbhand.matchListboxItems(mi_accesslevel,kkk);
+
+	kgu = "1";
+	if(mrec.get("usergrouplevel") != null)
+		kgu = (mrec.get("usergrouplevel") == 9) ? "God-like" : mrec.get("usergrouplevel").toString();
+
+	lbhand.matchListboxItems(mi_usergrouplevel,kgu);
+	
+	// tick usernames list according to what's inside elb_menutree.limited_users
+	usernames_lb.clearSelection(); 	// clear all ticks
+	if(!kiboo.checkNullString(mrec.get("limited_users")).equals("")) guihand.findAndTick(usernames_lb,mrec.get("limited_users")," ");
+}
+
+void menuTreeOnSelect(Tree wTree)
+{
+	selitem = wTree.getSelectedItem();
+	selected_menuid = guihand.getTreecellItemLabel(selitem,5);
+	//menuid = getTreecellItemLabel(selitem,0);
+
+	showMenuMetadata(selected_menuid);
+
+} // end of menuTreeOnSelect()
+
+void updateMenuItem()
+{
+	if(selected_menuid.equals("")) return;
+
+	Object[] ob = { mi_menulabel, mi_module_fn, mi_parameters, mi_image_fn, mi_label_style, mi_menutooltip,
+	mi_accesslevel, mi_guitype, mi_modal_flag, mi_disabled, mi_limited_users,
+	mi_usergrouplevel, mi_usergroup, mi_position };
+
+	dt = ngfun.getString_fromUI(ob);
+	if(dt[13].equals("")) dt[13]="0";
+	if(dt[6].equals("God-like")) dt[6] = "9";
+	if(dt[11].equals("God-like")) dt[11] = "9";
+	if(dt[7].equals("SEPARATOR")) { dt[0] = dt[7]; mi_menulabel.setValue(dt[0]); }
+
+	sqlstm = "update elb_menutree set menulabel='" + dt[0] + "', module_fn='" + dt[1] + "'," +
+	"parameters='" + dt[2] + "', image_fn='" + dt[3] + "', label_style='" + dt[4] + "', menutooltip='" + dt[5] + "'," +
+	"accesslevel=" + dt[6] + ", guitype='" + dt[7] + "', modal_flag=" + dt[8] + ", disabled=" + dt[9] + ", " + 
+	"limited_users='" + dt[10] + "', usergrouplevel=" + dt[11] + ", usergroup='" + dt[12] + "',position=" + dt[13] +
+	" where origid=" + selected_menuid;
+
+	sqlhand.gpSqlExecuter(sqlstm);
+	showMenuTree("MAINMENU", menu_tree);
+}
+
+void deleteMenuItem()
+{
+	if(selected_menuid.equals("")) return;
+	if(copied_menuid.equals(selected_menuid)) copied_menuid = ""; // reset copied menu-id
+
+	// add checks for sub-items .. dangerous to delete main-branch ---
+	sqlstm = "select origid from elb_menutree where menuparent=" + selected_menuid;
+	chkchild = sqlhand.gpSqlFirstRow(sqlstm);
+	if(chkchild != null)
+	{
+		alert("Child items available, delete them first..");
+		return;
+	}
+
+	sqlstm = "delete from elb_menutree where origid=" + selected_menuid;
+	sqlhand.gpSqlExecuter(sqlstm);
+	showMenuTree("MAINMENU", menu_tree);
+}
+
+void selectUsergroup(Tree wTree)
+{
+	selected_usergroup = wTree.getSelectedItem().getLabel();
+	mi_usergroup.setValue(selected_usergroup);
+}
+
+void listUsernames(Div idiv)
+{
+	Object[] sm_lb_headers = {
+	new dblb_HeaderObj("username",true,"username",1),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select distinct username from portaluser where locked=0 and deleted=0 order by username";
+	Listbox newlb = lbhand.makeVWListbox_onDB(idiv,sm_lb_headers,"usernames_lb",23,sql,sqlstm);
+	sql.close();
+	newlb.setStyle("font-size:9px");
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+}
+
+// Get what're ticked in usernames_lb, make a string and put into mi_limited_users
+void assignLimitedUsers()
+{
+	lustr = "";
+	for(dpi : usernames_lb.getSelectedItems())
+	{
+		lustr += dpi.getLabel() + " ";
+	}
+	mi_limited_users.setValue(lustr);
+}
+
+void copyMenuitem()
+{
+	// was a previous copied item - remove hilite
+	if(!copied_menuid.equals("")) selectedMenuTreeItem.setStyle("text-decoration:none");
+
+	copied_menuid = selected_menuid;
+
+	selectedMenuTreeItem = menu_tree.getSelectedItem();
+	selectedMenuTreeItem.setStyle("text-decoration:underline");
+
+	pastemenu_btn.setDisabled(false); // enable paste and move buttons
+	movemenu_btn.setDisabled(false);
+}
+
+// itype: 1=copy, 2=move
+void pasteMenuItem(int itype)
+{
+	selitem = menu_tree.getSelectedItem();
+	newselected_id = guihand.getTreecellItemLabel(selitem,5);
+
+	if(copied_menuid.equals(newselected_id)) return; // same-same - return lor
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	// get copied menu-rec
+	sqlstm = "select * from elb_menutree where origid=" + copied_menuid;
+	mrec = sql.firstRow(sqlstm);
+
+	if(mrec == null) { sql.close(); return; }
+
+	mmenulabel = kiboo.checkNullString(mrec.get("menulabel"));
+	mmodule_fn = kiboo.checkNullString(mrec.get("module_fn"));
+	mparameters = kiboo.checkNullString(mrec.get("parameters"));
+	mimage_fn = kiboo.checkNullString(mrec.get("image_fn"));
+	mlabel_style = kiboo.checkNullString(mrec.get("label_style"));
+	mmenutooltip = kiboo.checkNullString(mrec.get("menutooltip"));
+	mlimited_users = kiboo.checkNullString(mrec.get("limited_users"));
+
+	mposi = (mrec.get("position") == null) ? "0" : mrec.get("position").toString();
+	malvl = mrec.get("accesslevel").toString();
+
+	mguitype = (mrec.get("guitype") == null) ? "PANEL" : mrec.get("guitype");
+	mmodalflg = (mrec.get("modal_flag") == null) ? "0" : (mrec.get("modal_flag") == true) ? "1" : "0";
+	mdisable = (mrec.get("disabled") == null) ? "0" : (mrec.get("disabled") == true) ? "1" : "0";
+
+	musergroup = kiboo.checkNullString(mrec.get("usergroup"));
+	muglvl = (mrec.get("usergrouplevel") == null) ? "1" : mrec.get("usergrouplevel").toString();
+
+	if(itype == 1) // copy
+	{
+		sqlstm = "insert into elb_menutree " + 
+		"(menulabel,module_fn,parameters,image_fn," + 
+		"label_style,menutooltip,accesslevel,guitype,modal_flag,disabled," +
+		"limited_users,usergrouplevel,usergroup,position,menuparent) values (" +
+		"'" + mmenulabel + "','" + mmodule_fn + "','" + mparameters + "','" + mimage_fn + "'," + 
+		"'" + mlabel_style + "','" + mmenutooltip + "'," + malvl + ",'" + mguitype + "'," + mmodalflg + "," + mdisable +
+		",'" + mlimited_users + "'," + muglvl + ",'" + musergroup + "'," + mposi + "," + newselected_id + ")";
+
+		sql.execute(sqlstm);
+	}
+
+	if(itype == 2) // move menu-item
+	{
+		//sqlstm2 = "delete from elb_menutree where origid=" + copied_menuid;
+		//sql.execute(sqlstm2);
+		sqlstm = "update elb_menutree set menuparent=" + newselected_id + " where origid=" + copied_menuid;
+		sql.execute(sqlstm);
+
+		copied_menuid = ""; // reset
+		pastemenu_btn.setDisabled(true); // disable paste/move buttons after moving
+		movemenu_btn.setDisabled(true);
+	}
+
+	sql.close();
+	showMenuTree("MAINMENU", menu_tree); // refresh
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="menueditor_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<hbox>
+	<groupbox mold="3d" width="400px">
+	<button label="Insert tab" sclass="k9" onClick="insertSomemenu(1)" />
+	<button label="Insert menu-item" sclass="k9" onClick="insertSomemenu(2)" />
+	<button label="Delete" sclass="k9" onClick="deleteMenuItem()" />
+
+	<button label="Copy" sclass="k9" onClick="copyMenuitem()" />
+	<button id="pastemenu_btn" label="Paste" sclass="k9" disabled="true" onClick="pasteMenuItem(1)" />
+	<button id="movemenu_btn" label="Move" sclass="k9" disabled="true" onClick="pasteMenuItem(2)" />
+
+	<separator height="2px" />
+		<tree id="menu_tree" zclass="z-dottree" rows="25" onSelect="menuTreeOnSelect(menu_tree)" >
+		<treecols>
+			<treecol label="Menu label" />
+			<treecol label="Lvl" />
+			<treecol label="Usergroup" />
+			<treecol label="GLvl" />
+			<treecol label="Pos" />
+		</treecols>
+		</tree>
+	</groupbox>
+	
+<groupbox mold="3d">
+<grid width="500px">
+	<rows>
+		<row spans=",4,">
+			<label value="Label" sclass="k9" />
+			<textbox id="mi_menulabel" sclass="k9" width="99%" />
+			<hbox>
+			<label value="Posi" sclass="k9" />
+			<textbox id="mi_position" sclass="k9" width="20px" />
+			</hbox>
+		</row>
+		<row>
+			<label value="Level" sclass="k9" />
+			<listbox id="mi_accesslevel" mold="select" sclass="k9" />
+			<label value="Type" sclass="k9" />
+			<listbox id="mi_guitype" mold="select" sclass="k9" />
+			<checkbox id="mi_modal_flag" label="Modal" sclass="k9" />
+			<checkbox id="mi_disabled" label="Disabled" sclass="k9" />
+		</row>
+		<row spans=",4,">
+			<label value="OnlyUsers" sclass="k9" />
+			<textbox id="mi_limited_users" width="99%" multiline="true" height="40px" sclass="k9" />
+			<button label="Blank it" sclass="k9" onClick='mi_limited_users.setValue("")' />
+		</row>
+		<row spans=",5">
+			<label value="Filename" sclass="k9" />
+			<textbox id="mi_module_fn" width="99%" sclass="k9" />
+		</row>
+		<row spans=",5">
+			<label value="Parameters" sclass="k9" />
+			<textbox id="mi_parameters" width="99%" sclass="k9" />
+		</row>
+		<row spans=",5">
+			<label value="Image" sclass="k9" />
+			<textbox id="mi_image_fn" width="99%" sclass="k9" />
+		</row>
+		<row spans=",5">
+			<label value="CSS" sclass="k9" />
+			<textbox id="mi_label_style" width="99%" sclass="k9" />
+		</row>
+		<row spans=",5">
+			<label value="Tooltip" sclass="k9" />
+			<textbox id="mi_menutooltip" width="99%" multiline="true" height="50px" sclass="k9" />
+		</row>
+		<row spans=",2,,">
+			<label value="Usergroup" sclass="k9" />
+			<label id="mi_usergroup" sclass="k9" />
+			<button label="Set ALL" sclass="k9" onClick='mi_usergroup.setValue("ALL")' />
+			<label value="Usergroup level" sclass="k9" />
+			<listbox id="mi_usergrouplevel" mold="select" sclass="k9" />
+		</row>
+		<row spans="6">
+			<tree id="depart_tree" zclass="z-dottree" rows="11" onSelect="selectUsergroup(depart_tree)">
+			<treecols>
+				<treecol label="Usergroup" />
+				<treecol label="Description" />
+			</treecols>
+			</tree>
+		</row>
+	</rows>
+</grid>
+
+<separator height="2px" />
+<hbox>
+	<button label="Update item" sclass="k9" onClick="updateMenuItem()" />
+</hbox>
+</groupbox>
+
+<groupbox mold="3d">
+	<button label="Assign users" sclass="k9" onClick="assignLimitedUsers()" />
+	<separator height="2px" />
+	<div id="usernames_holder" />
+</groupbox>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+showMenuTree("MAINMENU", menu_tree);
+
+//setTodayDatebox(hiddendatebox);
+
+//lbhand.populateDropdownListbox(mi_accesslevel, dd_accesslevel); // def in securityfuncs.zs
+//lbhand.populateDropdownListbox(mi_usergrouplevel, dd_accesslevel);
+
+luhand.populateListbox_ByLookup(mi_accesslevel,"dd_accesslevel",2);
+luhand.populateListbox_ByLookup(mi_usergrouplevel,"dd_accesslevel",2);
+
+lbhand.populateDropdownListbox(mi_guitype,guiType);
+
+showLookupTree("DEPARTMENTS",depart_tree);
+listUsernames(usernames_holder);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

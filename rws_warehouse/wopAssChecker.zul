@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="wopsasswin_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "WhopAssets Checker/ Location Changer / Grade Also";
+MYVERSION = "v0.2.5";
+MY_ID = "wopassdpan";
+/*
+@Author Victor Wong
+@Since 24/01/2014
+@NOTES
+Make it to check stock-tick scanned asset against what're inside FC6 inventory table
+
+21/08/2014: able to change parts/assets location from here
+24/09/2014: able to change asset grade too -- req by Vimalan
+13/10/2014: repair-dept(varan) request export lb to EXCEL. Put in checks to allow only authorized ppl to change loca/grade
+08/12/2014: req vimalan, able to change asset type (DT,MT,NB..etc)
+09/12/2014: req vimalan, able to change asset casing
+12/01/2015: repair-division req to show commentsyh in list
+
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+last_type = 0;
+
+Object[] wpshd = 
+{
+	new listboxHeaderWidthObj("AssetTag",true,""),
+	new listboxHeaderWidthObj("S/Num",true,""),
+	new listboxHeaderWidthObj("Desc",true,""),
+	new listboxHeaderWidthObj("Brand",true,""),
+	new listboxHeaderWidthObj("Model",true,""),
+	new listboxHeaderWidthObj("Grd",true,""),
+	new listboxHeaderWidthObj("PalletNo",true,""),
+	new listboxHeaderWidthObj("Type",true,""),
+	new listboxHeaderWidthObj("Case",true,""),
+	new listboxHeaderWidthObj("Comments",true,""),
+};
+
+void checkEmAssets(int itype)
+{
+	last_type = 0;
+	tgs = (wopass_tb.getValue().trim()).split("\n");
+	asts = "";
+	for(i=0;i<tgs.length;i++)
+	{
+		asts += "'" + tgs[i].trim() + "',";
+	}
+	try { asts = asts.substring(0,asts.length()-1); } catch (Exception e) {}
+
+	Listbox newlb = lbhand.makeVWListbox_Width(fndass_holder, wpshd, "fndassets_lb", 5);
+
+	kk = "where ltrim(rtrim(s.code2)) in (" + asts + ") order by s.code2 desc;";
+	if(itype == 2) kk = "where ltrim(rtrim(s.code)) in (" + asts + ") order by s.code desc;";
+
+	sqlstm = "select s.name, s.code, s.code2, si.brandyh, si.modelyh, si.gradeyh, si.itemtypeyh, w.name as palletno, si.casingyh, si.commentsyh " +
+	"from mr001 s left join u0001 si on si.extraid = s.eoff " +
+	"left join mr003 w on w.masterid = si.palletnoyh " + kk;
+
+	ats = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(ats.size() == 0) return;
+	newlb.setRows(20); newlb.setMold("paging");
+	newlb.setMultiple(true); newlb.setCheckmark(true);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "code2", "code", "name", "brandyh", "modelyh", "gradeyh", "palletno", "itemtypeyh", "casingyh", "commentsyh" };
+	for(d : ats)
+	{
+		ngfun.popuListitems_Data2(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	
+	scnass_lb.setValue("Check: " + tgs.length.toString());
+	fndrecs_lb.setValue("Found: " + ats.size().toString());
+}
+
+// knockoff from equipRequest_tracker_v1.zul -- with modi
+void massUpdatePalletLoca(String ipallet)
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+	ipallet = kiboo.replaceSingleQuotes(ipallet.trim());
+	sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+	pmid = r.get("masterid").toString();
+
+	if(Messagebox.show("Please make sure you put these items to the proper loca/pallet", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+	ags = "";
+	si = fndassets_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],0).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+/*
+	if(!glob_sel_extrahdd.equals("")) // update u0015.lastlocator and lastlocatedate
+	{
+		sqlstm += "update u0015 set lastlocator='" + useraccessobj.username + "', lastlocadate='" + kiboo.todayISODateTimeString() + "' where extraid=" + glob_sel_extrahdd;
+	}
+*/
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	checkEmAssets(last_type);
+
+	wo = ags.replaceAll("'","").replaceAll(",",", ");
+	add_RWAuditLog("WOPASSLOCA", "", "Updt pallet to " + ipallet + " for " + wo, useraccessobj.username);
+}
+
+void massUpdateAssetGrade()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+	tg = assgrade_lb.getSelectedItem().getLabel();
+	//if(tg.equals("")) return;
+
+	ags = "";
+	si = fndassets_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],0).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set gradeyh='" + tg + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	checkEmAssets(last_type);
+}
+
+void exportListbox()
+{
+	try {
+	exportExcelFromListbox(fndassets_lb, kasiexport, wpshd, "checkassets.xls","chkass");
+	} catch (Exception e) {}
+}
+
+void massUpdateAssetType()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+	tg = itemtype_lb.getSelectedItem().getLabel();
+	//if(tg.equals("")) return;
+
+	ags = "";
+	si = fndassets_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],0).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set itemtypeyh='" + tg + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	checkEmAssets(last_type);
+}
+
+void massUpdateCasing()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+	tg = itemcasing_lb.getSelectedItem().getLabel();
+	//if(tg.equals("")) return;
+
+	ags = "";
+	si = fndassets_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],0).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set casingyh='" + tg + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	checkEmAssets(last_type);	
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+<window id="${MY_ID}" width="1000px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" sizable="true" closable="true">
+	<div>
+		<hbox>
+			<div width="100px">
+				<separator height="25px" />
+				<label value="Scanned assets / serial-number" sclass="k9" />
+				<textbox id="wopass_tb" multiline="true" width="99%" height="250px" sclass="k9" />
+				<separator height="2px" />
+				<vbox>
+					<button label="Check asset-tag" sclass="k9" onClick="checkEmAssets(1)" />
+					<button label="Check serial-num" sclass="k9" onClick="checkEmAssets(2)" />
+					<button label="Export EXCEL" sclass="k9" onClick="exportListbox()" />
+					<button label="Clear" sclass="k9" onClick='wopass_tb.setValue("")' />
+				</vbox>
+				<separator height="2px" />
+				<label id="scnass_lb" sclass="k9" />
+			</div>
+			<div>
+				<hbox>
+					<label sclass="k9" value="Pallet/Loca" />
+					<textbox id="palletloca_tb" width="60px" sclass="k9" />
+					<button id="chgpallet_b" sclass="k9mo" label="pallet" onClick="massUpdatePalletLoca(palletloca_tb.getValue())" disabled="true" />
+					<listbox id="assgrade_lb" mold="select" sclass="k9" />
+					<button id="chggrade_b" sclass="k9mo" label="grade" onClick="massUpdateAssetGrade()" disabled="true" />
+					<listbox id="itemtype_lb" mold="select" sclass="k9" />
+					<button id="chgtype_b" sclass="k9mo" label="type" onClick="massUpdateAssetType()" disabled="true" />
+					<listbox id="itemcasing_lb" mold="select" sclass="k9" />
+					<button id="chgcasing_b" sclass="k9mo" label="casing" onClick="massUpdateCasing()" disabled="true" />
+				</hbox>
+				<separator height="5px" />
+				<div id="fndass_holder" />
+				<separator height="2px" />
+				<label id="fndrecs_lb" sclass="k9" />
+			</div>
+		</hbox>
+	</div>
+<div id="kasiexport" visible="false" />
+<zscript>
+<![CDATA[
+
+	rws_fillListbox_uniqField("partsall_0","grade",assgrade_lb);
+	rws_fillListbox_uniqField("partsall_0","item",itemtype_lb);
+	rws_fillListbox_uniqField("partsall_0","casing",itemcasing_lb);
+
+	// || useraccessobj.accesslevel == 9
+	if(sechand.allowedUser(useraccessobj.username,"WHOPASSET_USER"))
+	{
+		chgpallet_b.setDisabled(false);
+		chggrade_b.setDisabled(false);
+		chgtype_b.setDisabled(false);
+		chgcasing_b.setDisabled(false);
+	}
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

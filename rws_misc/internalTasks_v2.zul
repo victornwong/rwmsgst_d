@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="internaltasks_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/internaltasksf_v2.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Tasks / To-Do";
+MYVERSION = "v0.2";
+MY_ID = "intjtaskid";
+/*
+Written by	: Victor Wong
+Dated		: 18/06/2014
+NOTES:
+18/06/2014: recode some parts of the old version
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+prev_sel_inttask = glob_sel_assigner = "";
+last_list_type = 0;
+
+void loadEmTasks(int itype)
+{
+	sdate = kiboo.getDateFromDatebox( (itype == 2) ? tskdate : asstskdate );
+	odiv = (itype == 2) ? tasksforyou_holder : tasksfromyou_holder;
+	olbid = (itype == 2) ? "yourtasks_lb" : "asstasks_lb";
+	showInternalTasksList(itype, useraccessobj.username, "", sdate, odiv, olbid );
+}
+
+Object[] actionlbhds =
+{
+	new listboxHeaderWidthObj("Dated",true,"120px"),
+	new listboxHeaderWidthObj("Action",true,""),
+	new listboxHeaderWidthObj("Who",true,"70px"),
+};
+
+void showTaskMeta(String iwhat)
+{
+	sqlstm = "select * from rw_int_tasks where origid=" + iwhat;
+	r = sqlhand.gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+
+	t_notes.setValue( kiboo.checkNullString(r.get("t_notes")) );
+	t_task.setValue( r.get("task") );
+
+	// show 'em actions
+	acts = sqlhand.clobToString(r.get("action")).split("~");
+	actd = sqlhand.clobToString(r.get("action_date")).split("~");
+	actw = sqlhand.clobToString(r.get("action_who")).split("~");
+
+	if(acts.length > 0) // have some actions -- show
+	{
+		Listbox newlb = lbhand.makeVWListbox_Width(actions_holder, actionlbhds, "actions_lb", 5);
+		ArrayList kabom = new ArrayList();
+		for(i=0; i<acts.length; i++)
+		{
+			try { a1 = kiboo.checkNullString(actd[i]); } catch (Exception e) { a1 = ""; }
+			try { a2 = kiboo.checkNullString(acts[i]); } catch (Exception e) { a2 = ""; }
+			try { a3 = kiboo.checkNullString(actw[i]); } catch (Exception e) { a3 = ""; }
+
+			kabom.add( a1 );
+			kabom.add( a2 );
+			kabom.add( a3 );
+			lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+			kabom.clear();
+		}
+	}
+}
+
+void saveTaskMeta(String iwhat)
+{
+	if(iwhat.equals("")) return;
+	kk = kiboo.replaceSingleQuotes( t_notes.getValue().trim() );
+	sqlstm = "update rw_int_tasks set t_notes='" + kk + "' where origid=" + iwhat;
+	sqlhand.gpSqlExecuter(sqlstm);
+}
+
+class inttskclk implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		kk = lbhand.getListcellItemLabel(isel,TSKORIGID_IDX);
+		glob_sel_assigner = lbhand.getListcellItemLabel(isel,ASGNER_IDX);
+
+		if(!prev_sel_inttask.equals(kk)) // save any previous task meta if user select another
+		{
+			saveTaskMeta(prev_sel_inttask);
+		}
+
+		glob_sel_inttask = prev_sel_inttask = kk;
+		showTaskMeta(glob_sel_inttask);
+
+		/*
+		glob_sel_taskowner = lbhand.getListcellItemLabel(isel,2);
+		kdn = lbhand.getListcellItemLabel(isel,9); // done flag
+		if(isel.getFellowIfAny("intmytaskno_lbl") != null)
+		{
+			intmytaskno_lbl.setValue("Task# : " + glob_sel_inttask);
+		}
+		//intmytaskno_lbl.setValue("Task# : " + glob_sel_inttask);
+		if(isel.getFellowIfAny("saveaction_b") != null)
+		{
+			saveaction_b.setDisabled( (kdn.equals("Y")) ? true : false);
+		}
+		*/
+	}
+}
+inttaskclicker = new inttskclk();
+
+Object[] inttskslb_hds =
+{
+	new listboxHeaderWidthObj("Dated",true,"90px"),
+	new listboxHeaderWidthObj("Priority",true,"60px"),
+	new listboxHeaderWidthObj("Task",true,""),
+	new listboxHeaderWidthObj("Link",true,"80px"),
+	new listboxHeaderWidthObj("NxtAD",true,"70px"),
+	new listboxHeaderWidthObj("NxtAct",true,""),
+	new listboxHeaderWidthObj("assigner",false,""),
+	new listboxHeaderWidthObj("origid",false,""),
+};
+TSKORIGID_IDX = 7;
+ASGNER_IDX = 6;
+
+// itype: 1=pending, 2=done
+void showUserTasksToDo(Div idiv, String iuname, int itype)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, inttskslb_hds, "todotasks_lb", 10);
+	kdn = kdnstr = "";
+	switch(itype)
+	{
+		case 1:
+			kdn = "and done=0 ";
+			kdnstr = "Pending tasks";
+			break;
+		case 2:
+			kdn = "and done=1 ";
+			kdnstr = "Done's";
+	}
+	list_type_lbl.setValue(kdnstr);
+	last_list_type = itype;
+
+	sqlstm = "select origid,datecreated,task,priority,nextactiondate,nextaction,linking_code,assigner from rw_int_tasks where assignee='" + iuname + "' " + kdn +
+	"order by nextactiondate desc";
+	recs = sqlhand.gpSqlGetRows(sqlstm);
+	if(recs.size() == 0) return;
+	/*
+	newlb.setMold("paging");
+	newlb.setRows(21);
+	*/
+	newlb.setCheckmark(true);
+	newlb.addEventListener("onSelect", inttaskclicker );
+	String[] fl = { "datecreated", "priority", "task", "linking_code", "nextactiondate", "nextaction", "assigner", "origid" };
+	ArrayList kabom = new ArrayList();
+	for(d : recs)
+	{
+		popuListitems_Data(kabom,fl,d);
+		prty = kiboo.checkNullString(d.get("priority"));
+		styl = "";
+		if(prty.equals("URGENT")) styl = "font-size:9px;background:#f57900;color:#ffffff;font-weight:bold";
+		if(prty.equals("CRITICAL")) styl = "font-size:9px;background:#ef2929;color:#ffffff;font-weight:bold";
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",styl);
+		kabom.clear();
+	}
+}
+
+void taskerFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = refreshmeta = false;
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("addtask_b"))
+	{
+		kk = kiboo.replaceSingleQuotes( addtask_tb.getValue().trim() );
+		if(kk.equals("")) return;
+		kl = t_linking_code.getSelectedItem().getLabel();
+		kt = t_priority.getSelectedItem().getLabel();
+		sqlstm = "insert into rw_int_tasks (datecreated,assigner,assignee,task,linking_code,priority,done,action,action_date,action_who) values " +
+		"('" + todaydate + "','" + unm + "','" + unm + "','" + kk + "','" + kl + "','" + kt + "',0,'','','');";
+		refresh = true;
+		addtask_tb.setValue(""); // clear for next task
+	}
+
+	if(itype.equals("settaskdone_b"))
+	{
+		if(glob_sel_inttask.equals("")) return;
+		sqlstm = "update rw_int_tasks set done=1-done where origid=" + glob_sel_inttask;
+		refresh = true;
+	}
+
+	if(itype.equals("addaction_b"))
+	{
+			if(glob_sel_inttask.equals("")) return;
+			kk = kiboo.replaceSingleQuotes(addaction_tb.getValue().trim()).replaceAll("~"," ");
+			if(kk.equals("")) return;
+
+			sqlstm = "update rw_int_tasks set action = convert(varchar(max),action) + '" + kk + "~', action_date = convert(varchar(max),action_date) + '" + todaydate + 
+			"~', action_who = convert(varchar(max),action_who) + '" + unm + "~' where origid="  + glob_sel_inttask;
+
+			refreshmeta = true;
+			addaction_tb.setValue(""); // clear for next action
+	}
+
+	if(itype.equals("deltask_b"))
+	{
+		if(glob_sel_inttask.equals("")) return;
+		if(!glob_sel_assigner.equals(unm))
+		{
+			msgtext = "You are NOT the owner of this task/todo, cannot REMOVE..";
+		}
+		else
+		{
+			if(Messagebox.show("Delete this task/todo", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+			sqlstm = "delete from rw_int_tasks where origid=" + glob_sel_inttask;
+			refresh = true;
+		}
+	}
+
+	if(itype.equals("setnxtactd_b"))
+	{
+		if(glob_sel_inttask.equals("")) return;
+		kk = kiboo.replaceSingleQuotes(t_nextaction.getValue().trim());
+		ndt = kiboo.getDateFromDatebox(t_nextactiondate);
+		sqlstm = "update rw_int_tasks set nextactiondate='" + ndt + "', nextaction='" + kk + "' where origid=" + glob_sel_inttask;
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showUserTasksToDo(tasks_holder, useraccessobj.username, last_list_type);
+	if(refreshmeta) showTaskMeta(glob_sel_inttask);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+WINBACKGROUND = "background:#566B3A";
+
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+}
+</style>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="top,center" mode="overlapped" border="normal"
+closable="true" onClose="saveTaskMeta(prev_sel_inttask)">
+	<div sclass="shadowbox" style="${WINBACKGROUND}">
+
+		<hbox>
+			<button label="List pending" sclass="k9" onClick="showUserTasksToDo(tasks_holder, useraccessobj.username,1)" />
+			<button label="List done" sclass="k9" onClick="showUserTasksToDo(tasks_holder, useraccessobj.username,2)" />
+			<separator width="10px" />
+			<label id="list_type_lbl" style="color:#ffffff;font-weight:bold" />
+		</hbox>
+		<separator height="3px" />
+		<div id="tasks_holder" width="750px" />
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${WINBACKGROUND}">
+					<textbox id="addtask_tb" sclass="k9" width="420px" />
+					<listbox id="t_priority" mold="select" sclass="k9" />
+					<listbox id="t_linking_code" mold="select" sclass="k9" />
+					<button id="addtask_b" label="+ task" sclass="k9mo" onClick="taskerFunc(self.getId())" />
+				</row>
+				<row style="${WINBACKGROUND}">
+					<separator />
+					<separator />
+					<button id="settaskdone_b" label="Toggle DONE" sclass="k9mo" onClick="taskerFunc(self.getId())" />
+					<button id="deltask_b" label="- task" sclass="k9mo" onClick="taskerFunc(self.getId())" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="5px" bar="true" />
+
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${WINBACKGROUND}" spans="2">
+						<label id="t_task" style="color:#ffffff;font-weight:bold" />
+				</row>
+				<row style="${WINBACKGROUND}" spans="2">
+					<label value="NOTES" style="color:#ffffff;font-weight:bold" />
+				</row>
+				<row style="${WINBACKGROUND}" spans="2">
+					<textbox id="t_notes" multiline="true" height="60px" sclass="k9" width="99%" />
+				</row>
+				<row style="${WINBACKGROUND}" spans="2">
+					<label value="ACTIONS" style="color:#ffffff;font-weight:bold" />
+				</row>
+				<row spans="2">
+					<div id="actions_holder" />
+				</row>
+				<row style="${WINBACKGROUND}" spans="2">
+					<hbox>
+						<textbox id="addaction_tb" width="420px" sclass="k9" />
+						<button id="addaction_b" label="+ action" sclass="k9" onClick="taskerFunc(self.getId())" />
+					</hbox>
+				</row>
+				<row style="${WINBACKGROUND}" spans="2">
+					<hbox>
+						<textbox id="t_nextaction" width="400px" sclass="k9" />
+						<datebox id="t_nextactiondate" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+						<button id="setnxtactd_b" label="Set next action-date" sclass="k9" onClick="taskerFunc(self.getId())" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+
+	</div>
+
+<zscript>
+<![CDATA[
+
+showUserTasksToDo(tasks_holder, useraccessobj.username, 1);
+luhand.populateListbox_ByLookup(t_linking_code,"TASKS_CATEGORY",2);
+luhand.populateListbox_ByLookup(t_priority,"PRIORITY_LISTS",2);
+
+/*
+java.util.Calendar calcdate = java.util.Calendar.getInstance();
+calcdate.add(calcdate.DAY_OF_MONTH, -7);
+tskdate.setValue(calcdate.getTime());
+asstskdate.setValue(calcdate.getTime());
+sdate = kiboo.getDateFromDatebox(tskdate);
+
+if(useraccessobj.accesslevel < 9)
+	showInternalTasksList(2, useraccessobj.username, "", sdate, tasksforyou_holder, "yourtasks_lb" );
+
+populateUsernames(intassignto_lb,"");
+luhand.populateListbox_ByLookup(inttaskprio_lb,"PRIORITY_LISTS",2);
+showInternalTasksList(1, useraccessobj.username, "", "", tasksfromyou_holder, "asstasks_lb");
+taskassigner_workarea.setVisible(true);
+loadEmTasks(2);
+*/
+
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

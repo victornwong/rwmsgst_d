@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="unbilledfolders_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/formMaker_v1.zs" />
+<zscript src="../alsglobal/uploadToMySoft.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Unbilled Folders Uploader";
+MYVERSION = "v0.1 (BETA testing)";
+/*
+Title		: show unbilled folders - so user can catch-up on work
+Written by	: Victor Wong
+
+Revisions:
+*/
+/*
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+samphand = new SampleReg();
+
+selected_arcode = "";
+selected_folderno = "";
+selected_folder_origid = "";
+selected_folder_status = "";
+
+glob_upload_flag = "";
+
+vicFormMaker glob_cashdetform = null;
+CASHDETAIL_FORM_ID = "11";
+
+COURIER_FORM_ID = "9";
+RECVBILL_FORM_ID = "10";
+vicFormMaker glob_formmaker = null;
+vicFormMaker receipt_formmaker = null;
+
+
+// TODO: to be included in Generals() - return retval[0] = startdate, retval[1] = enddate
+String[] endDateOfMonth(String imonth)
+{
+	String[] retval = new String[2];
+	SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd");
+	Calendar calendar = Calendar.getInstance();
+	int year = calendar.get(Calendar.YEAR);
+	int month = Integer.parseInt(imonth);
+	int date = calendar.get(Calendar.DATE);
+	calendar.set(year, month, date);
+	int maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+	calendar.set(year,month,maxDay);
+	retval[1] = dtf.format(calendar.getTime());
+	calendar.set(year,month,1);
+	retval[0] = dtf.format(calendar.getTime());
+	return retval;
+}
+
+// TODO: need to put this into sqlfuncs . billinguploader_v1_2.zul using this too
+Object getSentCooler_rec(String iwhat)
+{
+	sql = sqlhand.als_mysoftsql();
+	retval = null;
+	if(sql == null ) return retval;
+	String sqlstm = "select * from elb_sendcoolerboxes where origid=" + iwhat;
+	retval = sql.firstRow(sqlstm);
+	sql.close();
+	return retval;
+}
+
+
+glob_selected_airwaybill = "";
+
+class ablb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = abill_lb.getSelectedItem();
+		glob_selected_airwaybill = lbhand.getListcellItemLabel(isel,0);
+	}
+}
+
+// show send-out-cooler boxes records
+void showCourierBills(String iarcode)
+{
+Object[] ablb_headers = 
+{
+	new listboxHeaderWidthObj("ID",true,"20px"),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Courier",true,"100px"),
+	new listboxHeaderWidthObj("AirwayBill",true,"100px"),
+	new listboxHeaderWidthObj("Box",true,"40px"),
+};
+
+	if(iarcode.equals("")) return;
+	Listbox newlb = lbhand.makeVWListbox_Width(bills_holder, ablb_headers, "abill_lb", 10);
+	billsarea.setVisible(true);
+	sqlstm = "select top 200 origid,datecreated,couriername,airwaybill,numboxes from elb_sendcoolerboxes " +
+	"where ar_code='" + iarcode + "' and billed=0 and bstatus='COMMITTED'";
+	abrecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(abrecs.size() == 0) { newlb.detach(); return; }
+	newlb.addEventListener("onSelect", new ablb_onSelect());
+	for(dpi : abrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+/*
+		billd = (dpi.get("billed") == 1) ? "YES" : "NO";
+		kabom.add(billd);
+*/
+		kabom.add(dpi.get("couriername"));
+		kabom.add(dpi.get("airwaybill"));
+		numbx = (dpi.get("numboxes") == null) ? "0" : dpi.get("numboxes");
+		kabom.add(numbx);
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+
+// unbilled LB onSelect
+class unbilled_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_folder_origid = lbhand.getListcellItemLabel(selitem,0);
+		selected_arcode = lbhand.getListcellItemLabel(selitem,1);
+		selected_folder_status = lbhand.getListcellItemLabel(selitem,7);
+		//documentLinkProp.global_eq_origid = selected_folder_origid; // used by doculink.zul
+
+		// later activate this one
+		//showCourierBills(selected_arcode); // 05/09/2012: show send-out-cooler-boxes records
+	}
+}
+
+Object[] unbill_lb_headers = {
+	new listboxHeaderWidthObj("origid",false,""),
+	new listboxHeaderWidthObj("arcode",false,""),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Folder",true,"70px"),
+	new listboxHeaderWidthObj("SC",true,"40px"),
+	new listboxHeaderWidthObj("TA",true,"40px"),
+	new listboxHeaderWidthObj("CM",true,"70px"),
+	new listboxHeaderWidthObj("Status",true,"70px"),
+	new listboxHeaderWidthObj("PP",true,"30px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Category",true,"80px"),
+	new listboxHeaderWidthObj("Salesperson",true,"80px"),
+};
+
+void showUnbilled()
+{
+	monthsel = lbhand.getListcellItemLabel(monthselection.getSelectedItem(),1);
+	idaterange = endDateOfMonth(monthsel);
+	icustcat = customer_category.getSelectedItem().getLabel();
+	branch = branchsel.getSelectedItem().getLabel();
+
+	custcatsql = "and cust.category='" + icustcat + "' ";
+	if(icustcat.equals("")) custcatsql = "";
+
+	brnhsql = "and jf.branch='" + branch + "' ";
+	if(branch.equals("ALL")) brnhsql = "";
+
+	sqlstm = "select jf.ar_code,jf.origid,jf.datecreated, jf.folderno_str, cust.customer_name, " + 
+	"csci.customer_name as cash_customer, cust.category, jf.folderstatus, " +
+	"(select count(origid) from jobsamples where jobfolders_id = jf.origid and deleted=0) as sample_count, " +
+	"(select count(jtp3.origid) from jobtestparameters jtp3 left join jobsamples js3 on jtp3.jobsamples_id=js3.origid " +
+	"left join jobfolders jf3 on js3.jobfolders_id = jf3.origid where jf3.origid = jf.origid) as tests_assigned, " +
+	"(select top 1 username from elb_systemaudit where linking_code=jf.folderno_str and " + 
+	"audit_notes='TestAssign: Commit folder') as user_commit, jf.prepaid, " +
+	"cust.salesman_code, cust.category from jobfolders jf " +
+	"left join customer cust on cust.ar_code = jf.ar_code " +
+	"left join cashsales_customerinfo csci on csci.folderno_str = jf.folderno_str " +
+	"where jf.folderstatus <> 'DRAFT' and jf.deleted = 0 " +
+	"and jf.datecreated between '" + idaterange[0] + "' and '" + idaterange[1] + "' " +
+	"and jf.uploadtomysoft = 0 " + custcatsql + brnhsql +
+	"order by jf.origid";
+
+	newlb = lbhand.makeVWListbox_Width(unbilledholder,unbill_lb_headers,"unbilled_lb", 5);
+	tlist = sqlhand.gpSqlGetRows(sqlstm);
+	if(tlist.size() == 0) return;
+
+	newlb.setRows(25);
+	newlb.addEventListener("onSelect", new unbilled_Listener());
+
+	for(dpi : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("ar_code"));
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("folderno_str"));
+		kabom.add(dpi.get("sample_count").toString());
+		kabom.add(dpi.get("tests_assigned").toString());
+		kabom.add(kiboo.checkNullString(dpi.get("user_commit")));
+		kabom.add(dpi.get("folderstatus"));
+		
+		ppaid = (dpi.get("prepaid") == 1) ? "-Y-" : "";
+		kabom.add(ppaid);
+
+		custname = kiboo.checkNullString(dpi.get("customer_name"));
+		if(dpi.get("ar_code").equals("CASH")) custname = "CshAcct: " + kiboo.checkNullString(dpi.get("cash_customer"));
+
+		kabom.add(custname);
+		
+		kabom.add(kiboo.checkNullString(dpi.get("category")));
+		kabom.add(kiboo.checkNullString(dpi.get("salesman_code")));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+	unbilled_msg.setValue("Unbilled folders: " + tlist.size().toString());
+
+}
+
+void runMe(Object iwhich)
+{
+	itype = iwhich.getId();
+
+	if(itype.equals("listunbilled"))
+	{
+		showUnbilled();
+	}
+
+	if(itype.equals("showsendboxes"))
+	{
+		if(glob_selected_airwaybill.equals("")) return;
+		
+		fmobj = sqlhand.getFormKeeper_rec(COURIER_FORM_ID);
+		if(fmobj == null) { gui.showMessageBox("ERR: Cannot load XML-form definitions"); return; }
+		formxml = sqlhand.clobToString(fmobj.get("xmlformstring"));
+		//exmres = sqlhand.clobToString(fmobj.get("exampleresult"));
+		glob_formmaker = new vicFormMaker(form_holder,"courierform",formxml);
+		glob_formmaker.generateForm();
+		formid_label.setValue("Form ID: " + iwhat);
+
+		// populate fields
+		serec = getSentCooler_rec(glob_selected_airwaybill);
+		if(serec != null)
+		{
+			glob_formmaker.populateFormValues(serec);
+			showsendout_popup.open(iwhich);
+		}
+	}
+
+	if(itype.equals("uploadmysoft"))
+	{
+		if(selected_folder_origid.equals("")) return;
+		if(!selected_folder_status.equals("COMMITED"))
+		{
+			guihand.showMessageBox("ERR: Please assign tests and commit the folder before uploading to MySoft");
+			return;
+		}
+
+		gpUploadToMySoft(selected_folder_origid);
+		showUnbilled(); // refresh
+		guihand.showMessageBox("Job folder uploaded to MySoft..");
+	}
+
+	if(itype.equals("exportlist"))
+	{
+		exportListboxExcel(unbilledholder,"unbilled_lb","unbilled_checklist.xls",
+			unbill_lb_headers,"Unbilled",kasiexport_holder,65);
+	}
+
+}
+
+]]>
+</zscript>
+
+<!-- send-out cooler-boxes details -->
+<popup id="showsendout_popup">
+<groupbox mold="3d" width="400px" >
+	<div id="form_holder" />
+	<separator height="5px" />
+	<!-- <button id="saveform_btn" label="Save details" style="font-size:9px" onClick="sendoutFunc(4)" /> -->
+<!--
+	<div id="recvbillform_holder" />
+	<separator height="5px" />
+	<button id="updatebill_btn" label="Update receipt and bill details" style="font-size:9px" onClick="sendoutFunc(7)" />
+-->
+</groupbox>
+</popup>
+<!-- ENDOF send-out cooler-boxes details -->
+
+<div width="1200px">
+<panel id="unbilledfolders_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+<hbox>
+<groupbox mold="3d" style="padding:2px" width="500px">
+	<hbox>
+		<label value="Select month" style="font-size:9px" />
+		<listbox id="monthselection" mold="select" style="font-size:9px" />
+		<label value="Customer category" style="font-size:9px" />
+		<div id="custcatholder" />
+		<listbox id="branchsel" mold="select" style="font-size:9px" />
+		<button id="listunbilled" label="List unbilled folders.." style="font-size:9px" onClick="runMe(self)" />
+	</hbox>
+</groupbox>
+
+<groupbox mold="3d" style="padding:2px">
+<hbox>
+	<button id="exportlist" label="Export unbilled list" style="font-size:9px" onClick="runMe(self)" />
+</hbox>
+</groupbox>
+</hbox>
+
+<hbox>
+<groupbox mold="3d" style="padding:2px">
+	<div style="background:#cc0000;padding:2px" width="800px" >
+		<hbox>
+		<label id="unbilled_msg" style="text-decoration:blink;color:#eeeeee;font-weight:bold" />
+		<label style="color:#eeeeee;font-weight:bold;font-size:9px">
+: Unbilled folders are ones that are not uploaded to MySoft. Do check in MySoft if the uploaded DO are actually billed
+		</label>
+		</hbox>
+		<separator height="2px" />
+		<label style="color:#eeeeee;font-weight:bold;font-size:9px" multiline="true">
+(SC=Sample count, TA=Tests assigned, CM=committed by, PP=pre-paid)
+		</label>
+	</div>
+	<separator height="3px" />
+	<hbox>
+		<button id="uploadmysoft" label="Upload to MySoft" onClick="runMe(self)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="unbilledholder" width="800px" />
+</groupbox>
+
+<!--
+	<groupbox id="billsarea" mold="3d" style="padding:2px" >
+		<div style="background:#ce5c00;padding:2px">
+		Send-out cooler-boxes records
+		</div>
+		<hbox>
+			<button id="showsendboxes" label="Show details" style="font-size:9px" onClick="runMe(self)" />
+			<button label="Upload for billing" style="font-size:9px" onClick="injectSendoutBill()" />
+		</hbox>
+		<label style="font-size:9px">
+		(Select an uploaded folder on the right first before uploading send-out-boxes for billing)
+		</label>
+		<separator height="3px" />
+		<div id="bills_holder" />
+	</groupbox>
+-->
+
+</hbox>
+
+<div id="kasiexport_holder" />
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(branchsel,"dd_branches",2);
+luhand.populateListBox_ValueSelection(monthselection,"MONTHS_SELECTION",2,1);
+luhand.populateDynamic_Mysoft(5, custcatholder,"customer_category","font-size:9px");
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

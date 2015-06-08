@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="blank_win_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Superuser Functions";
+MYVERSION = "v0.1";
+/*
+Written by	: Victor Wong
+Dated		:
+NOTES:
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+// functions spreader
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	msgstr = "";
+
+	// assign inv-no to folders - users missed picking-up DO for invoicing solver
+	if(itype.equals("assinvtofolder"))
+	{
+		fnom = kiboo.replaceSingleQuotes(fnum_1.getValue());
+		invn = kiboo.replaceSingleQuotes(invnum_1.getValue());
+		sqlstm = "update deliveryordermaster set invoiceno='" + invn + "',issuedinvoice=1 where dono='" + fnom + "'";
+		sqlhand.gpSqlExecuter(sqlstm);
+		msgstr = "Updated deliveryordermaster - invoiceno to folder";
+	}
+
+	if(!msgstr.equals("")) guihand.showMessageBox(msgstr);
+}
+
+]]>
+</zscript>
+
+<window id="blank_win" width="500px" height="400px" title="${MYTITLE} ${MYVERSION}" 
+position="center" mode="overlapped" border="normal" closable="true">
+<div>
+<div style="background:#cc0000;padding:2px">
+<label style="color:#eeeeee;">
+If you have access to this window, please be sure what you're doing. Functions here perform hard-updates on database
+</label>
+</div>
+<separator height="2px" />
+
+<groupbox mold="3d">
+	<label value="Folder#" style="font-size:9px" />
+	<textbox id="fnum_1" style="font-size:9px" />
+	<label value="Invoice#" style="font-size:9px" />
+	<textbox id="invnum_1" style="font-size:9px" />
+	<button id="assinvtofolder" label="Assign invoiceNo to folder" style="font-size:9px" onClick="doFunc(self)" />
+</groupbox>
+
+
+</div>
+</window>
+</zk>
+

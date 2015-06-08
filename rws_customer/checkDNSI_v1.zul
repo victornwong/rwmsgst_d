@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chkdnsimod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./digDNSI_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Check DN and SI and CN";
+MYVERSION = "v0.1.1";
+MYPANEL = "chkdnsipan";
+/*
+@Title Check DN and SI
+@Author Victor Wong
+@Since 11/04/2014
+@Notes To check DN/SI for buyout, insurance and etc..
+27/06/2014: Mahes req to dig for "deposit" in DN
+11/09/2014: Shopa req to list CN also
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+]]>
+</zscript>
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#ea7724" >
+
+<div sclass="shadowbox" style="background:#355c97" >
+	<label value="Start date" sclass="k9b" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<label value="End date" sclass="k9b" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<button id="insurance" label="Dig Insurance" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)" />
+	<button id="buy" label="Buyout" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)" />
+	<button id="stamp" label="Stamp" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)" />
+	<button id="project" label="Project" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)" />
+	<button id="damage" label="Damages" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)"/>
+	<button id="deposit" label="Deposits" sclass="k9" onClick="digDNSI(self,dnsholder,startdate,enddate)"/>
+	<textbox id="searchtext_tb" sclass="k9" />
+	<button label="CN by date and customer" sclass="k9mo" onClick="digCN(self,dnsholder,startdate,enddate)"/>
+	<button label="Export xcel" sclass="k9" onClick="exportDNSI_list(kasiexport)"/>
+</div>
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#355c97" id="listarea">
+<div id="dnsholder" />
+<div id="sisholder" />
+</div>
+
+<label id="debugbox" multiline="true" />
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
+

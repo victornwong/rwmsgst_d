@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chknbvfc6_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Check NBV from FOCUS Records";
+MYVERSION = "v0.1";
+MY_ID = "chknbvfc6pan";
+/*
+Written by	: Victor Wong
+Dated		: 02/06/2014
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+Object[] nbvlhds =
+{
+	new listboxHeaderWidthObj("LC/RW",true,"80px"),
+	new listboxHeaderWidthObj("DO.Date",true,"60px"),
+	new listboxHeaderWidthObj("DO",true,"60px"),
+	new listboxHeaderWidthObj("AssTag",true,""),
+	new listboxHeaderWidthObj("Item",true,""),
+	new listboxHeaderWidthObj("Typ",true,"30px"),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+	new listboxHeaderWidthObj("Cost",true,"70px"),
+	new listboxHeaderWidthObj("Mth.Diff",true,"60px"),
+	new listboxHeaderWidthObj("Depr",true,"70px"),
+	new listboxHeaderWidthObj("NBV",true,"70px"),
+};
+
+void checkNBVFromFGC()
+{
+	ts = kiboo.replaceSingleQuotes(masstag.getValue().trim());
+	if(ts.equals("")) return;
+
+	k = ts.split("\n");
+	atgs = "";
+	for(i=0; i<k.length; i++)
+	{
+		atgs += "'" + k[i].trim() + "',";
+	}
+	try { atgs = atgs.substring(0,atgs.length()-1); } catch (Exception e) {}
+	sdate = kiboo.getDateFromDatebox(startdate);
+	Listbox newlb = lbhand.makeVWListbox_Width(chkholder, nbvlhds, "nbvchecks_lb", 3);
+
+sqlstm = "select (select top 1 d3.voucherno from data d3 left join u001b ri on ri.extraid=d3.extraheaderoff where d3.vouchertype=3329 " + 
+"and ltrim(rtrim(ri.dorefyh))=d.voucherno) as RWLC, " +
+"convert(datetime, focus5012.dbo.ConvertFocusDate(d.date_), 112) as DODate,d.voucherno as DONo,ro.name product_name, pd.itemtypeyh, " +
+"p.code2 as assettag, (iy.quantity * -1) as qty, (iy.output5 * -1) as cost, " + 
+"(datediff( MM, convert(datetime, focus5012.dbo.ConvertFocusDate(d.date_), 112), '" + sdate + "' )) as monthdiff, " +
+"(((iy.output5 * -1) / 48) * DATEDIFF(MM, convert(datetime, focus5012.dbo.ConvertFocusDate(d.date_), 112), '" + sdate + "') ) as acc_depr, " +
+"((iy.output5 * -1) - ( ((iy.output5 * -1) / 48) * DATEDIFF(MM, convert(datetime, focus5012.dbo.ConvertFocusDate(d.date_), 112), '" + sdate + "') ) ) nbv " +
+"from data d left join mr001 p on p.masterid = d.productcode " +
+"left join u0001 pd on pd.extraid = d.productcode " +
+"left join indta iy on iy.salesid = d.salesoff " +
+"left join mr008 ro on ro.masterid = d.tags6 " +
+"where d.vouchertype=6144 and p.code2 in (" + atgs + ");";
+
+	r = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+	newlb.setRows(22);
+	String[] fl = { "RWLC", "DODate", "DONo", "assettag", "product_name", "itemtypeyh", "qty", "cost", "monthdiff", "acc_depr", "nbv" };
+	ArrayList kabom = new ArrayList();
+	for(d : r)
+	{
+		popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+void exportNBVExcel()
+{
+	exportExcelFromListbox(nbvchecks_lb, kasiexport, nbvlhds, "NBVchecko.xls","NBV");
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+<window id="${MY_ID}" width="850px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+
+<hbox>
+<div>
+	<vbox>
+	<label value="Set cutoff date" sclass="k9" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="Asset-tags" />
+	<textbox id="masstag" width="100px" height="300px" multiline="true" sclass="k9mo" />
+	<button label="Check NBV" onClick="checkNBVFromFGC()" />
+	<button label="Export" onClick="exportNBVExcel()" />
+	</vbox>
+</div>
+
+<div id="chkholder" />
+
+</hbox>
+
+<div id="kasiexport" visible="true" />
+
+<zscript>
+<![CDATA[
+]]>
+</zscript>
+
+</window>
+</zk>
+

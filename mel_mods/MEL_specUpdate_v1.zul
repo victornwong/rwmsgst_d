@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="melspecuipdyt"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rws_warehouse/goodsreceive/injtest.zs" />
+<zscript src="./MEL_specUpdate_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "MEL - Audit / Specs Update";
+MYVERSION = "v0.1";
+MYPANEL = "melitmspecupdpanl";
+/*
+@Title Inventory items spec update - like in FOCUS (for MEL project)
+@Author Victor Wong
+@Since 08/01/2015
+@Notes
+Knockoff from RWMS
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+String[] scanitems_colws = { "30px","250px","90px","90px",
+"80px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"50px",
+"", // comment colm
+"50px",
+"50px",
+"50px",
+"50px"
+};
+String[] scanitems_collb = { "","Item name","Asset tag","Serial",
+"Grd",
+"Brand",
+"Type",
+"Model",
+"Processor",
+"M.Size",
+"M.Type",
+"Color",
+"Case",
+"COA",
+"COA2",
+"RAM",
+"HDD",
+"CDROM1",
+"Comment",
+"Webcam",
+"B.Tooth",
+"F.Print",
+"C.Reader"
+ };
+
+String[] specs_fields = {
+"grade","Brand", "Item", "Model", "Processor", "MonitorSize", "MonitorType",
+"colour", "casing", "COA", "COA2", "RAM", "HDD", "Cdrom1", "Comment", "WebcamYH", "BluetoothYH", "FingerPrintYH", "CardReaderYH" };
+
+String[] specs_sql_fields = {
+"GradeYH","BrandYH","ItemTypeYH","ModelYH","ProcessorYH","MonitorSizeYH","MonitorTypeYH",
+"ColourYH","CasingYH","COA1YH","COA2YH","RAMSizeYH","HDDSizeYH","CD1YH","CommentsYH", "WebcamYH", "BluetoothYH", "FingerPrintYH", "CardReaderYH" };
+
+String[] specs_field_type = {
+"lb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb", "tb","tb","tb","tb", };
+
+String[] specs_mpf_names = {
+	"m_grd", "m_brand", "m_type", "m_model", "m_processor", "m_msize", "m_mtype",
+	"m_color", "m_case", "m_coa", "m_coa2", "m_ram", "m_hdd", "m_cdrom1", "m_comment",
+	"m_webcam", "m_btooth", "m_fprint", "m_creader"
+};
+
+String[] MEL_invt_fields = {
+"rw_grade",
+"brand_make",
+"item_type",
+"model",
+"sub_type",
+"sub_spec",
+"rw_monitortype",
+"rw_color",
+"rw_casing",
+"rw_COA",
+"rw_COA2",
+"ram",
+"hdd",
+"rw_cdrom1",
+"rw_comment",
+"rw_webcamyh",
+"rw_bluetoothyh",
+"rw_fingerprintyh",
+"rw_cardreaderyh"
+};
+
+
+PARSE_SNUM_POS = 0; // posi to MELGRN_funcs.csgnasshd
+PARSE_ASSETTAG_POS = 1;
+PARSE_CSGN_NO_POS = 2;
+PARSE_ITEMDESC_POS = 5;
+PARSE_DATERECEIVED_POS = 14;
+
+MELGRN_PREFIX = "MELGRN";
+
+last_showgrn_type = 0;
+user_location = "KUALA_LUMPUR"; // grab from user-rec(portal or local)
+
+glob_sel_grn = glob_sel_stat = glob_sel_parentcsgn = glob_sel_batchno = glob_sel_unknown = "";
+
+glob_sel_auditstat = "";
+
+showgrn_extra_sql = " and mg.gstatus='COMMIT' and mg.rwlocation='" + user_location + "'"; // use in show_MELGRN() to filter committed grn only
+//showgrn_extra_sql = "";
+grn_show_meta = false; // used in goodsrecv_funcs.grnclicker to show grn-metadata or not
+glob_focus6_grades = null;
+
+void grn_Selected_Callback() // call-back in goodsrecv_funcs.grnclicker
+{
+	//showGRN_things(glob_sel_grn);
+	//toggButts_specupdate( (glob_sel_auditstat.equals("POST")) ? true : false );
+}
+
+String JN_linkcode()
+{
+	if(glob_sel_grn.equals("")) return "";
+	return MELGRN_PREFIX + glob_sel_grn;
+}
+
+void grnFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("shwauditlogs_b"))
+	{
+		showSystemAudit(auditlogs_holder,JN_linkcode(),"");
+		auditlogs_pop.open(shwauditlogs_b);
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		showGRN(last_showgrn_type);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void itemFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("sourcepecs_b")) // Source specs from Focus
+	{
+		if(Messagebox.show("Sourcing for previous specs will overwrite whatever you've inserted..", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sourcePrevious_NameSerials();
+	}
+
+	if(itype.equals("savespecs_b")) // save the specs into rw_grn ONLY
+	{
+		if(glob_sel_grn.equals("")) return;
+		if(saveSpecs())
+		{
+			msgtext = "OK: Specs saved..";
+		}
+	}
+
+/*
+	if(itype.equals("postspecs_b")) // post SPECS into u0001
+	{
+		if(glob_sel_grn.equals("")) return;
+
+		if(Messagebox.show("Posting specs into database, you cannot change anything after this..", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		saveSpecs(); // save to rw_grn before posting into u0001
+
+		if(postSpecs()) // post-specs and if ok, update other things
+		{
+			msgtext = "OK: Specs posted..";
+			// update the rw_grn.audit* fields accordingly
+			sqlstm = "update rw_grn set audit_date='" + todaydate + "', audit_stat='POST', audit_user='" + unm + "' where origid=" + glob_sel_grn;
+			toggButts_specupdate(true); // disable 'em butts
+			add_RWAuditLog(JN_linkcode(),"", "Posted specs-update", useraccessobj.username);
+		}
+	}
+*/
+
+	if(!sqlstm.equals(""))
+	{
+		//sqlhand.gpSqlExecuter(sqlstm);
+		//showGRN(last_showgrn_type);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(String itype)
+{
+	adminpop.close();
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(glob_sel_grn.equals("")) return;
+
+	if(itype.equals("clearaudit_b"))
+	{
+		sqlstm = "update mel_grn set auditdate=null, audituser=null, audit_id=null where origid=" + glob_sel_grn;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		//sqlhand.gpSqlExecuter(sqlstm);
+		//showGRN(last_showgrn_type);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label sclass="subhead" value="Audit Logs" />
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="mpf_pop">
+	<div sclass="shadowbox" style="background:#ABC11B" width="500px">
+		<label value="(Mass update ticked items)" />
+		<button label="Clear boxes" sclass="k9" onClick="mpf_clearBoxes()" />
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#ABC11B">
+					<label value="Grd" sclass="k9" />
+					<textbox id="m_grd" sclass="k9" />
+					<button id="bm_grd" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="Brand" sclass="k9" />
+					<textbox id="m_brand" sclass="k9" />
+					<button id="bm_brand" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="Type" sclass="k9" />
+					<textbox id="m_type" sclass="k9" />
+					<button id="bm_type" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="Model" sclass="k9" />
+					<textbox id="m_model" sclass="k9" />
+					<button id="bm_model" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="Processor" sclass="k9" />
+					<textbox id="m_processor" sclass="k9" />
+					<button id="bm_processor" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="M.Size" sclass="k9" />
+					<textbox id="m_msize" sclass="k9" />
+					<button id="bm_msize" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="M.Type" sclass="k9" />
+					<textbox id="m_mtype" sclass="k9" />
+					<button id="bm_mtype" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="Color" sclass="k9" />
+					<textbox id="m_color" sclass="k9" />
+					<button id="bm_color" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="Case" sclass="k9" />
+					<textbox id="m_case" sclass="k9" />
+					<button id="bm_case" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="COA" sclass="k9" />
+					<textbox id="m_coa" sclass="k9" />
+					<button id="bm_coa" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="COA2" sclass="k9" />
+					<textbox id="m_coa2" sclass="k9" />
+					<button id="bm_coa2" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="RAM" sclass="k9" />
+					<textbox id="m_ram" sclass="k9" />
+					<button id="bm_ram" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="HDD" sclass="k9" />
+					<textbox id="m_hdd" sclass="k9" />
+					<button id="bm_hdd" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="CDROM1" sclass="k9" />
+					<textbox id="m_cdrom1" sclass="k9" />
+					<button id="bm_cdrom1" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="Comment" sclass="k9" />
+					<textbox id="m_comment" sclass="k9" />
+					<button id="bm_comment" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="Webcam" sclass="k9" />
+					<textbox id="m_webcam" sclass="k9" />
+					<button id="bm_webcam" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B">
+					<label value="B.Tooth" sclass="k9" />
+					<textbox id="m_btooth" sclass="k9" />
+					<button id="bm_btooth" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+
+					<label value="F.Print" sclass="k9" />
+					<textbox id="m_fprint" sclass="k9" />
+					<button id="bm_fprint" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+				<row style="background:#ABC11B" spans="1,1,4">
+					<label value="C.Reader" sclass="k9" />
+					<textbox id="m_creader" sclass="k9" />
+					<button id="bm_creader" label="Updt" sclass="k9" onClick="mpfUpdate_specs(self)" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#E2241C">
+		<vbox>
+			<button id="shwauditlogs_b" label="AuditLog" sclass="k9mo" onClick="grnFunc(self.getId())" />
+			<button id="clearaudit_b" label="Clear specs-post" sclass="k9mo" onClick="adminFunc(self.getId())" />
+		</vbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+} 
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" onClose="panel_Close()">
+<panelchildren style="background:#0C203E">
+
+	<div sclass="shadowbox" style="background:#3E436B">
+		<hbox style="padding:3px">
+			<label value="Start date" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="searhtxt_tb" sclass="k9" visible="false" />
+			<button label="Load" sclass="k9mo" onClick="show_MELGRN(1)" />
+			<textbox id="grnid_tb" width="50px" sclass="k9" />
+			<button label="by MELGRN" sclass="k9mo" onClick="show_MELGRN(2)" />
+			<listbox id="p_location" mold="select" sclass="k9" />
+			<button label="by location" sclass="k9mo" />
+			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" visible="false" onClick="adminpop.open(self)" />
+		</hbox>
+	</div>
+
+	<div sclass="shadowbox" style="background:#36427F">
+		<hbox visible="false">
+			<button id="newgrn_b" label="New GRN" sclass="k9mo" onClick="grnFunc(self.getId())" />
+			<button id="remgrn_b" label="Remove" sclass="k9mo" onClick="grnFunc(self.getId())" />
+			<button id="commgrn_b" label="Commit" sclass="k9mo" onClick="grnFunc(self.getId())" />
+			<button id="uptstock_b" label="UPDATE INVENTORY" sclass="k9mo" style="color:#D41212" onClick="grnFunc(self.getId())" visible="false" />
+			<separator width="10px" />
+		</hbox>
+		<separator height="3px" />
+		<div id="melgrnlb_holder" />
+	</div>
+
+	<div id="workarea" sclass="shadowbox" style="background:#3E436B" visible="false">
+		<label id="melgrn_no" sclass="subhead1" />
+		<hbox>
+			<button id="mpftogcheck_b" label="Toggle" sclass="k9mo" onClick="mpfToggCheckbox()" />
+			<button id="savespecs_b" label="SAVE specs" sclass="k9mo" onClick="itemFunc(self.getId())" />
+			<!--
+			<button id="sourcepecs_b" label="Source previous" sclass="k9mo" onClick="itemFunc(self.getId())" />
+			-->
+			<button id="mpfbutt" label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
+			<separator width="10px" />
+			<button id="postspecs_b" label="POST inventory/specs FC6" sclass="k9mo" style="color:#CD3A3A" onClick="itemFunc(self.getId())" visible="false" />
+		</hbox>
+		<separator height="2px" />
+
+		<div style="overflow:auto;overflow-y:hidden" >
+			<div id="scanitems_holder" width="1800px" />
+		</div>
+
+	</div>
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(p_location, "MEL_PARTNER_LOCATION", 2);
+
+ngfun.checkMakeGrid(scanitems_colws, scanitems_collb, scanitems_holder, "grn_grid", "grn_rows", "", "", false);
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+	postspecs_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

@@ -1,0 +1,840 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="stockserviceitems_man"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/divisiongroup_funcs.zs" />
+<zscript src="../alsglobal/testpackage_funcs.zs" />
+
+<zscript>
+<![CDATA[
+MYTITLE="Test/Service/Sale Items Manager";
+MYVERSION="v0.82";
+MYPANEL="stockserviceitems_panel";
+/*
+Title				: Service/Sales Items Manager
+Coding began date	: 7/9/2010
+Developers			: Victor
+
+**NOTES**
+
+24/09/2012: add sql to update entry_date in stockmaster and some optimization
+27/03/2012: modded to use byte-codes
+09/08/2012: put newfield5 for form-keeper-id
+07/03/2013: newfield4 set for subcon - if null or 0, ignore
+
+StockMasterDetails.newfield10 = units
+StockMasterDetails.newfield9 = bill - YES/NO
+StockMasterDetails.newfield8 = LOR
+StockMasterDetails.newfield7 = CAS #
+StockMasterDetails.newfield6 = Pre-conditioning method (16/07/2012 - req by Zakiah for BS tests - reporting)
+StockMasterDetails.newfield5 = form-keeper-id (for those extra input required)
+
+DecimalFormat df = new DecimalFormat("#.##");
+invtotal = df.format(dpi.get("total"));
+
+*/
+import java.util.*;
+import java.text.*;
+import java.math.BigDecimal;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+samphand = new SampleReg();
+luhand = new LookupFuncs();
+
+TestsPanel testspanel;
+
+String[] predef_units = { "mg/kg","ug/L","%","-" };
+String todaydate_str = "";
+selected_test = "";
+
+// Show or hide test-parameters 3-pane selector
+void toggleTestParametersBox(boolean iwhat)
+{
+	mysoft_testparams.setVisible(iwhat);
+}
+
+boolean testItem_InTestPackage(Listbox ilb, String imyc)
+{
+	retval = false;
+
+	for(i=0; i<ilb.getItemCount(); i++)
+	{
+		// children -> item 1 = hidden mysoft code
+		lbim = ilb.getItemAtIndex(i).getChildren().get(1).getLabel();
+
+		if(lbim.equals(imyc))
+		{
+			retval = true;
+			break;
+		}
+	}
+	return retval;
+}
+
+// Database func: check if stock-code exist in StockMasterDetails
+boolean existStockCode(String iwhat)
+{
+	if(iwhat.equals("")) return;
+	retval = false;
+	sqlstm = "select id from stockmasterdetails where stock_code='" + iwhat + "'";
+	therec = sqlhand.gpSqlFirstRow(sqlstm);
+	if(therec != null) retval = true;
+	return retval;
+}
+
+// onSelect event used in TestsPanel()
+class ALSTestParametersLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		// get mysoft stockmasterdetails id from hidden listbox column
+		selitem = event.getReference();
+		selected_test = lbhand.getListcellItemLabel(selitem,0);
+		showStockItem_Metadata(selected_test);
+		newstockitem_btn.setLabel("Update test/sale item"); // change button label if item selected
+	}
+}
+
+// Auto select those test-parameters boxes
+void autoAssignTestBox(String iwhich)
+{
+	istockrec = samphand.getStockMasterDetails(iwhich);
+	istockcat = istockrec.get("Stock_Cat");
+	igroupcode = istockrec.get("GroupCode");
+
+	testspanel.populateSectionColumn(istockcat);
+	testspanel.populateTestParametersColumn(istockcat,igroupcode);
+
+	// auto-select the thing in the listboxes.. tricky part
+	divisionln = convertCodeToLongName(als_divisions,istockcat);
+
+	lbhand.matchListboxItems(division_stockcat_lb, divisionln);
+	lbhand.matchListboxItems(section_groupcode_lb, igroupcode);
+
+	tscode = istockrec.get("ID").toString();
+	lbhand.matchListboxItems(tests_description_lb,tscode);
+}
+
+// Grab/show code + accountname from Accountchart - si_nominal_code_lb si_purchasecode_lb
+// 7/9/2010: used here - only populate the nominal-code/sale-code listbox
+void populateGLCode_listbox()
+{
+	Object[] glcode_lb_headers = {
+	new listboxHeaderObj("Account",true),
+	new listboxHeaderObj("code",false),
+	};
+	sqlstm = "select code,name from accountchart where code like '51100.%'";
+	accts = sqlhand.gpSqlGetRows(sqlstm);
+	for(dpi : accts)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(si_nominal_code_lb,strarray,"false","");
+	}
+
+	si_nominal_code_lb.setSelectedIndex(0);
+
+	/*
+	sqlstm = "select code,name from accountchart where code like '61100.%'";
+	purchasecodes = sql.rows(sqlstm);
+
+	for(dpi : purchasecodes)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(si_purchasecode_lb,strarray,"false");
+	}
+	*/
+}
+
+void showStockItem_Metadata(String imysoftcode)
+{
+	stkrec = sqlhand.getMySoftMasterProductRec(imysoftcode);
+	if(stkrec == null) return;
+
+	si_stockcode.setValue(kiboo.checkNullString(stkrec.get("Stock_Code")));
+	si_description.setValue(kiboo.checkNullString(stkrec.get("Description")));
+	si_description2.setValue(kiboo.checkNullString(stkrec.get("Description2")));
+
+	proddet = stkrec.get("Product_Detail");
+	long length = proddet.length();
+	String prodstr = proddet.getSubString(1, (int)length);
+
+	si_product_details.setValue(prodstr);
+	lbhand.matchListboxItemsColumn(si_nominal_code_lb,stkrec.get("Nominal_Code"),1);
+
+	DecimalFormat df = new DecimalFormat("#.##");
+
+	costprice = new BigDecimal(stkrec.get("Cost_Price"));
+	si_cost_price.setValue(costprice);
+
+	sellingp = new BigDecimal(stkrec.get("Selling_Price"));
+	si_selling_price.setValue(sellingp);
+
+	si_units_newfield10.setValue(kiboo.checkNullString(stkrec.get("NewField10")));
+	//lbhand.matchListboxItems(si_units_newfield10,units_nf10);
+	
+	billyou_nf9 = stkrec.get("NewField9");
+	billyou_nf9 = (billyou_nf9 == null) ? 1 : (billyou_nf9.equals("YES")) ? 0 : 1;
+	si_billclient.setSelectedIndex(billyou_nf9);
+	
+	si_lor_newfield8.setValue(kiboo.checkNullString(stkrec.get("NewField8")));
+	si_casnumber_newfield7.setValue(kiboo.checkNullString(stkrec.get("NewField7")));
+	
+	// 16/07/2012: pre-conditioning method - for BS tests - req by Zakiah
+	si_precondmethod_field6.setValue(kiboo.checkNullString(stkrec.get("NewField6")));
+
+	// 09/08/2012: show stock-id and form-keeper-id
+	si_id.setValue( stkrec.get("ID").toString() );
+	si_formkeeper_newfield5.setValue( kiboo.checkNullString(stkrec.get("NewField5")) );
+
+	si_stockcode.setDisabled(true); // if selected stock-item, cannot change stock-code, will screw-up whole system
+}
+
+void clearStockitem_clicker()
+{
+	si_stockcode.setValue("");
+	si_description.setValue("");
+	si_description2.setValue("");
+	si_product_details.setValue("");
+	si_nominal_code_lb.setSelectedIndex(0);
+	zerome = new BigDecimal(0);
+	si_cost_price.setValue(zerome);
+	si_selling_price.setValue(zerome);
+
+	si_units_newfield10.setValue("");
+	//si_units_newfield10.setSelectedIndex(0);
+	si_billclient.setSelectedIndex(1);
+	si_lor_newfield8.setValue("");
+	si_casnumber_newfield7.setValue("");
+	si_precondmethod_field6.setValue("");
+
+	selected_test = ""; // clear global selected_test - to disallow updating of earlier selected item - in case
+	newstockitem_btn.setLabel("New test/sale item");
+	si_stockcode.setDisabled(false);
+}
+
+void updateStockItem(int iwhich)
+{
+	stokcode = si_stockcode.getValue();
+	descr = kiboo.replaceSingleQuotes(si_description.getValue());
+	descr2 = kiboo.replaceSingleQuotes(si_description2.getValue());
+	prodet = kiboo.replaceSingleQuotes(si_product_details.getValue());
+
+	selitem = si_nominal_code_lb.getSelectedItem();
+	nominalc = lbhand.getListcellItemLabel(selitem,1);
+
+	costp = si_cost_price.getValue().toString();
+	sellp = si_selling_price.getValue().toString();
+
+	theunits = si_units_newfield10.getValue();
+	//theunits = si_units_newfield10.getSelectedItem().getLabel();
+	billclient = si_billclient.selectedItem.label;
+	lor = si_lor_newfield8.getValue();
+	casnum = si_casnumber_newfield7.getValue();
+	precondmet = si_precondmethod_field6.getValue(); // 16/07/2012: pre-conditioning method
+
+	formkeeperid = si_formkeeper_newfield5.getValue();
+
+	sqlstm = "update stockmasterdetails set description='" + descr + "', description2='" + descr2 + "', product_detail='" + prodet + "', " +
+	"nominal_code='" + nominalc + "', selling_price=" + sellp + ", cost_price=" + costp + 
+	", newfield10='" + theunits + "', newfield9='" + billclient + "', newfield8='" + lor + "', newfield7='" + casnum + "', " +
+	"newfield6='" + precondmet + "', newfield5='" + formkeeperid + "' " +
+	"where id=" + selected_test;
+
+	if(iwhich == 2)
+	{
+		if(existStockCode(stokcode))
+		{
+			guihand.showMessageBox("Stock-code is used, please use a different stock-code");
+			return;
+		}
+
+		// 24/09/2012: store stock-item create-date = entrydate
+		todate = kiboo.todayISODateString();
+
+		sqlstm = "insert into stockmasterdetails (stock_code,stock_cat,description,nominal_code,item_type, warehousecode, groupcode, " + 
+		"product_detail,selling_price,cost_price,description2, newfield10, newfield9, newfield8, newfield7, newfield6, entrydate) values " +
+		"('" + stokcode + "','" + testspanel.selected_category + "','" + descr + "','" + nominalc + "','Service Item','none','" + testspanel.selected_groupcode + "'," +
+		"'" + prodet + "'," + sellp + "," + costp + ",'" + descr2 + "', '" + theunits + 
+		"','" + billclient + "','" + lor + "','" + casnum + "','" + precondmet + "','" + todate + "')";
+	}
+
+	sqlhand.gpSqlExecuter(sqlstm);
+
+	testspanel.populateTestParametersColumn(testspanel.selected_category, testspanel.selected_groupcode); // refresh
+	clearStockitem_clicker(); // clear input boxes
+}
+
+// Make new stock-item or update selected-item
+void newupdatestockitem_clicker()
+{
+	// si_billclient.selectedItem.label
+	// New stock-item
+	if(selected_test.equals(""))
+	{
+		if(testspanel.selected_category.equals("") || testspanel.selected_groupcode.equals("")) return;
+		updateStockItem(2);
+	}
+	else
+		updateStockItem(1);
+}
+
+void deleteStockItem_clicker()
+{
+	if(selected_test.equals("")) return;
+
+	stkrec = sqlhand.getMySoftMasterProductRec(selected_test);
+	if(stkrec == null) return;
+	stockcode = stkrec.get("Stock_Code");
+
+	showmsg = false;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null ) return;
+
+	// check if stock-code used in quotations
+	sqlstm = "select top 1 order_number from sop_detail where stock_code='" + stockcode + "'";
+	qutorec = sql.firstRow(sqlstm);
+	if(qutorec == null)
+	{
+		// check if stock-code used in invoices
+		sqlstm = "select top 1 invoiceno from invoicedetail where stockcode='" + stockcode + "'";
+		invrec = sql.firstRow(sqlstm);
+
+		// stock-code not used in both invoices and quotations, can delete
+		if(invrec == null)
+		{
+			if (Messagebox.show("Delete test/service/sale item..", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+			{
+				sqlstm = "delete from StockMasterDetails where id=" + selected_test;
+				sql.execute(sqlstm);
+
+				testspanel.populateTestParametersColumn(testspanel.selected_category, testspanel.selected_groupcode); // refresh
+				clearStockitem_clicker(); // clear input boxes
+			}
+		}
+		else showmsg = true;
+	}
+	else showmsg = true;
+
+	sql.close();
+
+	if(showmsg) guihand.showMessageBox("Item is in used, cannot delete.. sorry.");
+}
+
+// Let user move a stock-item to another section - groupcode
+class sectionmoverLB_DoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = sectionmover_lb.getSelectedItem();
+		moveme = lbhand.getListcellItemLabel(selitem,0);
+
+		sqlstm = "update StockMasterDetails set GroupCode='" + moveme + "' where ID=" + selected_test;
+		sqlhand.gpSqlExecuter(sqlstm);
+
+		sectionmover_popup.close();
+		testspanel.populateTestParametersColumn(testspanel.selected_category, testspanel.selected_groupcode); // refresh
+		clearStockitem_clicker(); // clear input boxes
+	}
+}
+
+void moveStockItem_Groupcode_clicker()
+{
+	Object[] sectionmover_lb_headers = {
+	new listboxHeaderObj("Section",true),
+	};
+
+	if(selected_test.equals("")) return;
+	if(section_column.getFellowIfAny("section_groupcode_lb") == null) return;
+
+	egroupc = section_groupcode_lb.getItemCount();
+	if(egroupc == 0) return; // paranoia check.. hahaha
+
+	selitem = tests_description_lb.getSelectedItem();
+
+	// populate and popup
+	// sectionmover_holder def in popup below
+	Listbox newlb = lbhand.makeVWListbox(sectionmover_holder,sectionmover_lb_headers,"sectionmover_lb",8);
+	String[] strarray = new String[1];
+
+	for(i=0; i<egroupc; i++)
+	{
+		orisec = section_groupcode_lb.getItemAtIndex(i).getLabel();
+		strarray[0] = orisec;
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+	dc_obj = new sectionmoverLB_DoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+	sectionmover_popup.open(selitem);
+}
+
+//---------- CAS selector -------------
+// onSelect event for showCASMegalist()
+class casmegalistLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_cas = lbhand.getListcellItemLabel(selitem,0);
+		casnum = lbhand.getListcellItemLabel(selitem,1);
+		chemname = lbhand.getListcellItemLabel(selitem,2);
+		shotname = lbhand.getListcellItemLabel(selitem,3);
+		// showCASDetails(casnum,chemname,shotname);
+	}
+}
+
+class casmegalistLB_DoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = casmegalist_lb.getSelectedItem();
+		casnum = lbhand.getListcellItemLabel(selitem,1);
+
+		// hardcoded for this module
+		si_casnumber_newfield7.setValue(casnum);
+	}
+}
+
+void showCASMegalist(String isearch, Div iwhich)
+{
+	Object[] casmegalist_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("CAS.Number",true),
+	new listboxHeaderObj("Chemical.Name",true),
+	new listboxHeaderObj("Short.Name",true),
+	};
+
+	if(isearch.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox(iwhich, casmegalist_lb_headers, "casmegalist_lb", 5);
+
+	sqlstm = "select top 100 * from elb_chemistry_lookup where casrn like '%" + isearch + 
+	"%' or chemical_name like '%" + isearch + "%' or short_name like '%" + isearch + "%' order by chemical_name";
+	casrecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(casrecs.size() == 0) return;
+	newlb.setRows(12);
+	//newlb.addEventListener("onSelect", new casmegalistLB_Listener());
+
+	for(dpi : casrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("casrn"));
+		kabom.add(dpi.get("chemical_name"));
+		kabom.add(dpi.get("short_name"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+	
+	dc_obj = new casmegalistLB_DoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+void searchCAS_clicker(Textbox thebox, Div theholder)
+{
+	global_searchstring = kiboo.replaceSingleQuotes(thebox.getValue());
+	if(global_searchstring.equals("")) return;
+	showCASMegalist(global_searchstring, theholder);
+}
+//---------- end of CAS selector -------------
+
+//---------- Units selector stuff ------------
+
+class unitsLB_DoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = units_lb.getSelectedItem();
+		unitcode = lbhand.getListcellItemLabel(selitem,0);
+
+		// hardcoded for this module
+		si_units_newfield10.setValue(unitcode);
+	}
+}
+
+void showUnits(String iunittype)
+{
+	Object[] units_lb_headers = {
+	new listboxHeaderObj("Units",true),
+	new listboxHeaderObj("Description",true),
+	};
+	// units_holder def in popup
+	Listbox newlb = lbhand.makeVWListbox(units_holder, units_lb_headers, "units_lb", 5);
+	sqlstm = "select unit_code,unit_desc from elb_units where unit_type='" + iunittype + "' order by unit_desc";
+	units = sqlhand.gpSqlGetRows(sqlstm);
+	if(units.size() == 0) return;
+	//newlb.addEventListener("onSelect", new unittypesLB_Listener());
+	newlb.setRows(10);
+	String[] strarray = new String[2];
+	for(dpi : units)
+	{
+		strarray[0] = dpi.get("unit_code");
+		strarray[1] = dpi.get("unit_desc");
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+	dc_obj = new unitsLB_DoubleClick_Listener();
+	lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+}
+
+// onSelect event for unitTypes_Putter()
+class unittypesLB_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		unittype = selitem.getLabel();
+		showUnits(unittype);
+	}
+}
+
+void unitTypes_Putter(Div idiv)
+{
+	Object[] unittypes_lb_headers = {
+	new listboxHeaderObj("Unit Types",true),
+	};
+	Listbox newlb = lbhand.makeVWListbox(idiv, unittypes_lb_headers, "unittypes_lb", 5);
+	sqlstm = "select distinct unit_type from elb_units order by unit_type";
+	unittypes = sqlhand.gpSqlGetRows(sqlstm);
+	if(unittypes.size() == 0) return;
+	newlb.addEventListener("onSelect", new unittypesLB_Listener());
+	newlb.setRows(10);
+	String[] strarray = new String[1];
+	for(dpi : unittypes)
+	{
+		strarray[0] = dpi.get("unit_type");
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void unitsPicker_clicker()
+{
+	units_selector_popup.open(unitspicker_btn);
+}
+//---------- end of Units selector stuff -----
+
+// -------- search stock items, ALS version .. can be used in other mods -- remember the popup too
+
+// knockoff from assign_tests_v2.zul
+void autoAssignTestParametersBox(String imysoftcode)
+{
+	istockrec = samphand.getStockMasterDetails(imysoftcode);
+	if(istockrec == null) return;
+
+	istockcat = istockrec.get("Stock_Cat");
+	igroupcode = istockrec.get("GroupCode");
+
+	testspanel.populateSectionColumn(istockcat);
+	testspanel.populateTestParametersColumn(istockcat,igroupcode);
+
+	// auto-select the thing in the listboxes.. tricky part
+	divisionln = convertCodeToLongName(als_divisions,istockcat);
+	lbhand.matchListboxItems(division_stockcat_lb, divisionln);
+	lbhand.matchListboxItems(section_groupcode_lb, igroupcode);
+	tscode = istockrec.get("ID").toString();
+	lbhand.matchListboxItems(tests_description_lb,tscode);
+}
+
+class itemsearchDoubleClick_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = founditems_lb.getSelectedItem();
+		selected_test = lbhand.getListcellItemLabel(selitem,0);
+		autoAssignTestParametersBox(selected_test);
+		showStockItem_Metadata(selected_test);
+		newstockitem_btn.setLabel("Update test/sale item"); // change button label if item selected
+		searchitem_popup.close();
+	}
+}
+
+void searchStockItem_clicker()
+{
+Object[] finditems_lb_headers = {
+	new dblb_HeaderObj("mysoftcode",false,"id",2),
+	new dblb_HeaderObj("Stock.Code",true,"stock_code",1),
+	new dblb_HeaderObj("Test",true,"description",1),
+	new dblb_HeaderObj("Method",true,"description2",1),
+	new dblb_HeaderObj("Division",true,"stock_cat",1),
+	new dblb_HeaderObj("Section",true,"groupcode",1),
+	};
+
+	srchstr = kiboo.replaceSingleQuotes(itemsearch_text.getValue());
+	if(srchstr.equals("")) return;
+
+	sql = sqlhand.als_mysoftsql();
+    if(sql == null) return;
+
+	sqlstatem = "select id,stock_code,description,description2,stock_cat,groupcode from stockmasterdetails where item_type='Service Item' and nominal_code like '5%' " +
+		"and (stock_code like '%" + srchstr + "%' or description like '%" + srchstr + "%' or description2 like '%" + srchstr + "%') " +
+		"order by description" ;
+
+	Listbox newlb = lbhand.makeVWListbox_onDB(founditems_holder,finditems_lb_headers,"founditems_lb",5,sql,sqlstatem);
+	sql.close();
+
+	if(newlb.getItemCount() > 5) newlb.setRows(10);
+	if(newlb.getItemCount() > 0)
+	{
+		dc_obj = new itemsearchDoubleClick_Listener();
+		lbhand.setDoubleClick_ListItems(newlb, dc_obj);
+	}
+}
+
+// -------- ENDOF search stock items, ALS version .. can be used in other mods -- remember the popup too
+
+// 07/03/2013: subcon setting funcs
+// itype: 1=set subcon, 2=remove
+void setSubonFunc(int itype)
+{
+	if(selected_test.equals("")) return;
+	isel = si_newfield4_subcon.getSelectedItem();
+	subcod = lbhand.getListcellItemLabel(isel,1);
+	//alert(selected_test + " :: " + lbhand.getListcellItemLabel(isel,0) + " :: " + lbhand.getListcellItemLabel(isel,1) );
+	sqlstm = "update stockmasterdetails set newfield4='" + subcod + "' where id=" + selected_test;
+	if(itype == 2)
+		sqlstm = "update stockmasterdetails set newfield4=null where id=" + selected_test;
+
+	sqlhand.gpSqlExecuter(sqlstm);
+	testspanel.populateTestParametersColumn(testspanel.selected_category, testspanel.selected_groupcode); // refresh
+}
+
+]]>
+</zscript>
+
+<!-- Units selector popup -->
+<popup id="units_selector_popup">
+<groupbox mold="3d" width="500px">
+	<caption label="Units Picker" />
+	<hbox>
+		<div id="unittypes_holder" width="150px" />
+		<div id="units_holder" />
+	</hbox>
+	<separator height="3px" />
+	<button label="X Close" style="font-size:9px" onClick="units_selector_popup.close()" />
+</groupbox>
+</popup>
+<!-- end of units selector popup -->
+
+<!-- section-mover popup -->
+<popup id="sectionmover_popup">
+<div id="sectionmover_holder" width="200px" />
+<separator height="3px" />
+<button label="X Close" style="font-size:9px" onClick="sectionmover_popup.close()" />
+</popup>
+<!-- end of section-mover popup -->
+
+<!-- stock items search popup -->
+<popup id="searchitem_popup">
+<groupbox mold="3d" width="600px" style="padding:3px">
+	<caption label="Search Items.." />
+	<hbox>
+		<label value="Search item" style="font-size:9px" />
+		<textbox id="itemsearch_text" style="font-size:9px" width="200px" />
+		<button label="Find" style="font-size:9px" onClick="searchStockItem_clicker()" />
+	</hbox>
+	<separator height="3px" />
+	<div id="founditems_holder" />
+</groupbox>
+</popup>
+<!-- end of stock items search popup -->
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<hbox>
+	<button id="searchitem_btn" label="Search item" style="font-size:9px" onClick="searchitem_popup.open(searchitem_btn)" />
+</hbox>
+<separator height="3px" />
+<hbox>
+<groupbox mold="3d" width="150px">
+	<div style="background:#7f7f7f;padding:2px">
+		<label value="Division" style="font-size:9px;color:#ffffff" />
+	</div>
+	<div id="division_column" />
+</groupbox>
+<groupbox mold="3d" width="200px">
+	<div style="background:#7f7f7f;padding:2px">
+		<label value="Section" style="font-size:9px;color:#ffffff" />
+	</div>
+	<div id="section_column" />
+</groupbox>
+<groupbox mold="3d">
+	<div id="testparameters_column" />
+	<separator height="3px" />
+	<button label="Move item to different section" style="font-size:9px" onClick="moveStockItem_Groupcode_clicker()" />
+</groupbox>
+</hbox>
+
+<separator height="3px" />
+
+<groupbox id="itemdata_gb" mold="3d">
+	<div style="background:#7f7f7f;padding:2px">
+		<label value="Test/Sale Item Metadata" style="color:#ffffff" />
+	</div>
+	<separator height="2px" />
+	<hbox>
+	<grid>
+		<rows>
+			<row>
+				<label value="ID" style="font-size:9px" />
+				<label id="si_id" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Stock.Code" style="font-size:9px" />
+				<textbox id="si_stockcode" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Item.Name" style="font-size:9px" />
+				<textbox id="si_description" width="99%" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Method" style="font-size:9px" />
+				<textbox id="si_description2" width="99%" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Pre-conditioning method" style="font-size:9px" />
+				<textbox id="si_precondmethod_field6" width="99%" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Details" style="font-size:9px" />
+				<textbox id="si_product_details" multiline="true" height="80px" width="99%" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Sales.Code" style="font-size:9px" />
+				<listbox id="si_nominal_code_lb" mold="select" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Cost.Price" style="font-size:9px" />
+				<hbox>
+					<decimalbox id="si_cost_price" value="0" width="80px" format="#.#" style="font-size:9px" />
+					<separator width="90px" />
+					<label value="Sell.Price" style="font-size:9px" />
+					<decimalbox id="si_selling_price" value="0" width="80px" format="#.#" style="font-size:9px" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+
+	<grid>
+		<rows>
+			<row>
+				<label value="FormKeeper ID" style="font-size:9px" />
+				<textbox id="si_formkeeper_newfield5" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="CAS #" style="font-size:9px" />
+				<textbox id="si_casnumber_newfield7" style="font-size:9px" />
+				<!-- <button id="pickcasnum_btn" label="Pick CAS#" style="font-size:9px" /> -->
+			</row>
+			<row>
+				<label value="LOR/MDL" style="font-size:9px" />
+				<textbox id="si_lor_newfield8" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Bill client" style="font-size:9px" />
+				<radiogroup id="si_billclient" >
+					<radio label="YES" style="font-size:9px" selected="true" />
+					<radio label="NO" style="font-size:9px" />
+				</radiogroup>
+			</row>
+			<row>
+				<label value="Units" style="font-size:9px" />
+				<hbox>
+					<textbox id="si_units_newfield10" style="font-size:9px" />
+					<button id="unitspicker_btn" label="Get units" style="font-size:9px" onClick="unitsPicker_clicker()" />
+				</hbox>
+			</row>
+			<row>
+				<label value="Subcon" style="font-size:9px" />
+				<vbox>
+					<listbox id="si_newfield4_subcon" mold="select" style="font-size:9px" />
+					<hbox>
+						<button label="Set subcon" style="font-size:9px" onClick="setSubonFunc(1)" />
+						<button label="Remove subcon" style="font-size:9px" onClick="setSubonFunc(2)" />
+					</hbox>
+				</vbox>
+			</row>
+		</rows>
+	</grid>
+
+		<groupbox>
+			<caption label="CAS #" />
+			
+			<hbox>
+				<label value="CAS/Chemical.Name" style="font-size:9px" />
+				<separator width="5px" />
+				<textbox id="main_searchstr" width="150px" style="font-size:9px" />
+				<button label="Search" style="font-size:9px" onClick="searchCAS_clicker(main_searchstr,casmegalist_holder)" />
+				<separator width="5px" />
+				<label value="(search max. 100 CAS per click)" style="font-size:9px" />
+			</hbox>
+			<separator height="3px" />
+			<div id="casmegalist_holder" />
+		</groupbox>
+
+	</hbox>
+	<separator height="3px" />
+	<button id="clearfields_btn" label="Clear fields" style="font-size:9px" onClick="clearStockitem_clicker()" />
+	<button id="newstockitem_btn" label="New test/sale item" style="font-size:9px" onClick="newupdatestockitem_clicker()" />
+	<button id="delstockitem_btn" label="DELETE (admin only)" style="font-size:9px" visible="false" onClick="deleteStockItem_clicker()"  />
+
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(hiddendatebox);
+todaydate_str = kiboo.getDateFromDatebox(hiddendatebox);
+
+populateGLCode_listbox();
+
+unitTypes_Putter(unittypes_holder);
+
+// Setup TestsPanel() . showType=2 (have pricings)
+testspanel = new TestsPanel(division_column,"",section_column,"",testparameters_column,"");
+testspanel.populateDivisionColumn();
+testspanel.showType = 2;
+testspanel.testOnClicker = new ALSTestParametersLB_Listener();
+
+// 07/03/2013: populate subcon from lookups
+/*
+sbcs = luhand.getLookups_ByParent("SUBCON_NAMES");
+for(sbi : sbcs)
+{
+}
+*/
+luhand.populateListBox_ValueSelection(si_newfield4_subcon,"SUBCON_NAMES",2,20);
+
+if(useraccessobj.accesslevel == 9)
+{
+	delstockitem_btn.setVisible(true);
+}
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>
+

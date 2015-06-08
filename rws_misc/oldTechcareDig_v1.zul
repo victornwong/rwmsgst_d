@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="oldtechcaredigg"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Dig old techcare records";
+MYVERSION = "v0.1";
+MY_ID = "oldtcaredigsd";
+/*
+Written by	: Victor Wong
+Dated		: 10/10/2013
+NOTES:
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+Sql sandb_Sql()
+{
+	try
+	{
+		String dbstring = "jdbc:jtds:sqlserver://192.168.100.201:1433/tempchk";
+		return(Sql.newInstance(dbstring, "testme", "9090", "net.sourceforge.jtds.jdbc.Driver"));
+	}
+	catch (Exception e)
+	{
+		return null;
+	}
+}
+
+void digOldTechcare()
+{
+	sct = kiboo.replaceSingleQuotes(search_tb.getValue().trim());
+	if(sct.equals("")) return;
+/*
+	sqlstm = "select top 100 * from otechcare_problems where asset_tag like '%" + sct + "%' or serial_no like '%" + sct + "%' or " +
+	"product_name like '%" + sct + "%' or problem like '%" + sct + "%' or action like '%" + sct + "%' or " +
+	"resolution like '%" + sct + "%' order by sv_no desc ";
+*/
+
+	sqlstm = "select top 100 * from otechcare_problems tcprob " +
+	"left join otechcare_calls tcalls on tcprob.sv_no = tcalls.sv_no " + 
+	"where tcprob.asset_tag like '%" + sct + "%' or "+
+	"tcprob.problem like '%" + sct + "%' or tcprob.action like '%" + sct + "%' or " +
+	"tcprob.resolution like '%" + sct + "%' order by tcprob.sv_no desc ";
+
+	ksql = sandb_Sql();
+	rts = ksql.rows(sqlstm);
+	
+	found_holder.setValue("Found " + rts.size().toString() + " records");
+	resultstring = "";
+	
+	for(d : rts)
+	{
+		resultstring += d.values() + "\n\n";
+	}
+
+	results_holder.setValue(resultstring);
+}
+
+]]>
+</zscript>
+
+<style>
+
+.subhead2 {
+	font-size:24px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+.subhead1 {
+	font-size:18px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+</style>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" left="60px" top="80px"
+ width="900px" height="600px" contentStyle="overflow:auto"
+ mode="overlapped" border="normal" closable="true">
+
+<div style="background:#628821; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<label sclass="subhead1">Old Techcare records</label>
+<separator height="5px" />
+
+<hbox>
+	<label value="Search text" style="color:#ffffff;font-weight:bold" />
+	<textbox id="search_tb" width="300px" />
+	<button id="digme_b" label="Dig" onClick="digOldTechcare()" />
+	<label style="color:#ffffff;font-weight:bold">
+	(Limit 100 records per dig)
+	</label>
+</hbox>
+<separator height="3px" />
+<label id="found_holder" style="font-weight:bold;color:#ffffff" />
+
+<separator height="5px" bar="true" />
+<separator height="3px" />
+
+<label id="results_holder" multiline="true" style="color:#ffffff;font-weight:bold" />
+
+</div>
+</window>
+</zk>
+

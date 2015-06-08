@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="convertpr2po_win"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript src="../alsglobal/purchasereq_sqlfuncs.zs" />
+<zscript src="../alsglobal/bpm_funcs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+/*
+Title: Convert approved Purchase-req to PO
+Written by: Victor Wong
+Started: 30/7/2010
+
+**NOTES**
+26/8/2010: need to inject non-stock item into stockmasterdetails..
+
+*/
+
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import java.math.BigDecimal;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+myincludeid = Executions.getCurrent().getParameter("myid");
+param_prorigid = Executions.getCurrent().getParameter("prid");
+global_selected_preq = param_prorigid;
+
+String[] currencycode = { "MYR","USD","AUD","NZD","SGD","JPY","HKD","IDR" };
+
+void checkNullSet_DecimalBox(Object inpbox, Object theval, String fieldname)
+{
+	putval = 0;
+	if(theval.get(fieldname) != null) putval = new BigDecimal(theval.get(fieldname));
+	inpbox.setValue(putval);
+}
+
+// Show purchase-request items - iprorigid = purchase-req id, to be used for pr_parent_id checking
+void populatePReq_Items(String iprorigid)
+{
+Object[] preq_items_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("mysoftcode",false),
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("Item.Name/Description",true),
+	new listboxHeaderObj("Stk",true),
+	new listboxHeaderObj("Unit.Price",true),
+	new listboxHeaderObj("Qty",true),
+	new listboxHeaderObj("S.Total",true),
+};
+
+	Listbox newlb = makeVWListbox(prf_purchaseitems_div, preq_items_lb_headers, "preq_items_lb", 5);
+
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "select origid,mysoftcode,description,unitprice,quantity from PurchaseReq_Items where pr_parent_id=" + iprorigid;
+	reqitemrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(reqitemrecs.size() == 0) return;
+	newlb.setRows(8);
+	
+	itemcount = 1;
+	grandtotal = 0;
+	
+	//NumberFormat nf = NumberFormat.getCurrencyInstance();
+	DecimalFormat nf = new DecimalFormat("##.00");
+	
+	for(reqitem : reqitemrecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(reqitem.get("origid").toString());
+		mmcode = reqitem.get("mysoftcode");
+		kabom.add(mmcode);
+		kabom.add(itemcount.toString() + ".");
+
+		desc = reqitem.get("description");
+		desc = trimListitemLabel(desc,50);
+		kabom.add(desc);
+
+		mmstr = "---";
+		if(!mmcode.equals("")) mmstr = "-Y-";
+		kabom.add(mmstr);
+
+		unitprice = reqitem.get("unitprice");
+		kabom.add(nf.format(unitprice));
+
+		quantity = reqitem.get("quantity");
+		kabom.add(quantity.toString());
+
+		subtotal = unitprice * quantity;
+		grandtotal += subtotal;
+		kabom.add(nf.format(subtotal));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+
+		itemcount++;
+	}
+
+	prf_totalvalue_lbl.setValue("Total: " + nf.format(grandtotal));
+}
+
+// Show the supporting documents - uses DocumentStorage
+// supportingdocs_div
+void populateSupportingDocuments(String iprorigid)
+{
+
+Object[] suppdocs_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("Title",true,"file_title",1),
+	new dblb_HeaderObj("Description",true,"file_description",1),
+	new dblb_HeaderObj("D.Created",true,"datecreated",3),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+	
+	pr_id_str = makePurchaseReq_ID(iprorigid);
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable where docu_link='" + pr_id_str + "' and deleted=0";
+
+	if(useraccessobj.accesslevel == 9) // admin can send everything..
+		sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable where docu_link='" + pr_id_str + "' ";
+
+	Listbox newlb = makeVWListbox_onDB(supportingdocs_div,suppdocs_lb_headers,"supportdocs_lb",5,ds_sql,sqlstm);
+	if(newlb.getItemCount() > 5) newlb.setRows(10);
+}
+
+// ---------- let user view the supporting docu - copied from doculink.zul
+void viewLinkingDocument()
+{
+	if(global_selected_preq.equals("")) return;
+	if(supportingdocs_div.getFellowIfAny("supportdocs_lb") == null) return;
+	if(supportdocs_lb.getSelectedIndex() == -1 ) return;
+
+	eorigid = supportdocs_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = makeRandomId("vdoc");
+	globalActivateWindow("miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+
+// 30/7/2010: knockoff from purchase_req.zul with some mods
+// Load selected purchase-req - populate the accordian motherload
+// prf_suppliername_lbl prf_datecreated_tb prf_duedate_tb prf_priority_lb prf_username_lbl
+// prf_purchaseitems_div
+void loadPurchaseReq_Clicker()
+{
+	prorigid = param_prorigid;
+
+	pr_rec = getPurchaseReq_Rec(prorigid);
+	if(pr_rec == null) return;
+
+	//pridstr = makePurchaseReq_ID(global_selected_preq);
+	prf_tab_lbl.setLabel("1. Purchase requisition : " + pr_rec.get("pr_id_str") + " :: " + pr_rec.get("pr_status"));
+
+	prsuppnameapcode = pr_rec.get("SupplierName") + " [" + pr_rec.get("APCode") + "]";
+	prf_suppliername_lbl.setValue(prsuppnameapcode);
+
+	datecret = pr_rec.get("datecreated");
+	prf_datecreated_tb.setValue(datecret);
+
+	duedate = pr_rec.get("duedate").toString().substring(0,10);
+	duedatesetter = (duedate.equals("1900-01-01")) ? datecret : pr_rec.get("duedate");
+	prf_duedate_tb.setValue(duedatesetter);
+
+	priority = pr_rec.get("priority");
+	matchListboxItems(prf_priority_lb, priority);
+
+	prf_username_lbl.setValue("Owner: " + pr_rec.get("username"));
+	prf_notes_tb.setValue(pr_rec.get("notes")); // the justification notes!!!
+
+	// 27/10/2010: added 2 more fields
+	curcode = pr_rec.get("curcode");
+	matchListboxItems(prf_curcode,curcode);
+	prf_parent_jobcode.setValue(pr_rec.get("parent_jobcode"));
+
+	// now, populate the purchase-req items , supporting documents
+	populatePReq_Items(global_selected_preq);
+	populateSupportingDocuments(global_selected_preq);
+}
+
+// Grab/show code + accountname from Accountchart - si_nominal_code_lb si_purchasecode_lb
+// These are hardcoded for ALS - other subsi might be different
+void populateGLCode_listbox()
+{
+Object[] glcode_lb_headers = {
+	new listboxHeaderObj("Account",true),
+	new listboxHeaderObj("code",false),
+};
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select code,name from accountchart where code like '51100.%'";
+	accts = sql.rows(sqlstm);
+
+	for(dpi : accts)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_nominal_code_lb,strarray,"false");
+	}
+	
+	sqlstm = "select code,name from accountchart where code like '61100.%'";
+	purchasecodes = sql.rows(sqlstm);
+
+	for(dpi : purchasecodes)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_purchasecode_lb,strarray,"false");
+	}
+	
+	sql.close();
+}
+
+// Extract from tblstockgroup, stockcategory, tblitemtype
+void populateStockMetadata()
+{
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	
+	sqlstm = "select distinct groupcode,description from tblstockgroup";
+	stkgroup = sql.rows(sqlstm);
+	
+	for(dpi : stkgroup)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("groupcode") + " : " + dpi.get("description"));
+		kabom.add(dpi.get("groupcode"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_stock_group,strarray,"false");
+	}
+
+	sqlstm = "select distinct stock_cat,stock_cat_desc from stockcategory";
+	stkcat = sql.rows(sqlstm);
+	
+	for(dpi : stkcat)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("stock_cat") + " : " + dpi.get("stock_cat_desc"));
+		kabom.add(dpi.get("stock_cat"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_stock_category,strarray,"false");
+	}
+
+	sqlstm = "select id,itemtype from tblitemtype";
+	stktype = sql.rows(sqlstm);
+
+	for(dpi : stktype)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("itemtype"));
+		kabom.add(dpi.get("id").toString());
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_item_type,strarray,"false");
+	}
+
+	sql.close();
+}
+
+// Convert non-stock-item to Stock-item - put stuff into inputboxes + open the popup
+// prf_purchaseitems_div, preq_items_lb_headers, "preq_items_lb"
+void convertToStockItem_clicker()
+{
+	if(!check_ListboxExist_SelectItem(prf_purchaseitems_div,"preq_items_lb")) return;
+
+	DecimalFormat nf = new DecimalFormat("##.00");
+
+	selitem = preq_items_lb.getSelectedItem();
+	origid = getListcellItemLabel(selitem,0);
+	mysoftcode = getListcellItemLabel(selitem,1); // grab the hidden stock-code
+	// non stock-item, lets do the conversion
+	if(!mysoftcode.equals("")) return;
+
+	prirec = getPurchaseReqItem_Rec(origid);
+	if(prirec == null) return;
+
+	desc = prirec.get("description");
+	si_description.setValue(desc);
+	
+	unitpri = prirec.get("unitprice");
+	si_sales_price.setValue(nf.format(unitpri));
+
+	convert_popup.open(selitem);
+}
+
+// Actually converting a normal PR-item to stock-item
+void convertItemToStockItem_clicker()
+{
+	// check if stock-code exist - no dups
+
+}
+
+]]>
+</zscript>
+
+<!-- Convert non-stock to stock popup -->
+<popup id="convert_popup">
+<groupbox mold="3d" id="stockitem_fields_gb">
+<caption id="si_groupbox_caption" label="Convert to Stock-Item" />
+<div style="padding:2px" >
+<groupbox>
+	<caption label="Stock-item metadata" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="Stock.Code" style="font-size:9px" />
+				<textbox id="si_stockcode" width="200px" style="font-size:9px" />
+				<label value="Item type" style="font-size:9px" />
+				<listbox id="si_item_type" mold="select" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Mfg.Part.No" style="font-size:9px" />
+				<textbox id="si_supplier_part_number" width="200px" style="font-size:9px" />
+				<label value="Brand.Name" style="font-size:9px" />
+				<textbox id="si_brandname" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Category" style="font-size:9px" />
+				<listbox id="si_stock_category" mold="select" style="font-size:9px" />
+				<label value="Currency" style="font-size:9px" />
+				<listbox id="si_curcode" mold="select" style="font-size:9px" />
+			</row>
+			<row spans=",3">
+				<label value="Group" style="font-size:9px" />
+				<listbox id="si_stock_group" mold="select" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Cost.Price" style="font-size:9px" />
+				<textbox id="si_cost_price" width="80px" style="font-size:9px" />
+				<label value="Sales.Price" style="font-size:9px" />
+				<textbox id="si_sales_price" width="80px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="2px" />
+<groupbox>
+	<caption label="Item description" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="Item.Name" style="font-size:9px" />
+				<textbox id="si_description" width="430px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="si_description2" width="430px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Product.Details" style="font-size:9px" />
+				<textbox id="si_product_detail" multiline="true" width="430px" height="40px" style="font-size:9px" />			
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+			<!--
+			<row>
+				<label value="GL.Code" style="font-size:9px" />
+				<listbox id="si_nominal_code_lb" mold="select" style="font-size:9px" />
+				<label value="Purchase.Code" style="font-size:9px" />
+				<listbox id="si_purchasecode_lb" mold="select" style="font-size:9px" />			
+			</row>
+			-->
+
+<separator height="3px"/>
+<hbox>
+	<button id="si_saveitem_btn" label="Convert item" style="font-size:9px" onClick="convertItemToStockItem_clicker()" />
+	<button id="si_cancel_btn" label="Cancel" style="font-size:9px" onClick="convert_popup.close()" />
+</hbox>
+</div>
+</groupbox>
+</popup>
+<!-- end of convert_popup -->
+
+<window id="purchasereq_detail_win" width="700px" height="500px" title="Purchase Requisition Details" position="center" mode="overlapped" border="normal" closable="true" 
+onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<div style="padding:2px">
+<button label="X Close window" style="font-size:9px" onClick="globalCloseWindow(myincludeid)" />
+<button label="Convert to Purchase Order" style="font-size:9px" />
+<separator height="3px" />
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<tabbox mold="accordion">
+	<tabs>
+		<tab id="prf_tab_lbl" label="1. Purchase requisition" />
+		<tab label="2. Justification/supporting documents" />
+	</tabs>
+
+	<tabpanels>
+	<!-- purchase req + items panel -->
+	<tabpanel>
+		<div style="background:#778844;padding:3px" >
+			<label id="prf_suppliername_lbl" style="font-size:12px;font-weight:bold;color:#FFFFFF" value="-Supplier-" />
+		</div>
+		<separator height="3px" />
+		<groupbox style="padding:3px">
+			<grid>
+				<columns>
+					<column label="" />
+					<column label="" />
+					<column label="" />
+					<column label="" />
+				</columns>
+				<rows>
+					<row>
+						<label value="Date created" style="font-size:9px" />
+						<datebox id="prf_datecreated_tb" format="yyyy-MM-dd" style="font-size:9px" disabled="true" />
+						<label value="Due date" style="font-size:9px" />
+						<datebox id="prf_duedate_tb" format="yyyy-MM-dd" style="font-size:9px" disabled="true" />
+					</row>
+					<row>
+						<label value="Priority" style="font-size:9px" />
+						<listbox id="prf_priority_lb" mold="select" style="font-size:9px" disabled="true" />
+						<label value="Owner" style="font-size:9px" />
+						<label id="prf_username_lbl" style="font-size:9px" />
+					</row>
+					<row>
+						<label value="Currency" style="font-size:9px" />
+						<listbox id="prf_curcode" mold="select" style="font-size:9px" />
+						<label value="Job.Code" style="font-size:9px" />
+						<hbox>
+							<textbox id="prf_parent_jobcode" style="font-size:9px" disabled="true" />
+							<!-- <button id="pick_jobcode_btn" label="Pick" style="font-size:9px" /> -->
+						</hbox>
+					</row>
+				</rows>
+			</grid>
+		</groupbox>
+
+		<groupbox style="padding:3px">
+			<caption label="Purchase details" style="font-size:9px" />
+			<vbox>
+				<div id="prf_purchaseitems_div" />
+				<div style="background:#778855;padding:3px">
+					<hbox>
+						<separator width="380px" />
+						<label id="prf_totalvalue_lbl" style="font-weight:bold;color:#ffffff" />
+					</hbox>
+				</div>
+				<hbox>
+					<button label="Convert item to Stock-Item" style="font-size:9px" onClick="convertToStockItem_clicker()" />
+				</hbox>
+			</vbox>
+		</groupbox>
+	</tabpanel>
+	<!-- END OF purchase req + items panel -->
+
+	<!-- Justification/documents panel -->
+	<tabpanel>
+		<div style="padding:3px">
+			<hbox>
+				<label value="Justification notes" />
+				<textbox id="prf_notes_tb" multiline="true" width="450px" height="80px" style="font-size:10px" />
+			</hbox>
+		</div>
+		<groupbox>
+			<caption label="Supporting documents" />
+			<vbox style="padding:3px">
+				<div id="supportingdocs_div" />
+				<hbox>
+					<button id="sjd_view_btn" label="View document" style="font-size:9px" onClick="viewLinkingDocument()" />
+				</hbox>
+			</vbox>
+		</groupbox>
+	</tabpanel>
+	<!-- END iOF Justification/documents panel -->
+	</tabpanels>
+</tabbox>
+</div>
+
+<zscript>
+<![CDATA[
+setTodayDatebox(hiddendatebox);
+
+populateDropdownListbox(prf_curcode,currencycode);
+populateDropdownListbox(si_curcode,currencycode);
+
+populateDropdownListbox(prf_priority_lb,purchasereq_priority);
+//populateGLCode_listbox();
+populateStockMetadata();
+
+loadPurchaseReq_Clicker();
+]]>
+</zscript>
+</window>
+</zk>

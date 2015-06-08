@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chknbvdo_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsimpleSql_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Check NBV from DO Records";
+MYVERSION = "v0.1";
+MY_ID = "chknbvdopan";
+/*
+Written by	: Victor Wong
+Dated		: 13/11/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+
+void checkShowNBV(String iasstg, String icutoff)
+{
+	iasstg = kiboo.replaceSingleQuotes(iasstg);
+	sqlstm =
+	"select top 1 customer,dono,dodate,product_name,cost, " +
+	"datediff(m,dodate,'" + icutoff + "') monthdiff, " +
+	"( (cost / 48) * DATEDIFF(month,dodate,'" + icutoff + "') ) as depval, " +
+	"(cost - ( (cost / 48) * DATEDIFF(month,dodate,'" + icutoff + "') ) ) nbv " +
+	"from rwdotbl where code='" + iasstg + "' order by dodate desc";
+
+	tr = rwGpFirstRow(sqlstm);
+	if(tr == null) return;
+
+	donumber.setValue( tr.get("dono") );
+	tcustomer.setValue( tr.get("customer") );
+	lastrecdate.setValue( dtf2.format(tr.get("dodate")) );
+	prodname.setValue( tr.get("product_name") );
+	lastcost.setValue( nf2.format(tr.get("cost")) );
+	monthsdf.setValue( tr.get("monthdiff").toString() );
+	depval.setValue( nf2.format(tr.get("depval")) );
+	nbvthing.setValue( nf2.format(tr.get("nbv")) );
+}
+
+// value="A0019856"
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" width="750px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+
+<grid>
+	<rows>
+		<row spans="1,2">
+			<label value="Asset tag" />
+			<textbox id="masstag" width="180px" style="font-weight:bold" />
+		</row>
+		<row>
+			<label value="Set cutoff date" />
+			<datebox id="startdate" format="yyyy-MM-dd" />
+			<button label="Check NBV" onClick="checkShowNBV(masstag.getValue().trim(), kiboo.getDateFromDatebox(startdate) )" />
+		</row>
+		<row spans="3">
+			<label style="font-size:9px;font-style:italic">
+			(Months now = cutoff date's month- last date's month)
+			</label>
+		</row>
+	</rows>
+</grid>
+
+<separator height="3px" />
+<grid>
+	<columns>
+		<column label="DO" />
+		<column label="Customer" />
+		<column label="Last date" />
+		<column label="Product name" />
+		<column label="Last cost" />
+		<column label="Months now" />
+		<column label="Depreciated" />
+		<column label="NBV" style="font-weight:bold" />
+	</columns>
+	<rows>
+		<row>
+			<label id="donumber" />
+			<label id="tcustomer" style="font-size:9px" />
+			<label id="lastrecdate" />
+			<label id="prodname" style="font-size:9px" />
+			<label id="lastcost" />
+			<label id="monthsdf" />
+			<label id="depval" />
+			<div style="background:#56815e;">
+			<label id="nbvthing" style="color:#ffffff;font-weight:bold;font-size:18px" />
+			</div>
+		</row>
+	</rows>
+</grid>
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(startdate);
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

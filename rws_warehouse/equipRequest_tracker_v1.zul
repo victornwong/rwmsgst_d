@@ -1,0 +1,748 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="equreqtracmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Equipments Requests Tracker";
+MYVERSION = "v0.2.3";
+MYPANEL = "eqreqtracoidpan";
+/*
+@Title Equipments requests tracker
+@Author Victor Wong
+@Since 26/02/2014
+
+20/05/2014: allow WH to update pallet/loca for scanned asset-tags on each req. fixed to PROD
+21/05/2014: add check dup scanned-ass - req by Mus
+13/06/2014: put in auto-save scanned asset-tags when use switch part-req record or req-item
+27/06/2014: prob in saving scanned ass-tags into individual req-items -- lesap when they ammend ERG/PRG. Save the scan-asstags
+	into reqthings_stat now
+14/10/2014: chg reqthings_stat.extra1 to NTEXT instead of VARCHAR - scanned asset-tags truncated reported by Salina
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+p_vtype = Executions.getCurrent().getParameter("vt");
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+ngfun = new NGfuncs();
+
+lastlisttype = 0;
+glob_sel_ereq = glob_sel_pri = prev_asset_tags = "";
+g_vouchertype = g_extratbl = g_remarks = prev_sel_pri = prev_sel_req = "";
+found_vouchers = "";
+
+String JN_linkcode()
+{
+	if(glob_sel_ereq.equals("")) return "";
+	return p_vtype + glob_sel_ereq;
+}
+
+Object[] eqihds = 
+{
+	new listboxHeaderWidthObj("salesid",false,""),
+	new listboxHeaderWidthObj("No.",true,"30px"),
+	new listboxHeaderWidthObj("Item descrption",true,""),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+};
+
+class priclko implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitm = event.getReference();
+		chkpri = lbhand.getListcellItemLabel(selitm,0);
+		glob_sel_pri = prev_sel_pri = chkpri;
+
+		/* per-req item punya asset-tags - not using
+		if(!prev_sel_pri.equals(""))
+		{
+			if(!prev_sel_pri.equals(chkpri)) updPickedAssetTags(false);
+		}
+		asstg_scans.setValue("");
+
+		scnass_lbl.setValue("Picked asset-tags: " + lbhand.getListcellItemLabel(selitm,2) );
+		ir = getFC_indta_rec(glob_sel_pri);
+		if(ir != null)
+		{
+			ktg = sqlhand.clobToString(ir.get("asstags")).trim();
+			asstg_scans.setValue(ktg);
+			scanass_div.setVisible(true);
+		}
+		*/
+	}
+}
+pricliclker = new priclko();
+
+void showReqItems(String iwhat)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(eqsitems_holder, eqihds, "eqreqitems_lb", 22);
+
+	sqlstm = "select iy.salesid, ro.name, iy.qty2 from data d " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"where d.vouchertype=" + g_vouchertype + " and d.voucherno='" + iwhat + "';";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", pricliclker);
+	lnc = 1; sumi = 0;
+	ArrayList kabom = new ArrayList();
+	for(d : trs)
+	{
+		sumi += d.get("qty2");
+		kabom.add( d.get("salesid").toString() );
+		kabom.add( lnc.toString() + "." );
+		kabom.add( kiboo.checkNullString(d.get("name")) ); 
+		kabom.add( nf0.format(d.get("qty2")) );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		lnc++;
+		kabom.clear();
+	}
+	totalreq_lbl.setValue("Total request quantity: " + sumi.toString());
+}
+
+// 27/06/2014: mod to save scanned-asstags into reqthings_stat.extra1 instead of storing individually in request-item -- can lesap after they mod ERG/PRG
+void updPickedAssetTags(boolean ishowmsg)
+{
+	//if(glob_sel_pri.equals("")) return;
+	if(glob_sel_ereq.equals("")) return;
+	atgs = kiboo.replaceSingleQuotes( asstg_scans.getValue().trim() );
+	rst = e_rstatus.getSelectedItem().getLabel();
+	//if(atgs.equals("")) return;
+	//sqlstm = "update indta set asstags='" + atgs + "' where salesid=" + glob_sel_pri;
+	//sqlhand.rws_gpSqlExecuter(sqlstm);
+	
+	lnkc = JN_linkcode();
+	todaydate =  kiboo.todayISODateTimeString();
+
+	sqlstm = "if EXISTS (select origid from reqthings_stat where parent_id='" + lnkc + "') " +
+	"update reqthings_stat set extra1='" + atgs + "', rstatus='" + rst + "' where parent_id='" + lnkc + "';" +
+	"ELSE " +
+	"insert into reqthings_stat (parent_id,rstatus,extranotes,lastupdate,username,extra1) values " +
+	"('" + lnkc + "','PENDING','','" + todaydate + "','" + useraccessobj.username + "','" + atgs + "')";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+
+	if(!prev_asset_tags.equals(""))
+		add_RWAuditLog(lnkc, glob_sel_pri, "Prev tags:" + prev_asset_tags, useraccessobj.username);
+
+	if(ishowmsg) guihand.showMessageBox("Picked asset-tags saved..");
+}
+
+void showEqReqMeta(String iwhat)
+{
+	showReqItems(glob_sel_ereq);
+	e_ergnum.setValue(iwhat);
+	fillDocumentsList(documents_holder,p_vtype,iwhat);
+	workarea.setVisible(true);
+
+	e_extranotes.setValue("");
+	asstg_scans.setValue("");
+	e_rstatus.setSelectedIndex(0);
+
+	r = getEqReqStat_rec(JN_linkcode());
+	if(r == null) return;
+	lbhand.matchListboxItems(e_rstatus, kiboo.checkNullString(r.get("rstatus")) );
+	e_extranotes.setValue( kiboo.checkNullString(r.get("extranotes")) );
+	//asstg_scans.setValue( kiboo.checkNullString(r.get("extra1")) ); // 27/06/2014: the scanned asset-tags
+	asstg_scans.setValue( sqlhand.clobToString(r.get("extra1")) );
+	//alert(r);
+}
+
+// TODO optmize this using "if exists"
+void updateEqReqMeta()
+{
+	if(glob_sel_ereq.equals("")) return;
+	todaydate =  kiboo.todayISODateTimeString();
+
+	rst = e_rstatus.getSelectedItem().getLabel();
+	ent = kiboo.replaceSingleQuotes( e_extranotes.getValue().trim() );
+	lnkc = JN_linkcode();
+	//r = getEqReqStat_rec(JN_linkcode());
+
+	sqlstm = "if EXISTS (select origid from reqthings_stat where parent_id='" + lnkc + "') " +
+	"update reqthings_stat set rstatus='" + rst + "', extranotes='" + ent + "', lastupdate='" + todaydate + "', " +
+	"username='" + useraccessobj.username + "' where parent_id='" + lnkc + "'" +
+	"ELSE " +
+	"insert into reqthings_stat (parent_id,rstatus,extranotes,lastupdate,username) values " +
+	"('" + lnks + "','" + rst + "','" + ent + "','" + todaydate + "','" + useraccessobj.username + "')";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	add_RWAuditLog(lnkc, "", "Update request-form", useraccessobj.username);
+	listEquipRequest(lastlisttype);
+}
+
+Object[] eqrehds = 
+{
+	new listboxHeaderWidthObj(p_vtype,true,"50px"),
+	new listboxHeaderWidthObj("Dated",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Req.By",true,"70px"),
+	//new listboxHeaderWidthObj("Qty",true,"40px"),
+	new listboxHeaderWidthObj("Order",true,""),
+	new listboxHeaderWidthObj("Remarks",true,""),
+	new listboxHeaderWidthObj("Status",true,"80px"),
+	new listboxHeaderWidthObj("Notes",true,""),
+	new listboxHeaderWidthObj("Last",true,"70px"),
+	new listboxHeaderWidthObj("User",true,"70px"),
+};
+
+class doclike implements org.zkoss.zk.ui.event.EventListener
+{
+	public Object selitem;
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		meme = lbhand.getListcellItemLabel(selitem,0);
+
+		// 13/06/2014: check for prev and do autosave
+		if( !meme.equals(prev_sel_req) )
+		{
+			updPickedAssetTags(false);
+			prev_sel_req = meme;
+		}
+		glob_sel_ereq = meme;
+		showEqReqMeta(glob_sel_ereq);
+	}
+}
+doclikor = new doclike();
+
+// itype: 1=by date, 2=by search text, 3=by string of requests
+void listEquipRequest(int itype)
+{
+	lastlisttype = itype;
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+	Listbox newlb = lbhand.makeVWListbox_Width(eqs_holder, eqrehds, "eqpreq_lb", 22);
+
+	sqlstm = "select distinct d.voucherno, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, " +
+	"ri.requestbyyh, c.name as customer_name, " +
+	/*
+	"(select sum(iyy.qty2) from indta iyy left join data dd on dd.salesoff = iyy.salesid " +
+	"where dd.vouchertype=" + g_vouchertype + " and dd.voucherno=d.voucherno) as itmqty, " +
+	*/
+	"st.rstatus, st.extranotes, st.lastupdate, st.username, " +
+	"ri.ordernoyh, ri." + g_remarks + " from data d " +
+	"left join " + g_extratbl + " ri on ri.extraid = d.extraoff " +
+	"left join mr000 c on c.masterid = CAST(ri.customernameyh AS INT) " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"left join reqthings_stat st on st.parent_id='" + p_vtype + "'+d.voucherno " +
+	"where d.vouchertype=" + g_vouchertype +
+	" and c.name is not null and c.name<>'' and ri.requestbyyh<>'' ";
+
+	switch(itype)
+	{
+		case 1:
+			sqlstm += "and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' ";
+			break;
+		case 2:
+			if(st.equals("")) return;
+			sqlstm += "and (c.name like '%" + st + "%' or ri.ordernoyh like '%" + st + "%' or " +
+			"ri." + g_remarks + " like '%" + st + "%' or d.voucherno like '%" + st + "%') ";
+			break;
+		case 3:
+			sqlstm += "and d.voucherno in (" + found_vouchers + ") ";
+			break;
+	}
+
+	sqlstm += "group by d.date_,d.voucherno, ri.requestbyyh, c.name, ro.name, ri.ordernoyh, ri." + g_remarks + "," +
+	"d.salesoff, st.rstatus, st.extranotes, st.lastupdate, st.username " +
+	"order by d.voucherno;";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", doclikor);
+	ArrayList kabom = new ArrayList();
+	//"itmqty",
+	String[] fl = { "voucherno", "vdate", "customer_name", "requestbyyh", "ordernoyh", g_remarks,
+	"rstatus", "extranotes", "lastupdate", "username" };
+	for(d : trs)
+	{
+		ngfun.popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	//scanass_div.setVisible(false);
+}
+
+void loadViewAuditlogs()
+{
+	showSystemAudit(auditlogs_holder,JN_linkcode(),"");
+	auditlogs_pop.open(doclikor.selitem);
+}
+
+class foundasstclk implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getTarget();
+		searhtxt_tb.setValue( lbhand.getListcellItemLabel(selitem,0) );
+		listEquipRequest(2);
+	}
+}
+fndascliker = new foundasstclk();
+
+void digAssTagsInRequest()
+{
+Object[] dashds = 
+{
+	new listboxHeaderWidthObj(p_vtype,true,"60px"),
+	new listboxHeaderWidthObj("AssTags",true,""),
+};
+	st = kiboo.replaceSingleQuotes( assfind_tb.getValue().trim() );
+	/*
+	sqlstm = "select d.voucherno, ro.name, iy.asstags from data d " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"where d.vouchertype=" + g_vouchertype + " and convert(nvarchar(max),iy.asstags) like '%" + st + "%' order by d.voucherno";
+	*/
+
+	sqlstm = "select d.voucherno, rts.extra1 from data d " +
+	"left join reqthings_stat rts on rts.parent_id='" + p_vtype + "'+d.voucherno " +
+	"where d.vouchertype=" + g_vouchertype + " and convert(nvarchar(max),rts.extra1) like '%" + st + "%' order by d.voucherno";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) { guihand.showMessageBox("Found nothing.."); return; }
+	mw = vMakeWindow(winsholder, "Picked/scanned asset-tags found", "0", "center", "480px","");
+	dv = new Div();
+	dv.setParent(mw);
+	Listbox newlb = lbhand.makeVWListbox_Width(dv, dashds, "digass_lb", 10);
+	ArrayList kabom = new ArrayList();
+	found_vouchers = "";
+	for(d : trs)
+	{
+		vnm = kiboo.checkNullString(d.get("voucherno"));
+		kabom.add(vnm);
+		found_vouchers += "'" + vnm + "',";
+		//kabom.add( kiboo.checkNullString(d.get("name")) );
+		//ats = sqlhand.clobToString( d.get("extra1") );
+		kabom.add( d.get("extra1") );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	try { found_vouchers = found_vouchers.substring(0,found_vouchers.length()-1); }
+	catch (Exception e) {}
+
+	listEquipRequest(3);
+
+	lbhand.setDoubleClick_ListItems(newlb, fndascliker);
+}
+
+void updatePalletLoca(String iwhat)
+{
+	iwhat = kiboo.replaceSingleQuotes(iwhat.trim());
+	sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + iwhat + "'";
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+	pmid = r.get("masterid").toString();
+
+	atgs = kiboo.replaceSingleQuotes(asstg_scans.getValue().trim());
+	if(atgs.equals("")) return;
+
+	ags = "";
+	a = atgs.split("\n");
+	for(i=0; i<a.length; i++)
+	{
+		ags += "'" + a[i].trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	alert(sqlstm);
+}
+
+// iwhat: voucher-no, voucher-type uses global-param g_vouchertype
+void massUpdatePalletLoca(String iwhat, String ipallet)
+{
+	/*
+	sqlstm = "select iy.asstags from data d " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"where d.vouchertype=" + g_vouchertype + " and d.voucherno='" + iwhat + "' and iy.asstags is not null";
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	//alert(sqlstm + " :: " + trs);
+	if(trs.size() == 0) { guihand.showMessageBox("No asset-tags to update.."); return; }
+	*/
+
+	ipallet = kiboo.replaceSingleQuotes(ipallet.trim());
+	sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+	pmid = r.get("masterid").toString();
+
+	ags = "";
+	a = asstg_scans.getValue().trim().split("\n");
+	for(i=0; i<a.length; i++)
+	{
+		ags += "'" + a[i].trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+	/*
+	for(d : trs)
+	{
+		a = sqlhand.clobToString(d.get("asstags")).trim().split("\n");
+		for(i=0; i<a.length; i++)
+		{
+			ags += "'" + a[i].trim() + "',";
+		}
+	}
+	*/
+
+	sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+
+	wo = ags.replaceAll("'","").replaceAll(",",", ");
+	add_RWAuditLog(JN_linkcode(), "", "Updt pallet to " + ipallet + " for " + wo, useraccessobj.username);
+
+	changeloca_pop.close();
+	guihand.showMessageBox("Asset-tags pallet/local set to " + ipallet);
+}
+
+void checkDupScannedAss(String iwhat)
+{
+	/*
+	sqlstm = "select iy.asstags from data d " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"where d.vouchertype=" + g_vouchertype + " and d.voucherno='" + iwhat + "' and iy.asstags is not null";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	*/
+	kh = new HashMap();
+	jt = ""; itml = 0;
+
+	a = asstg_scans.getValue().trim().split("\n");
+	itml = a.length;
+	for(i=0; i<a.length; i++)
+	{
+		ak = a[i].trim();
+		if(!ak.equals(""))
+		{
+			if( kh.containsKey( ak ) )
+			{
+				jt = "ERR: Duplicate asset-tag found = " + ak + ", go CHECK!!";
+				break;
+			}
+			else
+			kh.put(ak,"1");
+		}
+	}
+
+	/*
+	for(d : trs)
+	{
+		a = sqlhand.clobToString(d.get("asstags")).trim().split("\n");
+		itml = a.length;
+		for(i=0; i<a.length; i++)
+		{
+			ak = a[i].trim();
+			if(!ak.equals(""))
+			{
+				if( kh.containsKey( ak ) )
+				{
+					jt = "ERR: Duplicate asset-tag found = " + ak + ", go CHECK!!";
+					break;
+				}
+				else
+				kh.put(ak,"1");
+			}
+		}
+	}
+	*/
+	guihand.showMessageBox("Found : " + itml.toString() + " :: " + jt);
+}
+
+
+
+class lbClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		cel1 = lbhand.getListcellItemLabel(isel,0);
+	}
+}
+clkier = new lbClick();
+
+void showBOMList()
+{
+	
+
+	sqlstm = "";
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+	newlb.setRows(21); newlb.setMold("paging");
+	newlb.addEventListener("onSelect", clkier);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { };
+	for(d : rcs)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+Object[] scantagscheckhds = 
+{
+	new listboxHeaderWidthObj("Req.Items",true,""),
+	new listboxHeaderWidthObj("Qty",true,"60px"),
+};
+
+void showScanTags_breakdown()
+{
+	ags = "";
+	a = asstg_scans.getValue().trim().split("\n");
+	for(i=0; i<a.length; i++)
+	{
+		ags += "'" + a[i].trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "select distinct name, count(name) as countn from partsall_0 where assettag in (" + ags + ") group by name;";
+	rcs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(staghold, scantagscheckhds, "scantags_lb", 10);
+	//newlb.setMold("paging");
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "name","countn" };
+	sumi = 0;
+	for(d : rcs)
+	{
+		sumi += d.get("countn");
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	checkscantags_lbl.setValue("Total qty: " + sumi.toString());
+	showcheckscantags_pop.open(savescantags_b);
+
+}
+
+]]>
+</zscript>
+
+<popup id="showcheckscantags_pop">
+	<div class="shadowbox" style="background:#E36619" width="380px">
+		<div id="staghold" />
+		<separator height="3px" />
+		<label id="checkscantags_lbl" />
+	</div>
+</popup>
+
+<popup id="changeloca_pop">
+	<div class="shadowbox" style="background:#E36619" width="350px">
+		<label value="Pallet/Loca" />
+		<textbox id="palletloca_tb" width="60px" value="PROD" disabled="true" />
+		<button label="Update" onClick="massUpdatePalletLoca(glob_sel_ereq, palletloca_tb.getValue())" />
+	</div>
+</popup>
+
+<popup id="auditlogs_pop">
+	<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+		<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+		<separator height="3px" />
+		<div id="auditlogs_holder" />
+		<separator height="3px" />
+		<button label="Ok" class="k9" onClick="auditlogs_pop.close()" />
+	</div>
+</popup>
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" class="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" class="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,p_vtype,glob_sel_ereq)" />
+			<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" class="k9" />
+					<textbox id="fileupl_file_title" width="200px" class="k9" />
+				</row>
+				<row>
+					<label value="Description" style="font-size:9px" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" class="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,p_vtype,glob_sel_ereq)" class="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()"  class="k9" />
+	</hbox>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#1b528c" >
+
+<grid>
+	<rows>
+		<row style="background:#2e3436;" >
+			<label value="Start" class="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End" class="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<button label="Load by date" sclass="k9mo" onClick="listEquipRequest(1)" />
+
+			<label value="Search" class="k9b" />
+			<textbox id="searhtxt_tb" width="99%" class="k9" />
+			<button label="Search all" class="k9" onClick="listEquipRequest(2)" />
+
+			<textbox id="assfind_tb" width="99%" class="k9" />
+			<button label="Dig ass.tags" class="k9" onClick="digAssTagsInRequest()" />
+
+			<button id="viewadut_b" label="View audit-logs" onClick="loadViewAuditlogs()" />
+		</row>
+	</rows>
+</grid>
+<separator height="2px" />
+
+<div sclass="shadowbox" style="background:#2e3436;">
+	<label sclass="subhead1" style="color:#ffffff" id="woptit" visible="false" />
+	<separator height="3px" />
+
+	<hbox>
+		<div id="eqs_holder" width="770px" />
+
+		<vbox>
+			<div style="background:#D66509">
+				<label sclass="subhead1" style="color:#ffffff" id="woptit2" />
+			</div>
+
+			<div id="ereqmetaform" width="400px" />
+			<separator height="3px" />
+			<button label="Update request status.." style="font-weight:bold" onClick="updateEqReqMeta()" />
+			<separator height="3px" />
+			<div sclass="shadowbox" style="background:#555753;" width="400px" >
+				<label sclass="subhead1" style="color:#ffffff">ATTACHMENT / DOCUMENTS</label>
+				<separator height="3px" />
+				<hbox>
+					<button id="uploaddoc_btn" label="Upload file" class="k9" onClick="showUploadPopup(p_vtype,glob_sel_ereq)" />
+					<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+					<button id="editdoc_btn" label="Update" class="k9" onClick="updatefiledesc_popup.open(self)" />
+					<button id="deletedoc_btn" label="Delete" class="k9" onClick="deleteFile(documents_holder,p_vtype,glob_sel_ereq)" />
+				</hbox>
+				<separator height="3px" />
+				<div id="documents_holder" />
+			</div>
+		</vbox>
+	</hbox>
+</div>
+
+<separator height="2px" />
+
+<div sclass="shadowbox" style="background:#2e3436;" id="workarea" visible="false" >
+	<hbox>
+		<vbox>
+			<div style="background:#D66509">
+				<label sclass="subhead1" style="color:#ffffff" value="Request Items" />
+			</div>
+			<div id="eqsitems_holder" width="500px" />
+			<separator height="3px" />
+			<label id="totalreq_lbl" style="color:#ffffff" />
+		</vbox>
+
+		<vbox>
+			<div style="background:#D66509">
+				<label id="scnass_lbl" sclass="subhead1" value="Asset-Tags" />
+			</div>
+			<hbox>
+				<button id="savescantags_b" label="Save scanned asset-tags" style="font-weight:bold" sclass="k9" onClick="updPickedAssetTags(true)" />
+				<button id="chkdupass_b" label="Count / Check-dup ass.tags" style="font-size:9px;color:#F22267;font-weight:bold" onClick="checkDupScannedAss(glob_sel_ereq)" />
+				<button id="showscantags_b" label="Show scan-tags breakdown" sclass="k9" onClick="showScanTags_breakdown()" />
+				<button id="chgpallet_b" label="Change asset-tags loca/pallet" style="font-size:9px;color:#4286C9;font-weight:bold" onClick="changeloca_pop.open(self)" disabled="true" />
+			</hbox>
+			<separator height="3px" />
+			<div id="scanass_div">
+				<textbox id="asstg_scans" style="font-weight:bold" multiline="true" width="99%" height="200px" />
+			</div>
+		</vbox>
+	</hbox>
+</div>
+
+<div id="winsholder" />
+
+<zscript>
+<![CDATA[
+
+dometaform = dynamicForm(ereqmetaform, "ereqmetaform_grid", "32");
+
+if(p_vtype != null)
+{
+	p_vtype = p_vtype.toUpperCase();
+	if(p_vtype.equals("PRG"))
+	{
+		g_vouchertype = "7947";
+		g_remarks = "partsremarksyh";
+		g_extratbl = "u0141";
+		eqreqtracoidpan.setTitle("Parts Requests Tracker " + MYVERSION);
+		woptit.setValue("Parts Requests");
+		woptit2.setValue("Parts Request Status");
+	}
+	if(p_vtype.equals("ERG"))
+	{
+		g_vouchertype = "7946";
+		g_remarks = "requestremarksyh";
+		g_extratbl = "u0140";
+		eqreqtracoidpan.setTitle("Equipments Requests Tracker " + MYVERSION);
+		woptit.setValue("Equipment Requests");
+		woptit2.setValue("Equipment Request Status");
+	}
+}
+
+// users who can update pallet(usually to PROD)
+if(sechand.allowedUser(useraccessobj.username,"MOD_UPDATE_PE_REQ")) chgpallet_b.setDisabled(false);
+
+if(useraccessobj.accesslevel == 9)
+{
+	palletloca_tb.setDisabled(false); // allow admin to key-in pallet ID for mass-update, others can only update PROD (HARDCODED)
+	chgpallet_b.setDisabled(false);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

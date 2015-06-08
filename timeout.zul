@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page title="Session Timeout" ?>
+<window width="80%" title="Session Timeout" border="normal">
+<vbox>
+The page or component you have requested is no longer available. Please reload..
+</vbox>
+</window>

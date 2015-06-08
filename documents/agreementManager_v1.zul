@@ -1,0 +1,534 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="agreementman_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/fileUploading.zs" />
+<zscript src="../alsglobal/searchSelectCustomer_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Agreement Manager";
+MYVERSION = "v0.1";
+/*
+Title		: Agreement manager - to manage those customer agreements
+Written by	: Victor Wong
+
+Revisions:
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+AGREEMENT_PREFIX = "AG";
+last_search_type = 0;
+glob_selected_agreement = "";
+
+//--- to be used in searchSelectCustomer_v1.zs
+class CallMeObject
+{
+	public Object companyrec;
+	public Object callme;
+
+	void doSomething()
+	{
+		if(companyrec == null) return;
+		if(glob_selected_agreement.equals("")) return;
+		ar_code.setValue(kiboo.checkNullString(companyrec.get("ar_code")));
+		customer_name.setValue(kiboo.checkNullString(companyrec.get("customer_name")));
+		contact_persons.setValue(kiboo.checkNullString(companyrec.get("contact_person1")));
+
+		// get what's in companyrec and populate fields -- can be customized for other mods
+		/*
+		drc_arcode.setValue(companyrec.get("ar_code"));
+		drc_customer_name.setValue(companyrec.get("customer_name"));
+		drc_address1.setValue(companyrec.get("address1"));
+		drc_address2.setValue(companyrec.get("address2") + " " + companyrec.get("address3"));
+		drc_contactperson.setValue(companyrec.get("contact_person1"));
+		drc_email.setValue(companyrec.get("E_mail"));
+		drc_phone.setValue(companyrec.get("telephone_no"));
+		drc_fax.setValue(companyrec.get("fax_no"));
+		*/
+		selectcustomer_popup.close();
+	}
+}
+
+local_callme = new CallMeObject();
+//---
+
+Object getAgreement_rec(String iwhat)
+{
+	sql = sqlhand.als_mysoftsql();
+	retval = null;
+	if(sql == null ) return retval;
+	String sqlstm = "select * from elb_agreementtracker where origid=" + iwhat;
+	retval = sql.firstRow(sqlstm);
+	sql.close();
+	return retval;
+}
+
+void showAgreementMeta(String iwhat)
+{
+	dpi = getAgreement_rec(iwhat);
+	if(dpi == null)
+	{
+		guihand.showMessageBox("ERR!! Cannot connect to database..");
+		return;
+	}
+
+	ag_num.setValue(AGREEMENT_PREFIX+iwhat);
+	ar_code.setValue(kiboo.checkNullString(dpi.get("ar_code")));
+	customer_name.setValue(kiboo.checkNullString(dpi.get("customer_name")));
+	contact_persons.setValue(kiboo.checkNullString(dpi.get("contact_persons")));
+	title.setValue(kiboo.checkNullString(dpi.get("title")));
+	quote_parent.setValue(kiboo.checkNullString(dpi.get("quote_parent")));
+
+	lbhand.matchListboxItems(valid_period,kiboo.checkNullString(dpi.get("valid_period")));
+
+	sign_date.setValue(dpi.get("sign_date"));
+	expire_date.setValue(dpi.get("expire_date"));
+	notes.setValue(kiboo.checkNullString(dpi.get("notes")));
+
+	workarea.setVisible(true);
+}
+
+class aglb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = agreement_lb.getSelectedItem();
+		glob_selected_agreement = lbhand.getListcellItemLabel(isel,0);
+		showAgreementMeta(glob_selected_agreement);
+		fillDocumentsList(AGREEMENT_PREFIX, glob_selected_agreement); // fileUploading.zs
+	}
+}
+
+Object[] agreement_lb_headers = {
+	new listboxHeaderWidthObj("AG",true,"30px"),
+	new listboxHeaderWidthObj("AR_Code",true,"60px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("A.Title",true,""),
+	new listboxHeaderWidthObj("Sign",true,"60px"),
+	new listboxHeaderWidthObj("Expire",true,"60px"),
+	new listboxHeaderWidthObj("Stat",true,"50px"),
+};
+
+void listCustomerAgreement(int itype)
+{
+	sdate = kiboo.getDateFromDatebox(startdate);
+    edate = kiboo.getDateFromDatebox(enddate);
+	cnm =  kiboo.replaceSingleQuotes(customer_tb.getValue());
+	agst = agreestat_dd.getSelectedItem().getLabel();
+
+	last_search_type = itype;
+
+	sqlstm = "select top 200 origid,title,ar_code,customer_name,sign_date,expire_date,astatus from elb_agreementtracker " +
+	"where (sign_date between '" + sdate + "' and '" + edate + "' " + 
+	"or expire_date between '" + sdate + "' and '" + edate + "') ";
+
+	if(!cnm.equals("")) sqlstm += " and (customer_name like '%" + cnm + "%' or ar_code like '%" + cnm + "%') ";
+
+	if(itype == 2) sqlstm += " and astatus='" + agst + "' ";
+
+	sqlstm += "order by origid";
+	alist = sqlhand.gpSqlGetRows(sqlstm);
+
+	Listbox newlb = lbhand.makeVWListbox_Width(agree_holder, agreement_lb_headers, "agreement_lb", 10);
+	if(alist.size() == 0) return;
+
+	newlb.setRows(20);
+	newlb.addEventListener("onSelect", new aglb_onSelect());
+
+	SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+	Date todate2 = sdf.parse(kiboo.todayISODateString());
+
+	for(dpi : alist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(kiboo.checkNullString(dpi.get("ar_code")));
+		kabom.add(kiboo.checkNullString(dpi.get("customer_name")));
+		kabom.add(kiboo.checkNullString(dpi.get("title")));
+		kabom.add( kiboo.checkNullDate( dpi.get("sign_date"),""));
+
+		expdate = dpi.get("expire_date").toString().substring(0,10) ;		
+		Date expdate2 = sdf.parse(expdate);
+		
+		istyl = "";
+		if(todate2.compareTo(expdate2) > 0) istyl = "color:#ffffff;background:#ef2929;text-decoration:blink;";
+		
+		kabom.add(expdate);
+		kabom.add(kiboo.checkNullString(dpi.get("astatus")));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false",istyl);
+	}
+}
+
+void generalFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todate = kiboo.todayISODateString();
+	refresh = false;
+	sqlstm = "";
+	status_str = "";
+
+	if(itype.equals("newagree_btn"))
+		sqlstm = "insert into elb_agreementtracker (ar_code,customer_name,title,sign_date,expire_date," + 
+		"contact_persons,notes,astatus,datecreated,username) values (" +
+		"'','','','" + todate + "','" + todate + "'," +
+		"'','','ACTIVE','" + todate + "','" + useraccessobj.username + "')";
+
+	if(itype.equals("expire_btn")) status_str = "EXPIRED";
+	if(itype.equals("active_btn")) status_str = "ACTIVE";
+	if(itype.equals("pending_btn")) status_str = "PENDING";
+	
+	if(itype.equals("update_btn"))
+	{
+		arcod = ar_code.getValue();
+		custn = kiboo.replaceSingleQuotes(customer_name.getValue());
+		contp = kiboo.replaceSingleQuotes(contact_persons.getValue());
+		titld = kiboo.replaceSingleQuotes(title.getValue());
+		quotp = kiboo.replaceSingleQuotes(quote_parent.getValue());
+		sdate = kiboo.getDateFromDatebox(sign_date);
+		edate = kiboo.getDateFromDatebox(expire_date);
+		valp = valid_period.getSelectedItem().getLabel();
+		ntos = kiboo.replaceSingleQuotes(notes.getValue());
+
+		sqlstm = "update elb_agreementtracker set ar_code='" + arcod + "', customer_name='" + custn + "'," +
+		"contact_persons='" + contp + "',title='" + titld + "',quote_parent='" + quotp + "'," +
+		"sign_date='" + sdate + "',expire_date='" + edate + "',username='" + useraccessobj.username + "'," +
+		"datecreated='" + todate + "',notes='" + ntos + "',valid_period='" + valp + "' " + 
+		"where origid=" + glob_selected_agreement;
+	}
+
+	if(itype.equals("selectcontacts_btn"))
+	{
+		ddall = "";
+		for(selitem : otheremails_lb.getSelectedItems())
+		{
+			ddall += lbhand.getListcellItemLabel(selitem,1) + ",";
+		}
+		if(!ddall.equals("")) contact_persons.setValue(ddall);
+		getcontacts_popup.close();
+	}
+	
+	if(itype.equals("delete_btn"))
+	{
+		if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+		sqlstm = "delete from elb_agreementtracker where origid=" + glob_selected_agreement;
+
+		workarea.setVisible(false);
+	}
+
+	if(!status_str.equals(""))
+		sqlstm = "update elb_agreementtracker set astatus='" + status_str + "' where origid=" + glob_selected_agreement;
+
+	if(!sqlstm.equals("")) { sqlhand.gpSqlExecuter(sqlstm); refresh = true; }
+	if(refresh) listCustomerAgreement(last_search_type);
+}
+
+Object[] email_customers_lb_headers = {
+	new listboxHeaderObj("Email",true),
+	new listboxHeaderObj("Name",true),
+	new listboxHeaderObj("Phone",true),
+	};
+
+void populateCustomerContacts(Object icomp)
+{
+	tarcode = ar_code.getValue();
+	if(tarcode.equals("")) return;
+
+	// show them email addresses def in customer_emails..
+	sqlstm = "select contact_name,contact_email " + 
+	"from customer_emails where ar_code='" + tarcode + "' order by contact_name";
+
+	custemails = sqlhand.gpSqlGetRows(sqlstm);
+	if(custemails.size() == 0) { guihand.showMessageBox("Sorry, no extra contacts found"); return; }
+
+	Listbox newlb = lbhand.makeVWListbox(omholder, email_customers_lb_headers, "otheremails_lb", 6);
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+
+	for(dpi : custemails)
+	{
+		ArrayList kaboom = new ArrayList();
+		kaboom.add(dpi.get("contact_email"));
+		kaboom.add(dpi.get("contact_name"));
+		strarray = kiboo.convertArrayListToStringArray(kaboom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+
+	getcontacts_popup.open(icomp);
+}
+
+
+]]>
+</zscript>
+
+<!-- select customer popup , to be used by searchSelectCustomer_v1.zs -->
+<popup id="selectcustomer_popup">
+<div style="padding:3px">
+<hbox>
+<groupbox width="400px">
+	<caption label="Search / Assign customer" />
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="cust_search_tb" width="150px" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="searchCustomers(local_callme)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="foundcustomer_holder" />
+</groupbox>
+<groupbox id="custinfo_gb" width="300px" >
+	<caption label="Customer info" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Company" style="font-size:9px" />
+			<label id="cfind_company_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address1" style="font-size:9px" />
+			<label id="cfind_address1_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address2" style="font-size:9px" />
+			<label id="cfind_address2_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address3" style="font-size:9px" />
+			<label id="cfind_address3_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact " style="font-size:9px" />
+			<label id="cfind_contact_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Email" style="font-size:9px" />
+			<label id="cfind_email_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Tel" style="font-size:9px" />
+			<label id="cfind_tel_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Fax" style="font-size:9px" />
+			<label id="cfind_fax_lbl" style="font-size:9px" />
+		</row>
+		</rows>
+	</grid>
+</groupbox>
+
+</hbox>
+<separator height="3px" />
+<button label="X Close" style="font-size:9px" onClick="selectcustomer_popup.close()" />
+</div>
+</popup>
+<!-- ENDOF select customer popup -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(AGREEMENT_PREFIX, glob_selected_agreement)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+<!-- ENDOF update file description popup -->
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(AGREEMENT_PREFIX, glob_selected_agreement)" style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()" style="font-size:9px" />
+</hbox>
+</popup>
+<!-- ENDOF upload a file popup -->
+
+<popup id="getcontacts_popup">
+<groupbox mold="3d" width="350px" >
+	<div id="omholder" />
+	<button id="selectcontacts_btn" label="Select" style="font-size:9px" onClick="generalFunc(self)" />
+</groupbox>
+</popup>
+
+<div width="1200px">
+<panel id="agreementman_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+
+	<grid width="600px">
+		<rows>
+			<row>
+				<label value="Start date" style="font-size:9px" />
+				<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+				<label value="End date" style="font-size:9px" />
+				<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			</row>
+			<row>
+				<label value="Search" style="font-size:9px" />
+				<hbox>
+					<textbox id="customer_tb" width="250px" style="font-size:9px" />
+					<button label="Find" style="font-size:9px" onClick="listCustomerAgreement(1)" />
+				</hbox>
+				<label value="Status" style="font-size:9px" />
+				<hbox>
+					<listbox id="agreestat_dd" mold="select" style="font-size:9px" />
+					<button label="Dig" style="font-size:9px" onClick="listCustomerAgreement(2)" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+
+<separator height="3px" />
+
+<hbox>
+<button id="newagree_btn" label="New agreement" style="font-size:9px" onClick="generalFunc(self)" />
+<button id="expire_btn" label="Set expire" style="font-size:9px" onClick="generalFunc(self)" />
+<button id="active_btn" label="Set active" style="font-size:9px" onClick="generalFunc(self)" />
+<button id="pending_btn" label="Set pending" style="font-size:9px" onClick="generalFunc(self)" />
+
+<div id="adminstuff" style="background:#cc0000;padding:2px" visible="false" >
+	<button id="delete_btn" label="Delete" style="font-size:9px" onClick="generalFunc(self)" />
+</div>
+
+</hbox>
+
+<separator height="3px" />
+
+<hbox>
+
+<div id="agree_holder" width="600px" />
+
+<div id="workarea" visible="false" >
+<vbox>
+
+<groupbox mold="3d">
+<grid>
+	<rows>
+		<row style="background:#729fcf" spans="1,3">
+			<label value="Agreement No." style="font-size:9px" />
+			<label id="ag_num" style="font-size:9px" />
+		</row>
+		<row spans=",,2">
+			<label value="AR_Code" style="font-size:9px" />
+			<label id="ar_code" style="font-size:9px" />
+			<button label="Get customer" style="font-size:9px" onClick="selectcustomer_popup.open(ar_code)" />
+		</row>
+		<row spans=",3">
+			<label value="Customer" style="font-size:9px" />
+			<textbox id="customer_name" style="font-size:9px" width="99%" />
+		</row>
+		<row spans=",2,">
+			<label value="Contact person" style="font-size:9px" />
+			<textbox id="contact_persons" style="font-size:9px" width="99%" />
+			<button id="getcont_btn" label="Get contacts" style="font-size:9px" onClick="populateCustomerContacts(self)" />
+		</row>
+		<row spans=",3">
+			<label value="Title" style="font-size:9px" />
+			<textbox id="title" style="font-size:9px" width="99%" />
+		</row>
+		<row>
+			<label value="Validity" style="font-size:9px" />
+			<listbox id="valid_period" mold="select" style="font-size:9px" />
+			<label value="Quotation" style="font-size:9px" />
+			<textbox id="quote_parent" style="font-size:9px" width="99%" />
+		</row>
+		<row>
+			<label value="Sign-up" style="font-size:9px" />
+			<datebox id="sign_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			<label value="Expire" style="font-size:9px" />
+			<datebox id="expire_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row spans=",3">
+			<label value="Notes" style="font-size:9px" />
+			<textbox id="notes" style="font-size:9px" width="99%" multiline="true" height="60px" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button id="update_btn" label="Update agreement details.." style="font-size:9px" onClick="generalFunc(self)" />
+
+</groupbox>
+
+<groupbox mold="3d" width="500px" >
+	<div style="background:#888a85;padding:2px">
+	Attach agreement documents (PDF/Word/Excel/whatever)
+	</div>
+	<div>
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(glob_selected_agreement)" />
+			<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="viewFile()" />
+			<!-- <button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" /> -->
+			<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="deleteFile(AGREEMENT_PREFIX, glob_selected_agreement)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="documents_holder" />
+	</div>
+
+</groupbox>
+
+</vbox>
+
+</div>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+luhand.populateListbox_ByLookup(valid_period,"VALIDITY_DD",2);
+luhand.populateListbox_ByLookup(agreestat_dd,"ACTIVE_NOT_DD",2);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminstuff.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

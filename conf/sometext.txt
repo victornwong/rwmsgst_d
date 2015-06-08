@@ -1,0 +1,6 @@
+Network
+
+With companies within the group inter-connected to the main network backbone, the next step is to implement proper subnetting and routing for current needs and future expansion.
+At the moment, subnets are implemented within the network infra-structure, due to lack of experience to setup proper routing in the routers, subnets cannot "talk" to each other.
+Example will be workstations in Foxmay cannot connect directly to the database server, they have to route the connection through the internet and back (get out from the building to reach the toilet at the back).
+Proper setting of the routers will ensure fast access to application and database servers within the network, and this will allow smoother implementation/rollout of the groupwise resource planning system.

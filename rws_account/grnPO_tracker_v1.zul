@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="grnpotrakcmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./grnPO_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Temp.GRN - PO/RMA/EOL/MRN/whatever Tracking";
+MYVERSION = "v0.2.2";
+MYPANEL = "grnopoitkakpan";
+/*
+Title		: GRN and PO/RMA/EOL/whatever tracking - integrade FC6 Temp.GRN -> RWMS.PO
+Written by	: Victor Wong
+Dated		: 05/03/2014
+
+Revisions:
+11/04/2014: mod sql to retrieve GRN/MRN
+11/06/2014: able to update PR/PO remarks/notes
+13/06/2014: allow update items' loca/pallet -- done this in another module instead of clouding this one
+04/07/2014: put t.grn status. as req in meeting
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+lastlisttype = 0;
+grn_seli = null;
+glob_sel_grn = glob_sel_pono = glob_sel_mrn = "";
+
+String JN_linkcode()
+{
+	/*
+	PR_PREFIX
+	prn = c_prno.getValue().trim();
+	*/
+	//if(glob_selected_lc.equals("")) return "";
+	//return LC_PREFIX + glob_selected_lc;
+}
+
+void checkPOdets(String iwhat)
+{
+Object[] poitmhds =
+{
+	new listboxHeaderWidthObj("No.",true,"40px"),
+	new listboxHeaderWidthObj("Product",true,""),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+};
+
+	pon = kiboo.replaceSingleQuotes( iwhat.trim() );
+	if(pon.equals("")) return;
+	pon = pon.toUpperCase().replaceAll("PO","").trim();
+	cpono_tb.setValue(pon);
+	pr = getPR_rec(pon);
+	if(pr == null) { guihand.showMessageBox("Sorry.. cannot retrieve PR/PO record"); return; }
+
+	prporemk_tb.setValue( kiboo.checkNullString(pr.get("notes")) );
+
+	Listbox newlb = lbhand.makeVWListbox_Width(c_po_items_holder, poitmhds, "poitems_lb", 3);
+	ktg = sqlhand.clobToString(pr.get("pr_items"));
+	if(!ktg.equals(""))
+	{
+		newlb.setRows(22);
+		itms = sqlhand.clobToString(pr.get("pr_items")).split("~");
+		iqty = sqlhand.clobToString(pr.get("pr_qty")).split("~");
+		ArrayList kabom = new ArrayList();
+
+		for(i=0; i<itms.length; i++)
+		{
+			kabom.add( (i+1).toString() + "." );
+			try { k = itms[i]; } catch (Exception e) { k = ""; }
+			kabom.add(k);
+			try { k = iqty[i]; } catch (Exception e) { k = ""; }
+			kabom.add(k);
+			lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+			kabom.clear();
+		}
+	}
+	c_supplier_name.setValue("Supplier: " + kiboo.checkNullString(pr.get("supplier_name")) );
+	c_prno.setValue(pr.get("origid").toString() );
+	p_sup_etd.setValue( dtf2.format(pr.get("sup_etd")) );
+	p_sup_actual_deldate.setValue( pr.get("sup_actual_deldate") );
+	lbhand.matchListboxItems(p_del_status, kiboo.checkNullString(pr.get("del_status")) );
+
+	poitems_div.setVisible(true);
+}
+
+void poFuncs(String itype)
+{
+	sqlstm = msgtext = "";
+	refresh = false;
+
+	if(itype.equals("checkpo_b"))
+	{
+		if(c_po_items_holder.getFellowIfAny("poitems_lb") != null) poitems_lb.setParent(null);
+		poitems_div.setVisible(false);
+		checkPOdets(glob_sel_pono);
+		//cpono_tb.setValue(glob_sel_pono);
+		//chkpo_pop.open(grn_seli);
+	}
+
+	prn = c_prno.getValue().trim();
+	if(prn.equals("")) return;
+
+	if(itype.equals("updpodel_b"))
+	{
+		acd = kiboo.getDateFromDatebox(p_sup_actual_deldate);
+		dst = p_del_status.getSelectedItem().getLabel();
+
+		sqlstm = "update purchaserequisition set sup_actual_deldate='" + acd + "'," +
+		"del_status='" + dst + "', temp_grn='" + glob_sel_grn + "' where origid=" + prn;
+
+		lgstr = "Upd: delivery-date=" + acd + ", del-stat=" + dst + ", t.grn=" + glob_sel_grn;
+		add_RWAuditLog(PR_PREFIX + prn, "", lgstr, useraccessobj.username);
+		msgtext = "PR/PO delivery status updated..";
+	}
+
+	if(itype.equals("upporemarks_b"))
+	{
+		kn = kiboo.replaceSingleQuotes( prporemk_tb.getValue().trim() );
+		if(kn.equals("")) return;
+		sqlstm = "update purchaserequisition set notes='" + kn + "' where origid=" + prn;
+
+		add_RWAuditLog(PR_PREFIX + prn, "", "Upd: PR/PO remarks", useraccessobj.username);
+		msgtext = "PR/PO remarks/notes updated..";
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refresh)
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+// knockoff from equipRequest_tracker.zul - chop-off some codes
+void massUpdatePalletLoca(String ags, String ipallet)
+{
+	ipallet = kiboo.replaceSingleQuotes(ipallet.trim());
+	sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(r == null) { guihand.showMessageBox("ERR: UNKNOWN pallet/loca"); return; }
+	pmid = r.get("masterid").toString();
+
+	sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+	//alert(sqlstm);
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	wo = ags.replaceAll("'","").replaceAll(",",", ");
+	add_RWAuditLog(MRN_PREFIX + glob_sel_mrn, "", "Updt pallet to " + ipallet + " for " + wo, useraccessobj.username);
+	//guihand.showMessageBox("Asset-tags pallet/local set to " + ipallet);
+}
+
+class chgpalclikevent implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(mrnitems_lb.getSelectedCount() == 0) return;
+		si = mrnitems_lb.getSelectedItems().toArray();
+		atgs = "";
+		for(i=0; i<si.length; i++)
+		{
+			kk = lbhand.getListcellItemLabel(si[i],2); // check mrnitmhds for asset-tag index
+			atgs += "'" + kk + "',";
+		}
+		try { atgs = atgs.substring(0,atgs.length()-1); } catch (Exception e) {}
+		massUpdatePalletLoca(atgs, kiboo.replaceSingleQuotes(localtb.getValue().trim()) );
+
+		wdiv = event.getTarget().getParent().getParent();
+		listMRNitems(wdiv,local_mrn_no);
+	}
+}
+chgpalletcliker = new chgpalclikevent();
+local_mrn_no = "";
+
+void listMRNitems(Div idiv, String iwhat)
+{
+Object[] mrnitmhds =
+{
+	new listboxHeaderWidthObj("No.",true,"50px"),
+	new listboxHeaderWidthObj("Product",true,""),
+	new listboxHeaderWidthObj("AssTag",true,""),
+	new listboxHeaderWidthObj("Pallet",true,""),
+	new listboxHeaderWidthObj("Qty",true,"40px"),
+};
+	local_mrn_no = iwhat;
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, mrnitmhds, "mrnitems_lb", 3);
+	sqlstm = "select s.name as item_name, s.code2, iy.qty2," +
+	"(select top 1 pallet from partsall_0 where assettag=s.code2) as kpallet " +
+	"from data d " +
+	"left join mr001 s on s.masterid = d.productcode " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"where d.vouchertype=1280 and d.voucherno='" + iwhat + "' " +
+	"order by d.bodyid ";
+
+	r = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.setRows(21);
+	newlb.setMultiple(true);
+	newlb.setCheckmark(true);
+	//newlb.addEventListener("onSelect", grnclikor);
+	lnc = 1;
+	ArrayList kabom = new ArrayList();
+	for(d : r)
+	{
+		kabom.add(lnc.toString() + "." );
+		kabom.add( kiboo.checkNullString(d.get("item_name")) );
+		kabom.add( kiboo.checkNullString(d.get("code2")) );
+		kabom.add( kiboo.checkNullString(d.get("kpallet")) );
+		kabom.add( nf0.format(d.get("qty2")) );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		lnc++;
+		kabom.clear();
+	}
+}
+
+void viewFCMRN(String iwhat)
+{
+	mwin = vMakeWindow(winsholder,"Check MRN: " + iwhat,"0","center","600px","");
+	kdiv = new Div();
+	kdiv.setParent(mwin);
+	hb = new Hbox(); hb.setParent(kdiv);
+	kl = new Label(); kl.setValue("Pallet/Loca"); kl.setSclass("k9mo"); kl.setParent(hb);
+	kt = new Textbox(); kt.setId("localtb"); kt.setSclass("k9mo"); kt.setParent(hb);
+	kb = new Button(); kb.setLabel("Update"); kb.setSclass("k9mo"); kb.setParent(hb);
+	kb.addEventListener("onClick", chgpalletcliker);
+	if(!sechand.allowedUser(useraccessobj.username,"MOD_UPDATE_PE_REQ")) kb.setDisabled(true);
+	hs = new Separator(); hs.setHeight("5px"); hs.setParent(kdiv);
+	listMRNitems(kdiv,iwhat);
+}
+
+void exportTGRNMRN_list()
+{
+	exportExcelFromListbox(grns_lb, kasiexport, grndhds, "tgrnmrn.xls", "thelist" );
+}
+
+
+]]>
+</zscript>
+
+<popup id="chkpo_pop">
+<div sclass="shadowbox" style="background:#909d2a;" width="300px">
+	<hbox>
+		<label value="PO No." style="color:#ffffff" />
+		<textbox id="cpono_tb" />
+		<button label="Check" onClick="checkPOdets()" />
+	</hbox>
+</div>
+</popup>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" sclass="k9" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,EQUIPGRN_PREFIX,glob_sel_grn)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" sclass="k9" />
+				<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+			</row>
+			<row>
+				<label value="Description" sclass="k9" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,GRN_PREFIX,glob_sel_grn)" sclass="k9" />
+	<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+</hbox>
+</popup>
+	
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#204a87">
+
+<!-- <button label="testme" onClick="testme()" /> -->
+
+<div sclass="shadowbox" style="background:#2e3436;">
+
+	<label value="Start" sclass="k9b" />
+	<datebox id="startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="End" sclass="k9b" />
+	<datebox id="enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+	<button label="Load all by date" sclass="k9mo" onClick="listGRN(1)" />
+	<button label="by PO" sclass="k9mo" onClick="listGRN(2)" />
+	<button label="by RMA" sclass="k9mo" onClick="listGRN(4)" />
+	<button label="by EOL" sclass="k9mo" onClick="listGRN(5)" />
+	<button label="by GCO/GCN" sclass="k9mo" onClick="listGRN(6)" />
+
+	<textbox id="searhtxt_tb" sclass="k9" />
+	<button label="Search" sclass="k9" onClick="listGRN(3)" />
+	<button label="Export" sclass="k9" onClick="exportTGRNMRN_list()" />
+
+	<separator height="5px" bar="true" />
+
+	<div  id="tgrn_div" visible="false" >
+		<hbox>
+			<label sclass="subhead1" value="Temp.GRN" />
+			<separator width="20px" />
+			<button id="checkpo_b" label="Check PO" style="color:#1b528c;font-weight:bold" onClick="poFuncs(self.getId())" />
+			<button label="Check MRN / change loca-pallet" style="color:#1b528c;font-weight:bold" onClick="viewFCMRN(glob_sel_mrn)" />
+		</hbox>
+		<separator height="2px" />
+		<div id="grn_holder" />
+	</div>
+</div>
+<separator height="2px" />
+
+<hbox id="workarea" visible="false">
+	<vbox>
+		<div sclass="shadowbox" style="background:#2e3436;" width="550px" >
+			<label id="grnitms_lbl" sclass="subhead1" />
+			<separator height="2px" />
+			<div id="grnitems_holder" />
+		</div>
+
+		<div sclass="shadowbox" style="background:#2e3436;" width="550px" >
+			<label sclass="subhead1" value="ATTACHMENT / DOCUMENTS" />
+			<label sclass="k9b" value="(Supplier invoice, DO and etc)" />
+			<separator height="3px" />
+			<hbox>
+				<button id="uploaddoc_btn" label="Upload file" sclass="k9" onClick="showUploadPopup(GRN_PREFIX,glob_sel_grn)" />
+				<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+				<button id="editdoc_btn" label="Update" sclass="k9" onClick="updatefiledesc_popup.open(self)" />
+				<button id="deletedoc_btn" label="Delete" sclass="k9" onClick="deleteFile(documents_holder,GRN_PREFIX,glob_sel_grn)" />
+			</hbox>
+			<separator height="3px" />
+			<div id="documents_holder" />
+		</div>
+	</vbox>
+
+	<vbox>
+		<div sclass="shadowbox" style="background:#2e3436;" id="poitems_div" visible="false" >
+			<label value="PR/PO No:" style="color:#ffffff;font-weight:bold" />
+			<label id="c_prno" style="color:#ffffff;font-weight:bold" />
+			<separator height="2px" />
+			<label id="c_supplier_name" style="color:#ffffff;font-weight:bold" />
+			<separator height="2px" />
+			<grid>
+				<rows>
+					<row>
+						<label value="Supplier ETD" />
+						<label id="p_sup_etd" style="font-weight:bold" />
+						<label value="Actual delivery" />
+						<datebox id="p_sup_actual_deldate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
+					</row>
+					<row>
+						<label value="Delivery status" />
+						<listbox id="p_del_status" mold="select" />
+						<button id="updpodel_b" label="Update PR/PO delivery status" sclass="k9mo" onClick="poFuncs(self.getId())" />
+					</row>
+					<row spans="1,2,1">
+						<label value="PR/PO remarks" sclass="k9" />
+						<textbox id="prporemk_tb" sclass="k9" multiline="true" width="95%" height="60px" />
+						<button id="upporemarks_b" label="Update remarks" sclass="k9mo" onClick="poFuncs(self.getId())" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<div id="c_po_items_holder" />
+		</div>
+	</vbox>
+	
+</hbox>
+
+<div id="winsholder" />
+<div id="kasiexport" visible="false" />
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(p_del_status,"DO_STATUS",2);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

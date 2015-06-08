@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="helpboxwin"?>
+<zk>
+<zscript src="alsglobal/alsglobaldefs.zs" />
+<zscript src="alsglobal/alsglobal_guifuncs.zs" />
+<zscript>
+myincludeid = Executions.getCurrent().getParameter("myid");
+</zscript>
+
+<window id="helpbox" width="400px" height="500px" title="H E L P"
+	position="center" mode="overlapped" border="normal" closable="true"
+    onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<div>
+
+<grid width="850px">
+    <columns height="22px">
+      <column width="150px" label="Author" />
+      <column width="350px" label="Title" />
+    </columns>
+    <rows>
+      <row>
+        <textbox  value="Philip Hensher" width="99%" />
+        <textbox value="The Fit" width="99%" />
+      </row>
+    </rows>
+</grid>
+
+</div>
+</window>
+</zk>
+

@@ -1,0 +1,707 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="srfsmodd"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Rentals Schedule Report for Sales-division";
+MYVERSION = "v0.3";
+MY_ID = "sarfllelwnd";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+
+Fields=
+financer(u0000.credit5yh) (ctc,maybank or anything)
+MANumberYH = master-agreement no., RentalTermYH
+
+23/12/2013: Shopa req, add column C, type of billing, check OrderType for Partial/maintain/extension word and fill colm C
+21/05/2014: Shopa req, check for SEATBASE and insert into last column
+
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs(); luhand = new LookupFuncs();
+
+SimpleDateFormat dtf3 = new SimpleDateFormat("yyyyMMdd");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+SimpleDateFormat monthonly = new SimpleDateFormat("M");
+SimpleDateFormat monthonlystr = new SimpleDateFormat("MMM");
+SimpleDateFormat yearonly = new SimpleDateFormat("yyyy");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+DecimalFormat nf3 = new DecimalFormat("#####0.00");
+DecimalFormat nf4 = new DecimalFormat("###,##0.00");
+
+REPORTS_PATH = "sharedocs/salesreports";
+
+Object rentalsched_data = null;
+Object roc_data = null;
+
+// get financer(u0000.credit5yh) data into hashmap-by-customername
+void getFC_Customer_Financer(String icnms, HashMap ihm)
+{
+	sqlstm = "select m.name, u.Credit5YH,u.Credit4YH from u0000 u left join mr000 m on u.extraid = m.masterid " +
+	"where m.name in (" + icnms + ");";
+
+	krs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	for(d : krs)
+	{
+		km = d.get("name").trim();
+		if(ihm.containsKey(km))
+		{
+			ihm.remove(km);
+			//ihm.put(km, kiboo.checkNullString(d.get("Credit5YH")) );
+			ihm.put(km,d);
+		}
+	}
+}
+
+void doFunc(Object iwhat)
+{
+	msgtext = "";
+	itype = iwhat.getId();
+
+	try { // remove previous iframe/amedia child in kasiexport, else screw-up UI - download window kept-on popup
+		m = kasiexport.getChildren().toArray();
+		m[0].setParent(null);
+	} catch (Exception e) {}
+
+	if(itype.equals("upsched_b"))
+	{
+		rentalsched_data = new uploadedWorksheet();
+		rentalsched_data.getUploadFileData();
+		if(rentalsched_data.thefiledata == null)
+			msgtext = "ERR: Invalid rental-schedule worksheet";
+
+		rental_sched_filename.setValue( kiboo.checkNullString(rentalsched_data.thefilename) );
+	}
+
+	if(itype.equals("uproc_b"))
+	{
+		roc_data = new uploadedWorksheet();
+		roc_data.getUploadFileData();
+		if(roc_data.thefiledata == null)
+		{
+			msgtext = "ERR: Invalid ROC worksheet";
+		}
+		
+		roc_data_filename.setValue( kiboo.checkNullString(roc_data.thefilename) );
+	}
+
+	if(itype.equals("juggle_b"))
+	{
+		juggleTheThang();
+	}
+
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/*
+23/12/2013: Add new column-C = Type of billing (Partial, EXTENSION, MAINTAIN) - Shopa request
+*/
+void juggleTheThang()
+{
+	InputStream inps = null;
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+
+	HashMap custfiner = new HashMap();
+	HashMap roc_dater = new HashMap();
+
+	try
+	{
+		if(rentalsched_data == null) return;
+		if(rentalsched_data.thefiledata == null) return;
+		if(roc_data == null) return;
+		if(roc_data.thefiledata == null) return;
+
+		inps = new ByteArrayInputStream(rentalsched_data.thefiledata);
+		rocinps = new ByteArrayInputStream(roc_data.thefiledata);
+	}
+	catch (Exception e) { guihand.showMessageBox("ERR: Upload proper worksheets for this bugger to work.."); return; }
+
+	HSSFWorkbook excelWB = new HSSFWorkbook(inps);
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+
+	HSSFWorkbook rocWB = new HSSFWorkbook(rocinps);
+	FormulaEvaluator roc_evaluator = rocWB.getCreationHelper().createFormulaEvaluator();
+
+	rocsht0 = rocWB.getSheetAt(0);
+	rocnumrows = rocsht0.getPhysicalNumberOfRows();
+
+	//numsheets = excelWB.getNumberOfSheets();
+	sht0 = excelWB.getSheetAt(0);
+	numrows = sht0.getPhysicalNumberOfRows();
+
+	// hash 'em ROC-date from roc-data worksheet
+	for(i=0; i<rocnumrows; i++)
+	{
+		try
+		{
+		checkrow = rocsht0.getRow(i);
+		kcell = checkrow.getCell(0);
+
+		rnm = "";
+
+		try {
+		rnm = POI_GetCellContentString(kcell,evaluator,"").trim();
+		} catch (Exception e) {}
+
+		try {
+			rnm = rnm.toUpperCase();
+			if(rnm.indexOf("ROC:ROC") != -1) // found the hardcoded roc-prefix
+			{
+				kcell = checkrow.getCell(1);
+				rdt = "";
+				try {
+					rdt = POI_GetCellContentString(kcell,evaluator,"");
+				} catch (Exception e) {}
+
+				koo = Integer.parseInt( rnm.replaceAll("ROC:ROC","") );
+				if( !roc_dater.containsKey(koo) ) roc_dater.put(koo,rdt);
+			}
+		} catch (Exception e) {}
+		
+		} catch (Exception e) {}
+	}
+
+	mys = "";
+	for(i=1;i<numrows;i++)
+	{
+		try {
+	
+		checkrow = sht0.getRow(i);
+		// hash the customer-name to find the financier name in u0000.Credit5YH
+		kcell = checkrow.getCell(13); // customer-name, colm 13 / N
+		if(kcell != null)
+		{
+			//mys += POI_GetCellContentString(kcell,evaluator,"").trim() + ",";
+			cnm = POI_GetCellContentString(kcell,evaluator,"").trim();
+			if(!cnm.equals(""))
+			{
+				if( !custfiner.containsKey(cnm) )
+				{
+					custfiner.put(cnm,"");
+					cnm = cnm.replaceAll("'","''");
+					mys += "'" + cnm + "',";
+				}
+			}
+		}
+		
+		} catch (Exception e) {}
+	}
+
+/*
+	// map them customer-name --> financer
+	Iterator iterator = custfiner.entrySet().iterator();
+	while(iterator.hasNext())
+	{
+		km = iterator.next();
+		mys += "'" + km.getKey() + "',";
+	}
+*/
+	try {
+		mys = mys.substring(0,mys.length()-1);
+	} catch (Exception e) {}
+
+	getFC_Customer_Financer(mys,custfiner);
+	
+// now insert data back into worksheet
+for(i=1; i<numrows; i++)
+{
+	try
+	{
+		checkrow = sht0.getRow(i);
+		kcell = checkrow.getCell(13); // customer-name, colm 13 / N
+		if(kcell != null)
+		{
+			try {
+			cre = custfiner.get( POI_GetCellContentString(kcell,evaluator,"").trim() );
+
+			//alert(cre + " : " + cre.getClass()); return;
+			if(cre instanceof String)
+			{}
+			else
+			{
+			fncer = cre.get("Credit5YH");
+			pytm = cre.get("Credit4YH");
+			excelInsertString(sht0,i,25,pytm); // payment-term = 25 = Z
+			excelInsertString(sht0,i,14,fncer); // financer = 14 = O
+			}
+
+			} catch (Exception e) {}
+		}
+
+		// process quarter-column(A/0) and sales-reg-by-month(B/1) : uses date(D/3)
+		kcell = checkrow.getCell(4);
+		rwidate = POI_GetCellContentString(kcell,evaluator,"");
+
+			kdate = dtf2.parse(rwidate);
+			kyear = yearonly.format(kdate);
+			ckm = Integer.parseInt(monthonly.format(kdate));
+			qstring = "Q1";
+
+			// Q1 = 4-6 , Q2 = 7-9, Q3 = 10-12, Q4 = 1-3
+			if(ckm >= 7 && ckm <= 9) qstring = "Q2";
+			if(ckm >= 10 && ckm <= 12) qstring = "Q3";
+			if(ckm >= 1 && ckm <= 3) qstring = "Q4";
+
+			excelInsertString(sht0,i,0,qstring + "(" + kyear + ")");
+			excelInsertString(sht0,i,1,monthonlystr.format(kdate));
+
+		// check roc-no (I/8) and get from hashmap roc-date
+		kcell = checkrow.getCell(9);
+		try
+		{
+			rno = Integer.parseInt(POI_GetCellContentString(kcell,evaluator,""));
+			rdt = roc_dater.get(rno);
+			excelInsertString(sht0,i,10,rdt); // roc-date (K/10)
+		} catch (Exception e) {}
+
+		// 31/10/2013: calc grand contract value and put into AB(27)
+		contractval = 0.0;
+		kcell = checkrow.getCell(21); // rental-period
+		if(kcell != null)
+		{
+			kki = POI_GetCellContentString(kcell,evaluator,"").trim();
+			try
+			{
+				rentalperiod = Integer.parseInt(kki);
+
+				kcell = checkrow.getCell(23); // monthly rental
+				if(kcell != null)
+				{
+					kii = POI_GetCellContentString(kcell,evaluator,"").trim();
+					try
+					{
+						monthlyrental = Float.parseFloat( kii.replaceAll(",","") );
+						contractval = monthlyrental * rentalperiod;
+					} catch (Exception e) {}
+				}
+			} catch (Exception e) {}
+		}
+		excelInsertNumber(sht0,i,28, nf3.format(contractval) );
+
+		// 23/12/2013: Shopa req - new col C - type of billing. Check for Partial, MAINTAIN, EXTENSION in col S(Order type)
+		kcell = checkrow.getCell(18);
+		whattoput = "";
+		if(kcell != null)
+		{
+		kki = POI_GetCellContentString(kcell,evaluator,"").trim();
+		kki = kki.toUpperCase();
+		if(kki.indexOf("PARTIAL") != -1) whattoput = "Partial";
+		if(kki.indexOf("MAINTAIN") != -1) whattoput = "MAINTAIN";
+		if(kki.indexOf("EXTENSION") != -1) whattoput = "EXTENSION";
+		if(kki.indexOf("INERTIA") != -1) whattoput = "Inertia";
+		if(kki.indexOf("SHORT") != -1) whattoput = "SHORT TERM";
+		if(kki.indexOf("HOT") != -1) whattoput = "HOTSWAP";
+		if(kki.indexOf("RAM") != -1) whattoput = "UPGRADE";
+		if(kki.indexOf("UPGRADE") != -1) whattoput = "UPGRADE";
+		}
+
+		kcell = checkrow.getCell(19);
+		if(kcell != null)
+		{
+		kki = POI_GetCellContentString(kcell,evaluator,"").trim();
+		kki = kki.toUpperCase();
+		if(kki.indexOf("PARTIAL") != -1) whattoput = "Partial";
+		if(kki.indexOf("MAINTAIN") != -1) whattoput = "MAINTAIN";
+		if(kki.indexOf("EXTENSION") != -1) whattoput = "EXTENSION";
+		if(kki.indexOf("INERTIA") != -1) whattoput = "Inertia";
+		if(kki.indexOf("SHORT") != -1) whattoput = "SHORT TERM";
+		if(kki.indexOf("HOT") != -1) whattoput = "HOTSWAP";
+		if(kki.indexOf("RAM") != -1) whattoput = "UPGRADE";
+		if(kki.indexOf("UPGRADE") != -1) whattoput = "UPGRADE";
+		}
+		
+		excelInsertString(sht0,i,2,whattoput); // type of billing (colm C)
+
+	} catch (Exception e) {}
+}
+
+	excelInsertString(sht0,0,28, "Total.Rental" ); // 31/10/2013: Header for total-rental column AB (27)
+
+	// 17/10/2013: remove rows from roc-register which already have entries in invoice-register worksheet
+	// req by Shopa
+	//sht1 = excelWB.createSheet();
+
+	fndones = new ArrayList();
+
+	// hash 'em ROC-date from roc-data worksheet
+	for(i=7; i<rocnumrows; i++)
+	{
+		try
+		{
+		checkrow = rocsht0.getRow(i);
+		kcell = checkrow.getCell(0); // Col-A = ROC no.
+
+		rnm = "";
+
+		try {
+		rnm = POI_GetCellContentString(kcell,evaluator,"").trim();
+		} catch (Exception e) {}
+
+		try {
+			rnm = rnm.toUpperCase();
+			if(rnm.indexOf("ROC:ROC") != -1) // found the hardcoded roc-prefix
+			{
+				kcell = checkrow.getCell(1);
+				rdt = "";
+				try {
+					rdt = POI_GetCellContentString(kcell,evaluator,"");
+				} catch (Exception e) {}
+
+				koo = Integer.parseInt( rnm.replaceAll("ROC:ROC","") );
+
+				// Get Col-H = Description (compare against rental-inv-reg Col-O)
+				kcell2 = checkrow.getCell(7);
+				desx = POI_GetCellContentString(kcell2,evaluator,"").trim();
+
+				// check rental-invoice-register against roc-no. If found remove
+				if(checkAndKill(koo,desx,excelWB,evaluator))
+				{
+					// 25/07/2014: shopa req, remove all dups roc-no. Capture found ones
+					fndones.add(rnm);
+					//rocsht0.removeRow(checkrow);
+				}
+			}
+		} catch (Exception e) {}
+		
+		} catch (Exception e) {}
+	}
+
+	// remove all dups in roc-register using fndones
+	fndrocs = kiboo.convertArrayListToStringArray(fndones);
+	for(i=7; i<rocnumrows; i++)
+	{
+		try
+		{
+			chkrow = rocsht0.getRow(i);
+			kcell = chkrow.getCell(0);
+			orc = POI_GetCellContentString(kcell,evaluator,"").trim();
+			for(k=0; k<fndrocs.length; k++)
+			{
+				if(orc.equals(fndrocs[k])) rocsht0.removeRow(chkrow);
+			}
+		} catch (Exception e) {}
+	}
+
+	// shift deleted rows ** JUST WONT WORK!!! **
+	/*
+	for(i=7;i<rocnumrows;i++)
+	{
+		lastrownum = rocsht0.getLastRowNum();
+
+		try {
+			checkrow = rocsht0.getRow(i);
+			kcell = checkrow.getCell(0); // Col-A = ROC no.
+			rnm = "";
+
+			try {
+			rnm = POI_GetCellContentString(kcell,evaluator,"").trim();
+			} catch (Exception e) {}
+
+			if(rnm.equals(""))
+			{
+				rocsht0.shiftRows(i+1,lastrownum,-1);
+			}
+		} catch (Exception e) {}
+	}
+	*/
+
+	outfn = session.getWebApp().getRealPath(REPORTS_PATH + "/srfsales_" + dtf3.format(new Date()) + ".xls");
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+
+	outfn = session.getWebApp().getRealPath(REPORTS_PATH + "/rocsorted_" + dtf3.format(new Date()) + ".xls");
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	rocWB.write(fileOut);
+	fileOut.close();
+
+	listdirfiles(session.getWebApp().getRealPath(REPORTS_PATH), filesholder, "files_lb"); // refresh
+	guihand.showMessageBox("Ting..Ting..");
+}
+
+boolean checkAndKill(int irocno, String idesc, HSSFWorkbook iWB, FormulaEvaluator ieval )
+{
+	sht0 = iWB.getSheetAt(0);
+	numrows = sht0.getPhysicalNumberOfRows();
+	ifound = 0;
+
+	for(i=1;i<numrows;i++)
+	{
+		try {
+		checkrow = sht0.getRow(i);
+		kcell = checkrow.getCell(9); // r-inv-reg Col.J(9) = ROC.No : 06/01/2014: found out by shopa!!
+		if(kcell != null)
+		{
+			drocn = POI_GetCellContentString(kcell,ieval,"").trim();
+			if( drocn.equals(irocno.toString()) ) // found ROC.No
+			{
+				kcell2 = checkrow.getCell(15); // r-inv-reg Col.O(15) = desc
+				if(kcell2 != null)
+				{
+					ddesc = POI_GetCellContentString(kcell2,ieval,"").trim();
+					if(idesc.indexOf(ddesc) != -1) // same ROC.No and same Desc. inc found count
+					{
+						ifound++;
+//debugmsg.setValue(debugmsg.getValue() + "\nddesc=" + ddesc + " :: idesc=" + idesc);
+						break;
+					}
+				}
+			}
+		}
+		} catch (Exception e) {}
+	}
+
+	return (ifound > 0) ? true : false;
+}
+
+Object getCNDetails(String icn)
+{
+	sqlstm = "select sum(d.amount2) as cnamt, d.voucherno, a.name as customer_name, cn.remarksyh from data d " +
+	"left join u0111 cn on cn.extraid = d.extraoff " +
+	"left join mr000 a on a.masterid = d.bookno " +
+	"where d.vouchertype=4096 and ltrim(rtrim(cn.refnoyh)) = '" + icn + "' " +
+	"group by d.voucherno,a.name, cn.remarksyh";
+
+	return sqlhand.rws_gpSqlFirstRow(sqlstm);
+}
+
+// 08/04/2014: req by Shopa, check CN by RWI
+void checkRWCN()
+{
+	if(files_lb.getSelectedIndex() != -1)
+	{
+		fnm = files_lb.getSelectedItem().getLabel();
+		//downloadFile(kasiexport, fnm, session.getWebApp().getRealPath("sharedocs/salesreports/" + fnm ) );
+		if( fnm.indexOf("srfsales") == -1) return;
+	}
+
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	HashMap hm = new HashMap();
+
+	infn = session.getWebApp().getRealPath(REPORTS_PATH + "/" + fnm);
+	InputStream inp = new FileInputStream(infn);
+	HSSFWorkbook wb = new HSSFWorkbook(inp);
+/*
+	thedata = new uploadedWorksheet();
+	thedata.getUploadFileData();
+	InputStream inps = new ByteArrayInputStream(thedata.thefiledata);
+	HSSFWorkbook wb = new HSSFWorkbook(inps);
+*/
+	FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
+	sht0 = wb.getSheetAt(0);
+	numrows = sht0.getPhysicalNumberOfRows();
+
+	CellStyle st2 =  wb.createCellStyle();
+	st2.setFillForegroundColor(HSSFColor.RED.index);
+	st2.setFillPattern(HSSFCellStyle.SOLID_FOREGROUND);
+	
+	// do header for CN stuff
+	excelInsertString(sht0,0,29, "CN" );
+	excelInsertString(sht0,0,30, "CN.Amount" );
+	excelInsertString(sht0,0,31, "CN.Customer" );
+	excelInsertString(sht0,0,32, "CN.Remarks" );
+
+	for(i=0; i<numrows; i++)
+	{
+		rnm = "";
+		checkrow = sht0.getRow(i);
+		if(checkrow != null)
+		{
+			kcell = checkrow.getCell(5);
+			if(kcell != null)
+			{
+				rwn = "RW" + POI_GetCellContentString(kcell,evaluator,"").trim();
+				if( !hm.containsKey(rwn) )
+				{
+					hm.put(rwn,"1");
+					rec = getCNDetails(rwn);
+					if(rec != null) // found some CN thang .. put into worksheet
+					{
+						excelInsertString(sht0,i,29, kiboo.checkNullString(rec.get("voucherno")) );
+						excelInsertString(sht0,i,30, (rec.get("cnamt") == null) ? "0" : nf2.format(rec.get("cnamt")) );
+						excelInsertString(sht0,i,31, kiboo.checkNullString(rec.get("customer_name")) );
+						excelInsertString(sht0,i,32, kiboo.checkNullString(rec.get("remarksyh")) );
+						POI_SetCellStyleRange(sht0, st2, i, 0, 3);
+						POI_SetCellStyleRange(sht0, st2, i, 29, 33);
+					}
+				}
+			}
+		}
+	}
+	inp.close();
+
+	FileOutputStream fileOut = new FileOutputStream(infn);
+	wb.write(fileOut);
+	fileOut.close();
+
+	guihand.showMessageBox("Tong..Tong..");
+}
+
+void downloadSheet()
+{
+	if(files_lb.getSelectedIndex() != -1)
+	{
+		fnm = files_lb.getSelectedItem().getLabel();
+		downloadFile(kasiexport, fnm, session.getWebApp().getRealPath("sharedocs/salesreports/" + fnm ) );
+	}
+}
+
+void listdirfiles(String idirectory, Div iholder, String lbid)
+{
+Object[] files_hd =
+{
+	new listboxHeaderWidthObj("Filename",true,""),
+};
+
+	Listbox newlb = lbhand.makeVWListbox_Width(iholder, files_hd, lbid, 10);
+	File directory = new File(idirectory);
+	File[] flist = directory.listFiles();
+	for(k : flist)
+	{
+		ArrayList kabom = new ArrayList();
+		if(k.isFile())
+		{
+			kabom.add(k.getName());
+			strarray = kiboo.convertArrayListToStringArray(kabom);	
+			lbhand.insertListItems(newlb,strarray,"false","font-weight:bold");
+		}
+	}
+}
+
+// 21/05/2014: req by Shopa, a column having "seatbase" things
+void patchSeatbase()
+{
+	if(files_lb.getSelectedIndex() != -1)
+	{
+		fnm = files_lb.getSelectedItem().getLabel();
+		//downloadFile(kasiexport, fnm, session.getWebApp().getRealPath("sharedocs/salesreports/" + fnm ) );
+		if( fnm.indexOf("srfsales") == -1) return;
+	}
+
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	HashMap hm = new HashMap();
+
+	infn = session.getWebApp().getRealPath(REPORTS_PATH + "/" + fnm);
+	InputStream inp = new FileInputStream(infn);
+	HSSFWorkbook wb = new HSSFWorkbook(inp);
+	FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
+	sht0 = wb.getSheetAt(0);
+	numrows = sht0.getPhysicalNumberOfRows();
+
+	CellStyle st2 =  wb.createCellStyle();
+	st2.setFillForegroundColor(HSSFColor.RED.index);
+	st2.setFillPattern(HSSFCellStyle.SOLID_FOREGROUND);
+
+	// must check if col.29 got 'CN' - adj seatbase col accordingly
+	checkrow = sht0.getRow(0);
+	kcell = checkrow.getCell(29);
+	sbcol = 29;
+	if(kcell != null)
+	{
+		try {
+		ck = POI_GetCellContentString(kcell,evaluator,"").trim();
+		if(ck.equals("CN")) sbcol = 33;
+		} catch (Exception e) {}
+	}
+	excelInsertString(sht0,0,sbcol, "SEATBASE" );
+
+	for(i=1; i<numrows; i++)
+	{
+		checkrow = sht0.getRow(i);
+		if(checkrow != null)
+		{
+			sp1 = sp2 = "";
+			wht = "NON-SEATBASE";
+			try { sp1 = POI_GetCellContentString(checkrow.getCell(16),evaluator,"").trim().toUpperCase(); } catch (Exception e) {}
+			try { sp2 = POI_GetCellContentString(checkrow.getCell(17),evaluator,"").trim().toUpperCase(); } catch (Exception e) {}
+
+			if(sp1.indexOf("SEATBASE") != -1) wht = sp1;
+			if(sp2.indexOf("SEATBASE") != -1) wht = sp2;
+			excelInsertString(sht0,i,sbcol,wht);
+		}
+	}
+
+	inp.close();
+	FileOutputStream fileOut = new FileOutputStream(infn);
+	wb.write(fileOut);
+	fileOut.close();
+	guihand.showMessageBox("Seat..seat..");
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+
+<div id="workarea" width="700px" >
+
+<hbox>
+
+<div sclass="shadowbox" style="background:#2e3436;" >
+<vbox>
+	<button id="upsched_b" label="Upload Rental-Schedule data-template" style="font-weight:bold" onClick="doFunc(self)" />
+	<label id="rental_sched_filename" style="color:#ffffff;font-weight:bold" />
+	<button id="uproc_b" label="Upload ROC data" style="font-weight:bold" onClick="doFunc(self)" />
+	<label id="roc_data_filename" style="color:#ffffff;font-weight:bold" />
+	<button id="juggle_b" label="Juggle data" style="font-weight:bold" onClick="doFunc(self)" />
+	<button label="Patch CN details" style="font-weight:bold" onClick="checkRWCN()" />
+	<button label="Patch SEATBASE" style="font-weight:bold" onClick="patchSeatbase()" />
+</vbox>
+</div>
+
+<div sclass="shadowbox" style="background:#eb531a;" >
+	<label style="color:#ffffff;font-weight:bold">RENTAL-SCHEDULES available for download</label>
+	<separator height="3px" />
+	<div id="filesholder" />
+	<separator height="2px" />
+	<button label="Download" style="font-weight:bold" onClick="downloadSheet()" />
+	<div id="kasiexport" visible="false" />
+
+	<label id="debugmsg" multiline="true" />
+
+</div>
+
+</hbox>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+listdirfiles(session.getWebApp().getRealPath(REPORTS_PATH), filesholder, "files_lb");
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="searchcust_ui"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/searchSelectCustomer_v1.zs" />
+<zscript>
+<![CDATA[
+MYVERSION = "v0.1";
+
+local_callme = null;
+newvar = "";
+
+]]>
+</zscript>
+
+<!-- select customer popup , to be used by searchSelectCustomer_v1.zs -->
+<popup id="selectcustomer_popup">
+<div style="padding:3px">
+<hbox>
+<groupbox width="400px">
+	<caption label="Search" />
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="cust_search_tb" width="150px" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="searchCustomers(local_callme)" />
+	</hbox>
+	<separator height="3px" />
+	<label value="${newvar}" />
+	<div id="foundcustomer_holder" />
+</groupbox>
+<groupbox id="custinfo_gb" width="300px" >
+	<caption label="Customer info" />
+	<grid>
+		<rows>
+		<row>
+			<label value="Company" style="font-size:9px" />
+			<label id="cfind_company_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address1" style="font-size:9px" />
+			<label id="cfind_address1_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address2" style="font-size:9px" />
+			<label id="cfind_address2_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Address3" style="font-size:9px" />
+			<label id="cfind_address3_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Contact " style="font-size:9px" />
+			<label id="cfind_contact_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Email" style="font-size:9px" />
+			<label id="cfind_email_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Tel" style="font-size:9px" />
+			<label id="cfind_tel_lbl" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Fax" style="font-size:9px" />
+			<label id="cfind_fax_lbl" style="font-size:9px" />
+		</row>
+		</rows>
+	</grid>
+</groupbox>
+
+</hbox>
+<separator height="3px" />
+<button label="X Close" style="font-size:9px" onClick="selectcustomer_popup.close()" />
+</div>
+</popup>
+<!-- ENDOF select customer popup -->
+
+</zk>
+

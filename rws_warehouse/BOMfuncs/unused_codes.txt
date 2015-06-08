@@ -1,0 +1,112 @@
+// unused codes from BOM manager v1
+
+/*
+		if(tat.equals("")) return;
+		chkasst = checkAssetTagUsed(tat, global_sel_buildtype);
+		switch(chkasst)
+		{
+			case 1:
+				msgtext = "ERR: Non-existant asset-tag..";
+				break;
+			case 2:
+				msgtext = "ERR: Asset-tag is not rentable..";
+				break;
+			case 3:
+				msgtext = "ERR: Asset-tag is already assigned in another BOM..";
+				break;
+			case 4:
+				msgtext = "ERR: Wrong build-type for this asset-tag..";
+				break;
+		}
+		if(chkasst == 0)
+		{
+		}
+*/
+
+/*
+class gAssetDesc implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		ast = kiboo.replaceSingleQuotes( m_asset_tag.getValue().trim() );
+		if(ast.equals("")) return;
+		sqlstm = "select brandname,description from stockmasterdetails where stock_code='" + ast + "'";
+		krc = sqlhand.gpSqlFirstRow(sqlstm);
+		if(krc == null) return;
+		kdesc = kiboo.checkNullString(krc.get("brandname")) + " " + kiboo.checkNullString(krc.get("description"));
+		m_description.setValue(kdesc.trim());
+	}
+}
+getassetinfo_b.addEventListener("onClick", new gAssetDesc());
+
+// parts check audit-log buttons -- need these lines if uses formkeeper
+class partsauditbtn implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		ibtn = event.getTarget();
+		showPartsAuditLog(ibtn);
+	}
+}
+pauditclick = new partsauditbtn();
+
+Object[] lisn = { pickcpu_butt, pickram_butt, pickram2_butt, pickram3_butt, pickram4_butt,
+	pickhdd_butt, pickhdd2_butt, pickhdd3_butt, pickhdd4_butt,
+	pickpoweradapt_butt, pickbatt_butt, pickgfx_butt, pickmonitor_butt };
+
+for(i=0;i<lisn.length;i++)
+{
+	lisn[i].addEventListener("onClick", pauditclick);
+}
+
+class partsChk_onOK implements org.zkoss.zk.ui.event.EventListener
+{
+	public String lastchk = "";
+
+	public void onEvent(Event event) throws UiException
+	{
+		csk = kiboo.replaceSingleQuotes( event.getTarget().getValue().trim() );
+		if(csk.equals("")) return;
+		if( this.lastchk.equals(csk) ) return;
+		kid = event.getTarget().getId();
+		kid = kid.substring(2,kid.length());
+		kid = "n_" + kid;
+		kobj = build_details_grid.getFellowIfAny(kid);
+
+		if(kobj != null)
+		{
+			sqlstm = "select stock_cat,groupcode,classcode,class2code from stockmasterdetails where stock_code='" + csk + "'";
+			ks = sqlhand.gpSqlFirstRow(sqlstm);
+			if(ks != null)
+			{
+				bx = kiboo.checkNullString( ks.get("stock_cat") ) + " > " +
+				kiboo.checkNullString( ks.get("groupcode") ) + " > " +
+				kiboo.checkNullString( ks.get("classcode") ) + " > " +
+				kiboo.checkNullString( ks.get("class2code") );
+				kobj.setValue(bx);
+			}
+			else
+				kobj.setValue("");
+
+			this.lastchk = csk; // save to minimize sql-traffic
+		}
+	}
+}
+chkstkcat = new partsChk_onOK();
+
+Object[] inb = {
+	m_ram, m_ram2, m_ram3, m_ram4,
+	m_hdd, m_hdd2, m_hdd3, m_hdd4,
+	m_battery, m_gfxcard, m_poweradaptor, m_monitor };
+
+for(i=0;i<inb.length;i++)
+{
+	inb[i].addEventListener("onOK", chkstkcat);
+}
+*/
+
+/*
+m_vgacable.addEventListener("onOK", new partsChk_onOK());
+m_mouse.addEventListener("onOK", new partsChk_onOK());
+m_keyboard.addEventListener("onOK", new partsChk_onOK());
+*/

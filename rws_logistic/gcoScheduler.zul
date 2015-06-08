@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="gcoscheudlermod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rws_warehouse/goodsCollection_funcs.zs" />
+<zscript src="./gcoScheduler_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "GCO Scheduler";
+MYVERSION = "v0.1";
+MYPANEL = "gcoshedualerpanel";
+/*
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/globfuncs_ng.zs" />
+<zscript src="../alsglobal/globsqlfuncs_ng.zs" />
+<zscript src="../alsglobal/uploadedWorksheet_v2.zs" />
+<zscript src="../alsglobal/formMaker_v2.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript src="../alsglobal/checkListHandler.zs" />
+<zscript src="../alsglobal/internaltaskf_v2.zs" />
+
+@Title Reservator for anything
+@Author Victor Wong
+@Since 27/08/2014
+
+NOTES:
+Knockoff from anyReservator but with modis to use rw_goodscollection
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+param_paneltitle = Executions.getCurrent().getParameter("pt");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); rwms_sql = new RWMS_sql();
+NGfuncs ngfun = new NGfuncs();
+
+glob_prev_date = null;
+glob_sel_reservation = glob_sel_username = "";
+day_selected = "";
+
+Date glob_sel_date = new Date();
+
+void runTest()
+{
+	/*
+	Calendar cal = Calendar.getInstance();
+	//cal.set(Calendar.MONTH, Calendar.AUGUST);
+	//cal.set(Calendar.YEAR, 2014);
+	cal.set(Calendar.DAY_OF_MONTH, 1);
+	Date todate = cal.getTime();
+	sday = cal.get(Calendar.DAY_OF_WEEK);
+	cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH) );
+	eday = cal.get(Calendar.DAY_OF_MONTH);
+
+	alert(resv_date.getValue());
+	drawBigCalendar(resv_date, month_lbl, calendar_holder,"maincalendar",datelabelcliker);
+	*/
+}
+
+class datelblcliker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		dk = event.getTarget().getChildren().toArray();
+		day_selected = dk[0].getValue();
+		showDayReservation(day_selected);
+		doFunc("clearres_b"); // clear them stuff
+	}
+}
+datelabelcliker = new datelblcliker();
+
+void doFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = false;
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+	Calendar c_ks = new GregorianCalendar();
+	Calendar c_wk = new GregorianCalendar();
+
+	if(itype.equals("saveres_b"))
+	{
+		ks = n_res_start.getValue();
+		ke = n_res_end.getValue();
+
+		if(ks == null || ke == null)
+			msgtext = "Need a start-time and end-time..";
+		else
+		{
+			kdes = kiboo.replaceSingleQuotes( n_description.getValue().trim() );
+			if(kdes.equals("")) return;
+
+			c_wk.setTime(ks);
+			c_ks.setTime(glob_sel_date);
+			c_ks.set( Calendar.HOUR_OF_DAY, c_wk.get(Calendar.HOUR_OF_DAY) );
+			c_ks.set( Calendar.MINUTE, c_wk.get(Calendar.MINUTE) );
+			re_start = dtf.format(c_ks.getTime()); // get the reserv start time
+
+			c_wk.setTime(ke);
+			c_ks.set( Calendar.HOUR_OF_DAY, c_wk.get(Calendar.HOUR_OF_DAY) );
+			c_ks.set( Calendar.MINUTE, c_wk.get(Calendar.MINUTE) );
+			re_end = dtf.format(c_ks.getTime()); // get the reserv end time
+
+			if(glob_sel_reservation.equals(""))
+			{
+				sqlstm = "insert into elb_reservator (res_start,res_end,username,description) values " +
+				"('" + re_start + "','" + re_end + "','" + unm + "','" + kdes + "');";
+			}
+			else // an update
+			{
+				if(glob_sel_username.equals(unm)) // must be owner to update
+				{
+					sqlstm = "update elb_reservator set res_start='" + re_start + "',res_end='" + re_end + "'," +
+					"description='" + kdes + "' where origid=" + glob_sel_reservation;
+
+					alert(sqlstm);
+				}
+				else
+					msgtext = "Sorry, you're not the owner, cannot update..";
+			}
+		}
+	}
+
+	if(itype.equals("clearres_b")) // clear reset vars
+	{
+		glob_sel_reservation = glob_sel_username = "";
+		n_res_end.setValue(new Date());
+		n_res_start.setValue(new Date());
+		n_description.setValue("");
+		n_origid.setValue("");
+		//n_participants.clearSelection();
+	}
+
+	if(itype.equals("removeres_b"))
+	{
+		if(glob_sel_reservation.equals("")) return;
+
+		if(Messagebox.show("Totally remove this record..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from elb_reservator where origid=" + glob_sel_reservation;
+		doFunc("clearres_b");
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		drawBigCalendar(resv_date, month_lbl, calendar_holder, "maincalendar", datelabelcliker);
+		showDayReservation(day_selected);
+	}
+	//if(refresh) 
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" class="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" class="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" class="k9" onClick="updateFileDescription(documents_holder,COLLECTION_PREFIX,glob_sel_gco)" />
+			<button label="Close" class="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" class="k9" />
+					<textbox id="fileupl_file_title" width="200px" class="k9" />
+				</row>
+				<row>
+					<label value="Description" class="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" class="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,COLLECTION_PREFIX,glob_sel_gco)" class="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()"  class="k9" />
+	</hbox>
+</popup>
+
+<popup id="partipop">
+	<div sclass="shadowbox" style="background:#204a87;" width="400px" >
+		<listbox id="n_participants" rows="15" />
+		<separator height="3px" />
+		<button label="Save.." sclass="k9mo" />
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#2E2E2D">
+
+	<button id="admtest_b" label="test" sclass="k9mo" onClick="runTest()" visible="false" />
+	<label id="debugbox" multiline="true" />
+
+	<separator height="5px" />
+	<div style="margin-left:auto;margin-right:auto;width:15em">
+		<label id="month_lbl" style="font-size:24px;font-weight:bold;color:#ffffff;text-shadow: 1px 1px #000000;" />
+		<datebox id="resv_date" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" onChange="changeDate()" />
+	</div>
+	<separator height="3px" />
+	<div id="calendar_holder" />
+	<separator height="3px" />
+
+	<hbox id="workarea">
+		<div id="day_holder" sclass="shadowbox" style="background:#6CAEA2" width="450px" />
+
+		<div id="gcometaholder" sclass="shadowbox" style="background:#2e3436;" visible="false" >
+			<tabbox>
+				<tabs>
+					<tab label="Customer and transporter" />
+					<tab label="Collect items" />
+					<tab label="Documents" />
+				</tabs>
+				<tabpanels>
+					<tabpanel>
+						<grid>
+							<rows>
+								<row>
+									<label value="GCO" style="font-size:9px;font-weight:bold" />
+									<label id="collection_id_lbl" style="font-weight:bold" />
+									<label id="fc6custid_lbl" class="k9" />
+								</row>
+								<row>
+									<label value="Customer" class="k9" />
+									<label id="customername" style="font-weight:bold" />
+									<button visible="false" id="assigncust_b" label="Assign customer" style="font-weight:bold;font-size:9px" onClick="pickcustomer_popup.open(glob_sel_gcoli)" />
+								</row>
+							</rows>
+						</grid>
+						<separator height="3px" />
+						<button visible="false" id="updategco_b" label="Update GCO details" style="font-weight:bold" onClick="doFunc(self)" />
+						<button visible="false" id="showaudit_b" label="Audit logs" onClick="showGCOauditlogs(self)" />
+						<button visible="false" id="impfromcsv_b" label="importcsv" />
+						<div id="collectionform_holder" />
+						<separator height="3px" />
+
+						<grid>
+							<rows>
+								<row style="background:#204a87">
+									<label value="Transporter" style="color:#ffffff" />
+									<listbox id="g_transporter" mold="select" />
+									<label value="Ref No." style="color:#ffffff" />
+									<textbox id="g_transp_ref" />
+									<label value="Region" style="color:#ffffff" />
+									<listbox id="g_logregion" mold="select" />
+								</row>
+								<row style="background:#204a87" >
+									<label value="Act.Date" style="color:#ffffff" />
+									<datebox id="g_res_date" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self);" />
+									<label value="CSV" style="color:#ffffff" />
+									<textbox id="g_sv_no" />
+									<label value="Partner" style="color:#ffffff" />
+									<listbox id="g_opartner" mold="select" />
+								</row>
+								<row style="background:#204a87" spans="1,5">
+									<label value="TEMP GRN" style="color:#ffffff" />
+									<textbox id="g_tempgrn" />
+								</row>
+								<row spans="6" style="background:#204a87" visible="false">
+									<button id="savetransp_b" label="Save progress info" style="font-weight:bold" onClick="doFunc(self)" />
+								</row>
+
+							</rows>
+						</grid>
+					</tabpanel>
+
+					<tabpanel> <!-- collect items -->
+						<div sclass="shadowbox" style="background:#555753">
+							<hbox visible="false">
+							<button id="additem_b" label="Add collection item" class="k9" onClick="doFunc(self)" />
+							<button id="removeitem_b" label="Remove item" class="k9" onClick="doFunc(self)" />
+							<!--
+							<button id="importitems_b" label="Import" style="font-size:9px" onClick="impasset_pop.open(additem_b)" />
+							-->
+							<button id="imptransient_b" label="Imp. from LC" class="k9" onClick="showTransientItems_bycustomer();imptransient_pop.open(self)" />
+
+							<button id="imppartreq_b" label="Imp. from partner" class="k9"
+							onClick="showTransientItems_bypartner(global_selected_customerid, imppartners_holder); imppartnerreq_pop.open(self)" />
+
+							<button id="saveitems_b" label="SAVE" style="font-weight:bold" onClick="doFunc(self)" />
+							<button id="updatelc_b" label="Update LC-link" style="k9mo" onClick="doFunc(self)" />
+						</hbox>
+
+							<div id="pitems_holder" />
+						</div>
+					</tabpanel>
+
+					<tabpanel> <!-- attachments -->
+						<div sclass="shadowbox" style="background:#555753" id="docholder">
+							<label sclass="subhead1">ATTACHMENT / DOCUMENTS</label>
+							<separator height="3px" />
+							<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+							<hbox visible="false">
+								<button id="uploaddoc_btn" label="Upload file" class="k9" onClick="showUploadPopup(COLLECTION_PREFIX,glob_sel_gco)" />
+								<button id="editdoc_btn" label="Update" class="k9" onClick="updatefiledesc_popup.open(self)" />
+								<button id="deletedoc_btn" label="Delete" class="k9" onClick="deleteFile(documents_holder,COLLECTION_PREFIX,glob_sel_gco)" />
+							</hbox>
+							<separator height="3px" />
+							<div id="documents_holder" />
+						</div>
+					</tabpanel>
+
+				</tabpanels>
+			</tabbox>
+		</div>
+
+	</hbox>
+
+	<hbox visible="false">
+		<div sclass="shadowbox" style="background:#6CAEA2" width="400px">
+			<grid sclass="GridLayoutNoBorder">
+				<rows>
+					<row style="background:#CAF13B" spans="1,3">
+						<label value="Reservation date" sclass="k9" />
+					</row>
+					<row style="background:#CAF13B" spans="4">
+						<separator bar="true" />
+					</row>
+					<row style="background:#CAF13B" spans="1,3">
+						<label value="ID" />
+						<label id="n_origid" />
+					</row>
+					<row style="background:#CAF13B">
+						<label sclass="k9" value="Start"/>
+						<timebox id="n_res_start" />
+						<label sclass="k9" value="End" />
+						<timebox id="n_res_end" />
+					</row>
+					<row spans="1,3" style="background:#CAF13B">
+						<label sclass="k9" value="Description" />
+						<textbox id="n_description" sclass="k9" multiline="true" width="99%" height="70px" />
+					</row>
+					<row spans="4">
+						<hbox>
+							<button id="saveres_b" label="Save/update" sclass="k9mo" onClick="doFunc(self.getId())" />
+							<!-- <button label="Participants" onClick="partipop.open(self)" /> -->
+							<button id="clearres_b" label="Clear" sclass="k9mo" onClick="doFunc(self.getId())" />
+							<button id="removeres_b" label="Remove" style="font-size:9px;color:#ff0000" onClick="doFunc(self.getId())" />
+						</hbox>
+					</row>
+				</rows>
+			</grid>
+		</div>
+
+	</hbox>
+
+<zscript>
+<![CDATA[
+
+/*
+if(param_paneltitle != null) // append to panel title if anything passed
+{
+	reservatrorpanel.setTitle(MYTITLE + " " + MYVERSION + " : " + param_paneltitle);
+}
+*/
+
+collection_formmaker = dynamicForm(collectionform_holder, "collectionmeta_grid", "12");
+luhand.populateListbox_ByLookup(g_opartner, "OUTSOURCE_PARTNERS", 2);
+luhand.populateListbox_ByLookup(g_transporter, "TRANSPORTER_COURIER", 2);
+luhand.populateListbox_ByLookup(g_logregion, "LOGISTIC_REGIONS", 2);
+
+kiboo.setTodayDatebox(resv_date);
+drawBigCalendar(resv_date, month_lbl, calendar_holder, "maincalendar", datelabelcliker);
+
+java.util.Calendar kkk = java.util.Calendar.getInstance();
+n_res_end.setValue(kkk.getTime()); // set startup time/date for reservation
+n_res_start.setValue(kkk.getTime());
+
+//rwms_sql.populateUsernames_check(n_participants,"");
+
+if(useraccessobj.accesslevel == 9)
+{
+	//admtest_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

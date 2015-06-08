@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="updatefc6domod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Update FOCUS6 DO Status";
+MYVERSION = "v0.1";
+MY_ID = "updatef6dos";
+/*
+Written by	: Victor Wong
+Dated		:
+NOTES:
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+founddometa = "";
+
+void loadfc6DO_det()
+{
+	dono = kiboo.replaceSingleQuotes( dono_tb.getValue().trim() );
+	if(dono.equals("")) return;
+
+	founddometa = "";
+
+	sqlstm = "select top 1 convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as voucherdate, " +
+	"ac.name, k.deliverystatusyh, k.deliverydateyh, d.extraheaderoff from data d " +
+	"left join mr000 ac on ac.masterid = d.bookno " +
+	"left join u001c k on k.extraid = d.extraheaderoff " +
+	"where d.voucherno='" + dono + "' and d.vouchertype=6144";
+
+	drc = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(drc == null) return;
+	d_company_lbl.setValue( kiboo.checkNullString(drc.get("name")) );
+	d_voucherdate_lbl.setValue( dtf2.format(drc.get("voucherdate")) );
+	dst = kiboo.checkNullString( drc.get("deliverystatusyh") );
+	lbhand.matchListboxItems(d_deliverystatusyh, dst );
+	d_deliverydateyh.setValue( kiboo.checkNullString( drc.get("deliverydateyh") ) );
+
+	//upddo_b.setDisabled( (dst.equals("DELIVERED")) ? true : false );
+	founddometa = drc.get("extraheaderoff").toString();
+}
+
+void updateDOStatus()
+{
+	if(founddometa.equals("")) return;
+	dst = d_deliverystatusyh.getSelectedItem().getLabel();
+	ddt = kiboo.replaceSingleQuotes( d_deliverydateyh.getValue().trim() );
+	sqlstm = "update u001c set deliverystatusyh='" + dst + "', deliverydateyh='" + ddt + "' where extraid=" + founddometa;
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	guihand.showMessageBox("DO status and delivery-date updated..");
+}
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" width="600px" height="170px" title="${MYTITLE} ${MYVERSION}" 
+position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<grid>
+	<rows>
+		<row spans="1,3">
+			<label value="DO No." />
+			<hbox>
+			<textbox id="dono_tb" />
+			<button label="Load" onClick="loadfc6DO_det()" />
+			</hbox>
+		</row>
+		<row spans="1,3">
+			<label value="Company" />
+			<label id="d_company_lbl" />
+		</row>
+		<row spans="1,3">
+			<label value="DO Date" />
+			<label id="d_voucherdate_lbl" />
+		</row>
+		<row>
+			<label value="Delivery status" />
+			<listbox id="d_deliverystatusyh" mold="select" />
+			<label value="Delivery date" />
+			<textbox id="d_deliverydateyh" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<button id="upddo_b" label="Update DO status" onClick="updateDOStatus()" />
+
+</div>
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(d_deliverystatusyh, "DO_STATUS", 2);
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="fctrantrail_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "FOCUS Asset Transactions Lister";
+MYVERSION = "v0.1";
+MY_ID = "fctrantrailid";
+/*
+Written by	: Victor Wong
+Dated		: 13/03/2014
+NOTES:
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+Object[] fcthds = 
+{
+	new listboxHeaderWidthObj("Dated",true,""),
+	new listboxHeaderWidthObj("VT",true,""),
+	new listboxHeaderWidthObj("V.Desc",true,""),
+	new listboxHeaderWidthObj("VoucherNo",true,""),
+	new listboxHeaderWidthObj("AssTag",true,""),
+	new listboxHeaderWidthObj("Name",true,""),
+	new listboxHeaderWidthObj("Login",true,""),
+};
+
+void dungFCTransactions()
+{
+	atg = kiboo.replaceSingleQuotes( asstg_tb.getValue().trim() );
+	if(atg.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(asstrs_holder, fcthds, "fctrt_lb", 5);
+
+sqlstm = "select convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as voucherdate, d.vouchertype, " +
+"CASE d.vouchertype " +
+"when 768 then 'Pur :Purchases Vouchers' " +
+"when 1280 then 'MRN :Material Receipt Notes' " +
+"when 1281 then 'SPC :Temporary GRN' " +
+"when 2561 then 'Pro :Spec Update (New)' " +
+"when 7937 then 'Upd :Specification Update' " +
+"when 5639 then 'Stu :Stock Count Sheet' " +
+"when 5633 then 'Job :Process Order Document' " +
+"when 6144 then 'DO :Delivery Notes' " +
+"when 2048 then 'Exc :Excesses in Stocks' " +
+"when 7940 then 'Prf :Parts Return Form' " +
+"when 7941 then 'Prf :Equipment Return Form' " +
+"when 7945 then 'Prf :Equipment Return to WH' " +
+"when 5376 then 'Shr :Shortages in Stock' " +
+"when 7941 then 'Prf :Equipment Return Form' " +
+"when 7942 then 'Eqr :Equipment Requisition' " +
+"when 512 then 'Ost :Opening Stocks' " +
+"else 'tak tau le' " +
+"END as vouchertypen, d.voucherno, i.code2, c.name, h.login " +
+"from data d left join mr001 i on i.masterid = d.productcode " +
+"left join mr000 c on c.masterid = d.bookno left join header h on h.headerid=d.headeroff " +
+"where ltrim(rtrim(i.code2))='" + atg + "' order by d.date_";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.setRows(22);
+	//newlb.addEventListener("onSelect", doclikor);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "voucherdate", "vouchertype", "vouchertypen", "voucherno", "code2", "name", "login" };
+	for(d : trs)
+	{
+		popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" width="780px" title="${MYTITLE} ${MYVERSION}" position="top,center" mode="overlapped" border="normal" closable="true">
+<div>
+<hbox>
+	<label value="Asset-tag" />
+	<textbox id="asstg_tb" />
+	<button label="Dig transactions" onClick="dungFCTransactions()" />
+</hbox>
+<separator height="3px" />
+<div id="asstrs_holder" />
+</div>
+
+<zscript>
+<![CDATA[
+
+class tbonOK implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		dungFCTransactions();
+	}
+}
+asstg_tb.addEventListener("onOK",new tbonOK());
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

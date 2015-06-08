@@ -1,0 +1,111 @@
+<stylesheet>
+.myrotated
+{  
+-webkit-transform: rotate(45deg);
+-moz-transform: rotate(45deg);
+-o-transform: rotate(45deg);
+writing-mode: lr-tb;
+}
+
+.rotate2
+{
+-webkit-transform: rotate(360deg); 
+-moz-transform: rotate(360deg); 
+-o-transform: rotate(360deg);
+-ms-transform: rotate(360deg);
+}
+
+.r90 {
+-webkit-transform: rotate(100deg);
+-moz-transform: rotate(100deg);
+-o-transform: rotate(90deg);
+-ms-transform: rotate(90deg);
+transform: rotate(100deg);
+width: 1em;
+line-height: 1ex; 
+}
+
+.rnew
+{
+background-color: #001640;
+color: white;
+height:50px;
+padding-bottom: 10px;
+writing-mode: tb-rl;
+-webkit-transform: rotate(90deg);
+-moz-transform: rotate(90deg);
+width: -moz-fit-content;
+width: fit-content;
+font-size:20px;
+}
+
+.container
+{
+	/* this will give container dimension, because floated child nodes don't give any */
+	/* if your child nodes are inline-blocked, then you don't have to set it */
+	overflow: auto;
+}
+
+.container .head
+{
+	/* float your elements or inline-block them to display side by side */
+	float: left;
+	/* these are height and width dimensions of your header */
+	height: 10em;
+	width: 1.5em;
+	/* set to hidden so when there's too much vertical text it will be clipped. */
+	overflow: hidden;
+	/* these are not relevant and are here to better see the elements */
+	background: #2e3436;
+	margin-right: 1px;
+		-moz-box-shadow: 4px 5px 7px #000000;
+-webkit-box-shadow: 4px 5px 7px #000000;
+box-shadow: 4px 5px 7px #000000;
+
+}
+
+.container .head .vert
+{
+	/* line height should be equal to header width so text will be middle aligned */
+	line-height: 1.5em;
+	/* setting background may yield better results in IE text clear type rendering */
+	color: #eeeeee;
+	display: block;
+	/* this will prevent it from wrapping too much text */
+	white-space: nowrap;
+	/* so it stays off the edge */
+	padding-left: 3px;
+	/* IE specific rotation code */
+	writing-mode: tb-rl;
+	filter: flipv fliph;
+	/* CSS3 specific totation code */
+	/* translate should have the same negative dimension as head height */
+	transform: rotate(270deg) translate(-10em,0);
+	transform-origin: 0 0;
+	-moz-transform: rotate(270deg) translate(-10em,0);
+	-moz-transform-origin: 0 0;
+	-webkit-transform: rotate(270deg) translate(-10em,0);
+	-webkit-transform-origin: 0 0;
+	text-shadow:3px 3px 3px #666666;
+
+}
+
+.ctn { 	height:30px; margin:5px; }
+
+.little-caption
+{
+	float:left;
+	font-size:12px;
+	-webkit-transform: rotate(-90deg);
+	-moz-transform: rotate(-90deg);
+	filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+	width:150px;
+	height:100px;
+	background:#333;
+	color:#eeeeee;
+}
+ 
+.big-toe { float:left; font-size:30px; width:200px; background:#75507b; color:#eeeeee; margin-left:auto; margin-right:auto; }
+
+</stylesheet>
+

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="usergroupsetup_wind"?>
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+<zscript src="../alsglobal/als_lookuptree.zs" />
+
+<zscript>
+<![CDATA[
+// Some security checking codes here
+// useraccessobj = getUserAccessObject();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+lookupInputs dpInputBoxes;
+
+void showDepartmentDetails(Tree wTree)
+{
+    selectedname = wTree.getSelectedItem().getLabel();
+    sql = als_mysoftsql();
+
+    sqlstatem = "select * from lookups where name='" + selectedname + "'";
+    therec = sql.firstRow(sqlstatem);
+    sql.close();
+	
+	// 24/2/2010: store the lookup rec no.
+	dpInputBoxes.idlookups = therec.get("idlookups");
+
+    dpInputBoxes.name.setValue(therec.get("name"));
+    dpInputBoxes.disptext.setValue(therec.get("disptext"));
+	
+	iexpired = therec.get("expired");
+	wexpi = false;
+	if(iexpired == 1) wexpi = true;
+	
+    dpInputBoxes.expired.setChecked(wexpi);
+	
+	zzval = 0;
+
+    if(therec.get("intval") != null)
+		zzval = (int)therec.get("intval");
+
+    dpInputBoxes.intvalue.setValue(zzval);
+
+    dpInputBoxes.value1.setValue(therec.get("value1"));
+    dpInputBoxes.value2.setValue(therec.get("value2"));
+    dpInputBoxes.value3.setValue(therec.get("value3"));
+    dpInputBoxes.value4.setValue(therec.get("value4"));
+
+} // end of showDepartmentDetails()
+
+void verifyDelete(Tree itypetree, lookupInputs winputs)
+{
+    if (Messagebox.show("This is a hard-delete, you know what you are doing right? You sure you want to it?", "Delete",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) == Messagebox.YES)
+        {
+            // play safe - if expired = false, set to true, won't delete completely at first
+            if(winputs.expired.isChecked() == false)
+            {
+                winputs.expired.setChecked(true);
+                updateLookupItem(itypetree,winputs);
+            }
+            else
+            {
+                // if already checked as expired, do a hard-delete
+                deleteLookupItem(itypetree,winputs);
+				winputs.clearValues();
+            }
+        }
+}
+
+]]>
+</zscript>
+
+<window id="departmanagerwin" title="Usergroup/Department/Division Manager" width="770px" height="500px" position="center"
+ mode="overlapped" border="normal" closable="true"
+ onCancel="globalCloseWindow(myincludeid)" onClose="globalCloseWindow(myincludeid)"
+>
+<div>
+
+<vbox>
+
+<hbox>
+
+<groupbox mold="3d" width="100%">
+<caption label="Usergroup Tree" />
+<tree id="depart_tree" zclass="z-dottree" rows="20" onSelect="showDepartmentDetails(depart_tree)" >
+	<treecols>
+		<treecol label="Usergroup" />
+		<treecol label="Description" />
+	</treecols>
+</tree>
+
+<zscript>
+// fill-up the departments lookup tree
+showLookupTree("DEPARTMENTS",depart_tree);
+</zscript>
+
+</groupbox>
+
+<groupbox mold="3d" width="100%">
+<caption label="Usergroup details" />
+
+<grid>
+
+<columns>
+  <column label="Field" />
+  <column label="Entry" />
+</columns>
+
+<rows>
+    <row>
+        <label value="Usergroup code" />
+        <textbox id="name" />
+    </row>
+
+    <row>
+        <label value="Code Integer" />
+        <intbox id="intval" />
+    </row>
+
+
+    <row>
+        <label value="Description" />
+        <textbox id="zzdisptext" width="200px" />
+    </row>
+
+    <row>
+        <label value="Expired" />
+        <checkbox id="expired" />
+    </row>
+
+    <row>
+        <label value="HOD Name" />
+        <textbox id="hodname_value1" />
+    </row>
+
+    <row>
+        <label value="Ext No" />
+        <textbox id="hodextno_value2" />
+    </row>
+
+    <row>
+        <label value="Telephone" />
+        <textbox id="hodtel_value3" />
+    </row>
+
+    <row>
+        <label value="Email" />
+        <textbox id="hodemail_value4" width="200px" />
+
+        <textbox id="hiddenbox" visible="false" />
+    </row>
+
+
+</rows>
+</grid>
+
+<zscript>
+dpInputBoxes = new lookupInputs(name,zzdisptext,expired,intval,
+    hodname_value1, hodextno_value2, hodtel_value3, hodemail_value4,
+    hiddenbox, hiddenbox, hiddenbox, hiddenbox,
+    "DEPARTMENTS",depart_tree);
+</zscript>
+
+<separator />
+
+<div id="crubbuttons">
+    <hbox>
+        <button label="New" onClick="dpInputBoxes.clearValues()" />
+        <button label="Insert" onClick="insertLookupItem(depart_tree,dpInputBoxes)" />
+        <button label="Update" onClick="updateLookupItem(depart_tree,dpInputBoxes)" />
+        <button label="Delete" onClick="verifyDelete(depart_tree,dpInputBoxes)" />
+		<button label="Close window" onClick="globalCloseWindow(myincludeid)" />
+    </hbox>
+</div>
+
+</groupbox>
+
+</hbox>
+
+</vbox>
+
+</div>
+
+</window>
+
+</zk>

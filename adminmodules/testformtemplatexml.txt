@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theform width="900px">
+<notes>
+Designed by: Victor
+Purpose: Initial testing template XML
+</notes>
+	<header title="The title of this form" titlestyle="color:#ffffff;font-weight:bold" style="background:#667788;padding:2px" spans="3" />
+	
+	<row>
+		<label value="wwwe lab" style="color:#105555;font-size:7px" />
+		<textbox id="wwwe" multiline="true" width="99%" height="50px" style="font-size:8px" />
+		<textbox id="wwwe_tapi" />
+	</row>
+	<row>
+		<label style="color:#105555;font-size:8px" multiline="true">
+Testing label from data-part:::
+and see if multiline works..:::
+:::
+works!!
+		</label>
+		<textbox id="wwwe2" />
+		<checkboxes id="multichkb" style="font-size:9px" column="4" lookup="SHARESAMPLE_DEFS" titlestyle="background:#ee9900;padding:2px;" />
+	</row>
+	<header title="Sub title pulak" titlestyle="color:#ffffff;" style="background:#667788;padding:2px" spans="3" />
+	<row>
+		<listbox id="nlistb2" mold="select" style="font-size:8px">
+			<listitem><listcell label="testme 1"/></listitem>
+			<listitem><listcell label="testme 2"/></listitem>
+			<listitem><listcell label="testme 3"/></listitem>
+			<listitem><listcell label="testme 4"/></listitem>
+			<listitem><listcell label="testme 5"/></listitem>
+			<listitem><listcell label="testme 6"/></listitem>
+		</listbox>
+		<textbox id="wwwe3" />
+		<datebox id="wowdate" />
+	</row>
+	<row spans=",2">
+		<combobox id="wiwiw" lookup="dd_combounits" style="font-size:9px" />
+		<radiogroup id="wopradio" lookup="dd_combounits" style="font-size:8px" title="Wali-radio" titlestyle="background:#ee9900;padding:2px;" column="4" />
+	</row>
+</theform>
+

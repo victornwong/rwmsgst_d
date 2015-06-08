@@ -1,0 +1,680 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chqbankinmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Cheque Received / Bank-in Tracking";
+MYVERSION = "v0.1";
+MYPANEL = "chqbaninpan";
+/*
+Title		: Cheque recv and bank-in tracking
+Written by	: Victor Wong
+Dated		: 04/10/2013
+*/
+import java.util.*;
+import java.text.*;
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
+DecimalFormat nf2 = new DecimalFormat("#0.00");
+DecimalFormat nf3 = new DecimalFormat("#####0.00");
+DecimalFormat nf4 = new DecimalFormat("###,##0.00");
+
+global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
+global_selected_customername = ""; // use this one as supplier_name instead
+global_selected_customer = "";
+
+glob_sel_cheqrev = "";
+
+last_listcheq = 0;
+
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+/*
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = kiboo.checkNullString(custr.get("address1yh")) + ",\n" + kiboo.checkNullString(custr.get("address2yh")) + ",\n" +
+		kiboo.checkNullString(custr.get("address3yh")) + ",\n" + kiboo.checkNullString(custr.get("address4yh"));
+
+	locstr = locstr.replaceAll(",,",",");
+
+	s_destination.setValue(locstr);
+	s_contact_person.setValue( kiboo.checkNullString(custr.get("contactyh")) );
+	s_contact_tel.setValue( kiboo.checkNullString(custr.get("telyh")) );
+	s_contact_email.setValue( kiboo.checkNullString(custr.get("emailyh")) );
+*/
+	global_selected_customer = global_selected_customername;
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate = kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = false;
+
+	if(itype.equals("newcheqrv_b"))
+	{
+		sqlstm = "insert into rw_cheqrecv (datecreated,username,customer_name,recp_printed,cstatus) values " +
+		"('" + todaydate + "','" + useraccessobj.username + "','UNDEF',0,'PENDING')";
+
+		refresh = true;
+	}
+	else
+	if(glob_sel_cheqrev.equals("")) return;
+
+	if(itype.equals("updqt_b"))
+	{
+		cnm = kiboo.replaceSingleQuotes( customername.getValue().trim() );
+		chqn = kiboo.replaceSingleQuotes( c_cheq_no.getValue().trim() );
+		amt = kiboo.replaceSingleQuotes( c_amount.getValue().trim() );
+
+		try {
+		tryam = Float.parseFloat(amt);
+		} catch (Exception e) { amt = "0.0"; }
+
+		ourb = c_our_bank.getSelectedItem().getLabel();
+		tfxt = c_b_type.getSelectedItem().getLabel();
+		remk = kiboo.replaceSingleQuotes( c_remarks.getValue().trim() );
+		fcrep = kiboo.replaceSingleQuotes( c_fc6_recp_no.getValue().trim() );
+		intn = kiboo.replaceSingleQuotes( c_internal_notes.getValue().trim() );
+
+		custr = getFocus_CustomerRec(global_selected_customerid);
+		ctyp = (custr.get("type") == null) ? "0" : custr.get("type").toString();
+
+		sqlstm = "update rw_cheqrecv set customer_name='" + cnm + "', cheq_no='" + chqn + "', amount=" + amt.toString() +
+		", our_bank='" + ourb + "', b_type='" + tfxt + "', remarks='" + remk + "', fc6_recp_no='" + fcrep + "'," + 
+		"internal_notes='" + intn + "', fc6_act_type=" + ctyp + " where origid=" + glob_sel_cheqrev;
+
+		refresh = true;
+	}
+
+	if(itype.equals("setdone_b") || itype.equals("setpending_b"))
+	{
+		stts = (itype.equals("setpending_b")) ? "PENDING" : "DONE";
+		sqlstm = "update rw_cheqrecv set cstatus='" + stts + "' where origid=" + glob_sel_cheqrev;
+		refresh = true;
+	}
+
+	if(itype.equals("remcheq_b"))
+	{
+		if (Messagebox.show("Remove this cheque receival", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "update rw_cheqrecv set deleted=1 where origid=" + glob_sel_cheqrev;
+		refresh = true;
+	}
+
+	if(itype.equals("printrecp_b"))
+	{
+		printReceiptVoucher(glob_sel_cheqrev);
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showCheqRecvs(last_listcheq);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void exportReceiptRecs()
+{
+	sdate = kiboo.getDateFromDatebox(exp_startdate);
+    edate = kiboo.getDateFromDatebox(exp_enddate);
+
+	sqlstm = "select * from rw_cheqrecv where datecreated between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' "; 
+	sors = sqlhand.gpSqlGetRows(sqlstm);
+	if(sors.size() == 0) { guihand.showMessageBox("Nothing to export.."); return; }
+
+   	startadder = 1;
+	rowcount = 0;
+
+	Workbook wb = new HSSFWorkbook();
+	Sheet sheet = wb.createSheet("RECEIVALS");
+	Font wfont = wb.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+
+	String[] rhds = { "No.","Date","Customer","Chq/Tfx","Amount","Type","Status","User","FC6.Recp","Our Bank","Towards","I.Remarks","FC6.Type" };
+	for(i=0;i<rhds.length;i++)
+	{
+		POI_CellSetAllBorders(wb,excelInsertString(sheet,rowcount,i,rhds[i]),wfont,true,"");
+	}
+
+	rowcount++;
+
+	for(d : sors)
+	{
+		excelInsertString(sheet,rowcount,0, d.get("origid").toString());
+		excelInsertString(sheet,rowcount,1, dtf2.format(d.get("datecreated")) );
+		excelInsertString(sheet,rowcount,2, kiboo.checkNullString(d.get("customer_name")) );
+		excelInsertString(sheet,rowcount,3, kiboo.checkNullString(d.get("cheq_no")) );
+		excelInsertNumber(sheet,rowcount,4, (d.get("amount") == null) ? "0" : nf3.format(d.get("amount")) );
+		excelInsertString(sheet,rowcount,5, kiboo.checkNullString(d.get("b_type")) );
+		excelInsertString(sheet,rowcount,6, kiboo.checkNullString(d.get("cstatus")) );
+		excelInsertString(sheet,rowcount,7, kiboo.checkNullString(d.get("username")) );
+		excelInsertString(sheet,rowcount,8, kiboo.checkNullString(d.get("fc6_recp_no")) );
+		excelInsertString(sheet,rowcount,9, kiboo.checkNullString(d.get("our_bank")) );
+		excelInsertString(sheet,rowcount,10, kiboo.checkNullString(d.get("remarks")) );
+		excelInsertString(sheet,rowcount,11, kiboo.checkNullString(d.get("internal_notes")) );
+
+		ktyp = "UNKNOWN";
+		if(d.get("fc6_act_type") != null)
+		{
+			switch(d.get("fc6_act_type"))
+			{
+				case 195: // rental cust
+					ktyp = "RENTAL";
+					break;
+
+				case 163: // remarketing cust
+					ktyp = "REMARKETING";
+					break;
+
+				case 179: // sundry/cash cust
+					ktyp = "SUNDRY";
+					break;
+			}
+		}
+
+		excelInsertString(sheet,rowcount,12,ktyp);
+		rowcount++;
+	}
+
+	jjfn = "cheqbankrecvList_t.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + jjfn);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wb.write(fileOut); // Write Excel-file
+	fileOut.close();
+
+	downloadFile(kasiexport,jjfn,outfn);
+	expchqr_pop.close();
+}
+
+void printReceiptVoucher(String iwhat)
+{
+	crec = getCheqRecv_rec(iwhat);
+	if(crec == null) { guihand.showMessageBox("DBERR: Sorry.. cannot access cheque-receival table"); return; }
+
+	templatefn = "rwimg/receiptVoucher_v1.xls";
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	HSSFSheet sheet = excelWB.getSheetAt(0);
+	//HSSFSheet sheet = excelWB.createSheet("THINGS");
+	Font wfont = excelWB.createFont();
+	wfont.setFontHeightInPoints((short)10);
+	wfont.setFontName("Arial");
+
+	excelInsertString(sheet,1,1, kiboo.checkNullString(crec.get("fc6_recp_no")) );
+	excelInsertString(sheet,1,4, dtf2.format(crec.get("datecreated")) );
+	excelInsertString(sheet,1,5, "(" + iwhat + ")" );
+	excelInsertString(sheet,2,1, crec.get("customer_name") );
+	excelInsertString(sheet,3,1, crec.get("remarks") );
+	excelInsertString(sheet,4,1, (crec.get("amount") == null) ? "0.00" : nf3.format(crec.get("amount")) );
+	excelInsertString(sheet,5,1, crec.get("cheq_no") );
+
+	if(crec.get("amount") != null)
+	{
+		kv = nf3.format(crec.get("amount")).replaceAll(",","");
+		prt = kv.split("\\.");
+
+		sqlstm = "select dbo.[udf_NumberToEnglishWords](" + prt[0] + ") as rt1, " + 
+		"dbo.[udf_NumberToEnglishWords](" + prt[1] + ") as rt2 ";
+		jj = sqlhand.gpSqlFirstRow(sqlstm);
+
+		wds = jj.get("rt1") + " AND CENTS " + jj.get("rt2") + " ONLY";
+		excelInsertString(sheet,6,1, wds);
+	}
+
+	tfname = "RCPT" + iwhat + "_outp.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + tfname );
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+
+	sqlstm = "update rw_cheqrecv set recp_printed=1 where origid=" + iwhat; // set receipt-printed bit
+	sqlhand.gpSqlExecuter(sqlstm);
+	showCheqRecvs(last_listcheq);
+
+	downloadFile(kasiexport,tfname,outfn);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+	//lnkc = QUOTE_PREFIX + glob_sel_quote;
+
+	if(glob_sel_cheqrev.equals("")) return;
+
+	if(itype.equals("setprdate_b"))
+	{
+		sqlstm = "update rw_cheqrecv set datecreated='" + todaydate + "' where origid=" + glob_sel_cheqrev;
+	}
+	
+	if(itype.equals("delpr_b"))
+	{
+		if (Messagebox.show("Hard delete this cheq-recv", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from rw_cheqrecv where origid=" + glob_sel_cheqrev;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) showCheqRecvs(last_listcheq);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	adminpop.close();
+}
+
+void showCheqRecv_Meta(String iwhat)
+{
+	crec = getCheqRecv_rec(iwhat);
+	if(crec == null) { guihand.showMessageBox("DBERR: Sorry.. cannot access cheque-receival table"); return; }
+	c_origid.setValue(iwhat);
+	c_datecreated.setValue( dtf2.format(crec.get("datecreated")) );
+	customername.setValue( kiboo.checkNullString(crec.get("customer_name")) ) ;
+	c_cheq_no.setValue( kiboo.checkNullString(crec.get("cheq_no")) ) ;
+	c_amount.setValue( (crec.get("amount") == null) ? "" : nf3.format(crec.get("amount")) );
+	lbhand.matchListboxItems( c_our_bank, kiboo.checkNullString(crec.get("our_bank")) );
+	lbhand.matchListboxItems( c_b_type, kiboo.checkNullString(crec.get("b_type")) );
+	c_remarks.setValue( kiboo.checkNullString(crec.get("remarks")) ) ;
+
+	c_fc6_recp_no.setValue( kiboo.checkNullString(crec.get("fc6_recp_no")) ) ;
+	c_internal_notes.setValue( kiboo.checkNullString(crec.get("internal_notes")) ) ;
+	
+	workarea.setVisible(true);
+}
+
+Object[] chqrechds =
+{
+	new listboxHeaderWidthObj("RCV",true,"50px"),
+	new listboxHeaderWidthObj("Dated",true,"60px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Chq/Tfx",true,"100px"),
+	new listboxHeaderWidthObj("Amount",true,"100px"),
+	new listboxHeaderWidthObj("Stat",true,"60px"),
+	new listboxHeaderWidthObj("User",true,"60px"),
+	new listboxHeaderWidthObj("B.Type",true,"50px"),
+	new listboxHeaderWidthObj("Bank",true,"60px"),
+	new listboxHeaderWidthObj("FC6.R",true,"60px"),
+	new listboxHeaderWidthObj("Rcp.P",true,"50px"),
+	new listboxHeaderWidthObj("Cust.Type",true,"60px"),
+};
+
+class cheqrecclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_cheqrev = lbhand.getListcellItemLabel(isel,0);
+		showCheqRecv_Meta(glob_sel_cheqrev);
+	}
+}
+
+void showCheqRecvs(int itype)
+{
+	last_listcheq = itype;
+
+	scht = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+	scht2 = kiboo.replaceSingleQuotes(searhtxt2_tb.getValue().trim());
+	scht3 = kiboo.replaceSingleQuotes(searhtxt3_tb.getValue().trim());
+
+	amts = 0.0;
+	try { amts = Float.parseFloat( kiboo.replaceSingleQuotes(amtsearch_tb.getValue().trim()) ); } catch (Exception e) {}
+
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	Listbox newlb = lbhand.makeVWListbox_Width(cheqsrec_holder, chqrechds, "cheqrecv_lb", 25);
+
+	sqlstm = "select origid,customer_name,datecreated,username,cheq_no,amount,b_type,our_bank,recp_printed,cstatus, " +
+	"fc6_recp_no, fc6_act_type from rw_cheqrecv " +
+	"where datecreated between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' ";
+
+	if(!scht.equals("") && itype == 1)
+	{
+		sqlstm += "and (customer_name like '%" + scht + "%' ";
+		if(!scht2.equals("")) sqlstm += "or customer_name like '%" + scht2 + "%' ";
+		if(!scht3.equals("")) sqlstm += "or customer_name like '%" + scht3 + "%' ";
+		sqlstm += ") ";
+	}
+
+	if(itype == 2)
+	{
+		sqlstm += "and amount=" + amts.toString();
+	}
+
+	//sqlstm += "and contains(customer_name,'\"*" + scht + "*\" or \"*" + scht2 + "*\" or \"*" + scht3 + "*\"') ";
+
+	if(useraccessobj.accesslevel != 9) sqlstm += " and (deleted<>1 or deleted is null) "; // normal user will not see removed rec
+
+	//sqlstm += "order by datecreated ";
+
+	crecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(crecs.size() == 0) return;
+	//newlb.setRows(25);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", new cheqrecclik());
+
+	amtdone = amtpend = amtrental = amtremark = amtsundry = amtunkw = 0.0;
+
+	for(dpi : crecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add( dpi.get("origid").toString() );
+		kabom.add( dtf2.format(dpi.get("datecreated")) );
+		kabom.add( kiboo.checkNullString(dpi.get("customer_name")) );
+		kabom.add( kiboo.checkNullString(dpi.get("cheq_no")) );
+		kabom.add( (dpi.get("amount") == null) ? "" : nf3.format(dpi.get("amount")) );
+		stt = kiboo.checkNullString(dpi.get("cstatus"));
+		kabom.add(stt);
+
+		kabom.add( kiboo.checkNullString(dpi.get("username")) );
+		kabom.add( kiboo.checkNullString(dpi.get("b_type")) );
+		kabom.add( kiboo.checkNullString(dpi.get("our_bank")) );
+		kabom.add( kiboo.checkNullString(dpi.get("fc6_recp_no")) );
+
+		rprn = (dpi.get("recp_printed") == null) ? "N" : (dpi.get("recp_printed")) ? "Y" : "N" ;
+		kabom.add(rprn);
+		
+		ktyp = "UNKNOWN";
+		if(dpi.get("fc6_act_type") != null)
+		{
+			switch(dpi.get("fc6_act_type"))
+			{
+				case 195: // rental cust
+				case 211:
+					try { amtrental += (float)dpi.get("amount"); } catch (Exception e) {}
+					ktyp = "RENTAL";
+					break;
+
+				case 163: // remarketing cust
+					try { amtremark += (float)dpi.get("amount"); } catch (Exception e) {}
+					ktyp = "REMARKETING";
+					break;
+
+				case 179: // sundry/cash cust
+					try { amtsundry += (float)dpi.get("amount"); } catch (Exception e) {}
+					ktyp = "SUNDRY";
+					break;
+
+				default: // unknown cust type
+					try { amtunkw += (float)dpi.get("amount"); } catch (Exception e) {}
+					break;
+			}
+		}
+
+		kabom.add(ktyp);
+
+		jstyl = (dpi.get("cstatus").equals("PENDING")) ? "background:#e95252" : "";
+
+		if(stt.equals("DONE"))
+		{
+			try {
+			amtdone += (float)dpi.get("amount");
+			} catch (Exception e) {}
+		}
+
+		if(stt.equals("PENDING"))
+		{
+			try {
+			amtpend += (float)dpi.get("amount");
+			} catch (Exception e) {}
+		}
+		
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false",jstyl);
+	}
+
+	amtdone_lbl.setValue( nf4.format(amtdone) );
+	amtpend_lbl.setValue( nf4.format(amtpend) );
+	amtgtotal_lbl.setValue( nf4.format(amtdone + amtpend) );
+
+	amt_amtrental_lbl.setValue( nf4.format(amtrental) );
+	amt_amtremark_lbl.setValue( nf4.format(amtremark) );
+	amt_amtsundry_lbl.setValue( nf4.format(amtsundry) );
+	amt_amtunkw_lbl.setValue( nf4.format(amtunkw) );
+
+}
+
+]]>
+</zscript>
+
+<popup id="adminpop">
+<button id="setprdate_b" label="set ToDate" onClick="adminFunc(self)" />
+<button id="delpr_b" label="DELETE" onClick="adminFunc(self)" />
+</popup>
+
+<popup id="expchqr_pop">
+<div style="background:#628821; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<label sclass="subhead1" value="Export cheque/payment receival list" />
+<separator height="10px" />
+
+<grid>
+	<rows>
+		<row>
+			<label value="Start date" />
+			<datebox id="exp_startdate" format="yyyy-MM-dd" />
+			<label value="End date" />
+			<datebox id="exp_enddate" format="yyyy-MM-dd" />
+		</row>
+		<row spans="4">
+			<hbox>
+				<button id="expundelv_b" label="Export cheque/bank-in list" onClick="exportReceiptRecs()" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+
+</div>
+</popup>
+
+<!-- modded title to show "supplier" -->
+<popup id="pickcustomer_popup">
+<div style="background:#f9b12d; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+	<hbox>
+		<label style="font-size:9px">Supplier name</label>
+		<textbox id="searchcust_tb" style="font-size:9px" />
+		<button label="Find" style="font-size:9px" onClick="findCustomers()" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<div id="foundcusts_holder" width="400px" />
+		<separator width="5px" />
+		<div width="400px" id="custfound_wa" visible="false" >
+			<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+			<separator height="2px" />
+			<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+			<separator height="3px" />
+			<button label="Select this customer" style="font-size:9px" onClick="assignCustomer()" />
+		</div>
+	</hbox>
+	<label id="selectcustid" visible="false" />
+</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<style>
+
+.subhead2 {	font-size:24px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead1 {	font-size:18px;	font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px">
+
+<grid id="datboxgrid" width="1000px">
+	<rows>
+		<row>
+			<label value="Start date" style="font-size:9px" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+			<label value="End date" style="font-size:9px" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+		</row>
+		<row spans="1,">
+			<label value="Search" style="font-size:9px" />
+			<hbox>
+				<textbox id="searhtxt_tb" style="font-size:9px;background:#ff0000" />
+				<textbox id="searhtxt2_tb" style="font-size:9px" />
+				<textbox id="searhtxt3_tb" style="font-size:9px" />
+				<button label="Dig / Load" onClick="showCheqRecvs(1)" />
+			</hbox>
+			<hbox>
+				<label value="Amount" style="font-size:9px" />
+				<textbox id="amtsearch_tb" style="font-size:9px" />
+				<button label="by amount" onClick="showCheqRecvs(2)" />
+			</hbox>
+		</row>
+		<row spans="3">
+			<hbox>
+				<button id="newcheqrv_b" label="New cheque receival" onClick="doFunc(self)" />
+				<button id="setdone_b" label="Set DONE" onClick="doFunc(self)" />
+				<button id="setpending_b" label="Set PENDING" onClick="doFunc(self)" />
+				<button id="remcheq_b" label="Remove" onClick="doFunc(self)" />
+				<separator width="10px" />
+				<button id="printrecp_b" label="Print receipt" onClick="doFunc(self)" />
+				<button label="Export receival list" onClick="expchqr_pop.open(self)" />
+				<separator width="10px" />
+				<button id="admin_b" label="ADMIN" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+
+<hbox>
+<div id="cheqsrec_holder" width="1000px" />
+
+<vbox>
+	<label sclass="subhead1" value="DONE Total:" />
+	<label sclass="subhead2" id="amtdone_lbl" />
+	<separator height="2px" />
+	<label sclass="subhead1" style="color:#ff0000" value="PENDING Total:" />
+	<label sclass="subhead2" style="color:#ff0000" id="amtpend_lbl" />
+	<separator height="2px" />
+	<label sclass="subhead1" style="color:#f57900" value="Total All:" />
+	<label sclass="subhead2" style="color:#f57900" id="amtgtotal_lbl" />
+	<separator height="3px" bar="true" />
+	<separator height="5px" />
+
+	<label sclass="subhead1" value="Rental:" />
+	<label sclass="subhead1" id="amt_amtrental_lbl" />
+	<separator height="2px" />
+	
+	<label sclass="subhead1" value="Remarketing:" />
+	<label sclass="subhead1" id="amt_amtremark_lbl" />
+	<separator height="2px" />
+
+	<label sclass="subhead1" value="Sundry:" />
+	<label sclass="subhead1" id="amt_amtsundry_lbl" />
+	<separator height="2px" />
+
+	<label sclass="subhead1" value="UNKNOWN:" />
+	<label sclass="subhead1" id="amt_amtunkw_lbl" />
+	<separator height="2px" />
+
+	<label id="debugbox" multiline="true" />
+</vbox>
+
+</hbox>
+
+</div>
+
+<separator height="3px" />
+
+<div style="background:#2e3436; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" id="workarea" visible="false" >
+
+<vbox>
+<grid width="650px">
+	<rows>
+		<row style="background:#97b83a" >
+			<label value="RCV#" />
+			<label id="c_origid" style="font-size:14px;font-weight:bold" />
+			<hbox>
+				<label value="Dated: " />
+				<label id="c_datecreated" />
+			</hbox>
+		</row>
+		<row spans="1,2" >
+			<label value="Customer" style="font-size:9px" />
+			<textbox id="customername" width="99%" style="font-weight:bold" />
+		</row>
+	</rows>
+</grid>
+<hbox>
+	<button id="asssupp_b" label="Get customer" style="font-size:9px" onClick="pickcustomer_popup.open(self)" />
+	<button id="updqt_b" label="Update.." style="font-weight:bold" onClick="doFunc(self)" />
+</hbox>
+
+<div id="chqbinform_holder" />
+
+</vbox>
+
+</div>
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+void shownumd()
+{
+	kv = c_amount.getValue().replaceAll(",","");
+	prt = kv.split("\\.");
+	//alert(kv + " :: " + prt.length); // + " :: " + prt[0] + " :: " + prt[1]);
+	sqlstm = "select dbo.[udf_NumberToEnglishWords](" + prt[0] + ") as rt1, " + 
+	"dbo.[udf_NumberToEnglishWords](" + prt[1] + ") as rt2 ";
+	jj = sqlhand.gpSqlFirstRow(sqlstm);
+	alert(jj.get("rt1") + " AND CENTS " + jj.get("rt2") + " ONLY" );
+}
+
+kiboo.setTodayDatebox(startdate);
+kiboo.setTodayDatebox(enddate);
+kiboo.setTodayDatebox(exp_startdate);
+kiboo.setTodayDatebox(exp_enddate);
+
+showCheqRecvs(1);
+
+chqbinformeta = dynamicForm(chqbinform_holder, "chqbin_metagrid", "19");
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

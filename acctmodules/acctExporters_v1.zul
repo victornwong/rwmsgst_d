@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="accts_exporter_winmod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Accounts Stuff Exporter";
+MYVERSION = "v0.1";
+MY_ID = "acctexp";
+/*
+Title		: Accounts tables exporter -- gather those nitty-gritty reqs to export stuff from GL/invoice/whatever
+Written by	: Victor Wong
+Dated		: 13/03/2013
+NOTES:
+*/
+import java.io.*;
+import java.util.*;
+import java.text.*;
+import java.math.BigDecimal;
+import org.zkoss.util.media.AMedia;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
+import org.apache.poi.hssf.usermodel.HSSFCell;
+import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFRow;
+import org.apache.poi.hssf.usermodel.HSSFPrintSetup;
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+glob_selected_tmpage = "";
+
+class tmpage_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_selected_tmpage = lbhand.getListcellItemLabel(isel,0);
+	}
+}
+
+Object[] agetemptbl_headers = 
+{
+	new listboxHeaderWidthObj("Table",true,""),
+	new listboxHeaderWidthObj("Dated",true,"150px"),
+};
+
+void showAgeingTempTables()
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(tempage_holder, agetemptbl_headers, "tempageing_lb", 5);
+
+	sqlstm = "select t.name,last_user_update from sys.dm_db_index_usage_stats i join sys.tables t on (t.object_id = i.object_id) " +
+	"where t.name like '%ageing' order by last_user_update desc";
+
+	ttbls = sqlhand.gpSqlGetRows(sqlstm);
+	if(ttbls.size() == 0) return;
+	newlb.addEventListener("onSelect", new tmpage_onSelect());
+	newlb.setRows(10);
+
+	for(dpi : ttbls)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("name").toString());
+		kabom.add(dpi.get("last_user_update").toString());
+		strarray = kiboo.convertArrayListToStringArray(kabom);	
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void dumpExcel(String itype, String ifilename, Object trecs)
+{
+	HSSFWorkbook wb = new HSSFWorkbook();
+	sheet = wb.createSheet("sheit");
+	DecimalFormat nf = new DecimalFormat("#.00");
+
+	stylo = wb.createCellStyle();
+	stylo.setFillBackgroundColor((short)999);
+
+	if(itype.equals("expagedets_btn"))
+	{
+		// popu the header
+		row1 = sheet.createRow(0);
+		row1.createCell(0).setCellValue("AR_CODE");
+		row1.createCell(1).setCellValue("Customer");
+		row1.createCell(2).setCellValue("CashCust");
+		row1.createCell(3).setCellValue("Dated");
+		row1.createCell(4).setCellValue("ReferenceNo");
+		row1.createCell(5).setCellValue("CurCode");
+		
+		row1.createCell(6).setCellValue("Total");
+		row1.createCell(7).setCellValue("BaseRate");
+		row1.createCell(8).setCellValue("ExchangeRate");
+		row1.createCell(9).setCellValue("MYRbyBase");
+		row1.createCell(10).setCellValue("MYRbyExR");
+		
+		row1.createCell(11).setCellValue("Salesmancode");
+		row1.createCell(12).setCellValue("Credit_limit");
+		row1.createCell(13).setCellValue("Credit_period");
+		row1.createCell(14).setCellValue("Category");
+		row1.createCell(15).setCellValue("CC");
+		row1.createCell(16).setCellValue("CompGrp");
+
+		rowcount = 1;
+		for(dpi : trecs)
+		{
+			row = sheet.createRow(rowcount);
+			row.createCell(0).setCellValue(kiboo.checkNullString(dpi.get("ar_code")));
+			row.createCell(1).setCellValue(kiboo.checkNullString(dpi.get("name")));
+			row.createCell(2).setCellValue(kiboo.checkNullString(dpi.get("cashcust")));
+			row.createCell(3).setCellValue(dpi.get("somedate"));
+			row.createCell(4).setCellValue(kiboo.checkNullString(dpi.get("referenceno")));
+			row.createCell(5).setCellValue(kiboo.checkNullString(dpi.get("curcode")));
+			/*
+			row.createCell(6).setCellValue(nf.format(dpi.get("total")));
+			row.createCell(7).setCellValue(nf.format(dpi.get("baserate")));
+			row.createCell(8).setCellValue(nf.format(dpi.get("conv_myr")));
+			*/
+			/*
+			row.createCell(6).setCellValue(nf.format(dpi.get("total")));
+			row.createCell(7).setCellValue(nf.format(dpi.get("baserate")));
+			row.createCell(8).setCellValue(nf.format(dpi.get("exchangerate")));
+			row.createCell(9).setCellValue(nf.format(dpi.get("myrbybase")));
+			row.createCell(10).setCellValue(nf.format(dpi.get("myrbyforeign")));
+			*/
+			row.createCell(6).setCellValue(dpi.get("total").doubleValue());
+			row.createCell(7).setCellValue(dpi.get("baserate").doubleValue());
+			row.createCell(8).setCellValue(dpi.get("exchangerate").doubleValue());
+			row.createCell(9).setCellValue(dpi.get("myrbybase").doubleValue());
+			row.createCell(10).setCellValue(dpi.get("myrbyforeign").doubleValue());
+
+			row.createCell(11).setCellValue(kiboo.checkNullString(dpi.get("salesmancode")));
+			row.createCell(12).setCellValue(nf.format(dpi.get("credit_limit")));
+			row.createCell(13).setCellValue(kiboo.checkNullString(dpi.get("credit_period")));
+			row.createCell(14).setCellValue(kiboo.checkNullString(dpi.get("category")));
+			row.createCell(15).setCellValue(kiboo.checkNullString(dpi.get("newfield10")));
+			row.createCell(16).setCellValue(kiboo.checkNullString(dpi.get("newfield9")));
+
+			rowcount++;
+		}
+	}
+
+	ps = sheet.getPrintSetup();
+	ps.setScale((short)75);
+
+	thefn = session.getWebApp().getRealPath("tmp/" + ifilename);
+	FileOutputStream fileOut = new FileOutputStream(thefn);
+	wb.write(fileOut);
+	fileOut.close();
+	
+	// long method to let user download a file	
+	File f = new File(thefn);
+	fileleng = f.length();
+	finstream = new FileInputStream(f);
+	byte[] fbytes = new byte[fileleng];
+	finstream.read(fbytes,0,(int)fileleng);
+
+	AMedia amedia = new AMedia(ifilename, "xls", "application/vnd.ms-excel", fbytes);
+	Iframe newiframe = new Iframe();
+	newiframe.setParent(kasiexport);
+	newiframe.setContent(amedia);
+}
+
+void doExport(Component iwhat)
+{
+	itype = iwhat.getId();
+
+	if(itype.equals("expagedets_btn"))
+	{
+		if(glob_selected_tmpage.equals("")) return;
+
+		sqlstm = "select agme.code as ar_code, agme.name, csci.customer_name as cashcust, " + 
+		"agme.date as somedate, " +
+		"agme.referenceno, agme.curcode, agme.total, agme.exchangerate, agme.baserate, " +
+		"(agme.total * agme.baserate) as myrbybase, " +
+		"(agme.total / agme.exchangerate) as myrbyforeign, " +
+		"agme.salesmancode, cust.credit_limit, cust.credit_period, cust.category, " +
+		"cust.newfield9, cust.newfield10 " +
+		"from " + glob_selected_tmpage + " agme " +
+		"left join customer cust on cust.ar_code = agme.code " +
+		"left join cashsales_customerinfo csci on csci.folderno_str = agme.referenceno " +
+		"order by agme.code";
+
+		arecs = sqlhand.gpSqlGetRows(sqlstm);
+		//alert(sqlstm + " :: " + arecs);
+		if(arecs.size() == 0) { guihand.showMessageBox("Sorry.. nothing to export"); return; }
+
+		dumpExcel(itype,"ageinvdets.xls",arecs);
+	}
+}
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" width="460px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div>
+
+<groupbox mold="3d">
+<hbox>
+	<button label="Load temporary ageing tables" style="font-size:9px" onClick="showAgeingTempTables()" />
+	<button id="expagedets_btn" label="Export: Temp.Ageing.Table with invoice details" style="font-size:9px" onClick="doExport(self)" />
+</hbox>
+<separator height="3px" />
+<div id="tempage_holder" />
+</groupbox>
+
+</div>
+
+<div id="kasiexport" />
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

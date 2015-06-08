@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="webreport_usersetup_mod"?>
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+// Some security checking codes here
+// useraccessobj = getUserAccessObject();
+
+/*
+This module is a knockoff from usersetup.zul(main portal user-management)
+
+24/6/2010: modded to use MySQL database with "sql = alsportal_Mysql();" - setup ubuntu server with tomcat + mysql running locally
+	webreport system runs in ubuntu-server
+
+*/
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+Object whathuh;
+
+WEBREPORT_USERTABLE = "WebreportUser";
+
+void doCrypt(Textbox icleart)
+{
+	kkk = als_MD5_Encrypter(icleart.getValue());
+	alert(kkk);
+}
+
+// Database func: get user record from WebreportUser
+Object getWebreport_Username_Rec(String iorigid)
+{
+	if(iorigid.equals("")) return null;
+	//sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+	if(sql == NULL) return;
+	sqlstatem = "select * from WebreportUser where origid=" + iorigid;
+	therec = sql.firstRow(sqlstatem);
+	sql.close();
+	return therec;
+}
+
+
+class usernameForm
+{
+	public Textbox origid;
+	public Textbox username;
+	public Textbox password;
+	public Textbox fullname;
+	public Textbox designation;
+	public Textbox email;
+	public Textbox handphone;
+	public Listbox accesslevel;
+	public Listbox branch_lb;
+	public Textbox ar_code;
+	
+	public int user_deleted;
+	public int user_status;
+	public String oldpassword;
+	
+	public usernameForm(Textbox iorigid, Textbox iusername, Textbox ipassword, Textbox ifullname, Textbox idesignation, Textbox iemail, 
+		Textbox ihandphone, Listbox iaccesslevel, Listbox ibranchlb, Textbox iarcode)
+	{
+		origid = iorigid;
+		username = iusername;
+		password = ipassword;
+		fullname = ifullname;
+		designation = idesignation;
+		email = iemail;
+		handphone = ihandphone;
+		accesslevel = iaccesslevel;
+		branch_lb = ibranchlb;
+		ar_code = iarcode;
+	}
+	
+	void clearDetails()
+	{
+		origid.setValue("");
+		username.setValue("");
+		password.setValue("");
+		fullname.setValue("");
+		designation.setValue("");
+		email.setValue("");
+		handphone.setValue("");
+		accesslevel.clearSelection();
+		branch_lb.clearSelection();
+		ar_code.setValue("");
+	}
+	
+	void showDetails()
+	{
+		urec =  getWebreport_Username_Rec(origid.getValue()); // uses webreportuser table instead
+		if(urec == null) return;
+
+		username.setValue(urec.get("username"));
+		password.setValue("");
+		oldpassword = urec.get("password");
+		fullname.setValue(urec.get("fullname"));
+		designation.setValue(urec.get("designation"));
+		email.setValue(urec.get("email"));
+		handphone.setValue(urec.get("handphone"));
+
+		user_status = urec.get("locked");
+
+		kkk = (user_status == 1) ? "Unlock account" : "Lock account";
+
+		// hardcoded at the UI for "Lock account" button
+		locktiktok.setLabel(kkk);
+		kkk = urec.get("accesslevel").toString();
+		if(kkk.equals("9")) kkk = "God-like";
+
+		matchListboxItems(accesslevel,kkk);
+
+		bbb = urec.get("branch");
+		matchListboxItems(branch_lb,bbb);
+		
+		ar_code.setValue(urec.get("ar_code"));
+	}
+
+	void updateDetails()
+	{
+	    //sql = als_mysoftsql();
+		sql = alsportal_Mysql();
+		if(sql == NULL) return;
+
+		iorigid = origid.getValue();
+		iusername = replaceSingleQuotes(username.getValue());
+		ipassword = replaceSingleQuotes(password.getValue());
+		ifullname = replaceSingleQuotes(fullname.getValue());
+		idesignation = replaceSingleQuotes(designation.getValue());
+		iemail = replaceSingleQuotes(email.getValue());
+		ihandphone = replaceSingleQuotes(handphone.getValue());
+		iaccesslevel = accesslevel.getSelectedItem().getLabel();
+		ibranch = branch_lb.getSelectedItem().getLabel();
+		iarcode = replaceSingleQuotes(ar_code.getValue());
+
+		if(iaccesslevel.equals("God-like")) iaccesslevel = "9";
+
+		sqlstatem = "update " + WEBREPORT_USERTABLE + " set username='" + iusername + "',fullname='" + ifullname + "'," + 
+			"designation='" + idesignation + "',email='" + iemail + "',handphone='" + ihandphone + "', accesslevel=" + iaccesslevel + 
+			", branch='" + ibranch + "', ar_code='" + iarcode + "'" ;
+
+		if(oldpassword.equals(""))
+		{
+			encrypt_password = als_MD5_Encrypter(ipassword);
+			sqlstatem = sqlstatem + ",password='" + encrypt_password + "'";
+		}
+
+		sqlstatem = sqlstatem + " where origid=" + iorigid;
+		sql.execute(sqlstatem);
+		sql.close();
+	}
+	
+} // end of class usernameForm
+
+// username listbox onSelect event routine
+class usernamelb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		iorigid = username_lb.getSelectedItem().getLabel();
+		whathuh.origid.setValue(iorigid);
+		whathuh.showDetails();
+		usernameform_gb.getCaption().setLabel("Details user : " + iorigid);
+	}
+}
+
+Object[] username_lb_headers = {
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("AR.Code",true),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Fullname",true),
+	new listboxHeaderObj("Status",true),
+};
+	
+// Do the search and populate listbox
+void startUsername_Search(Div mDiv)
+{
+	// create a new listbox and attach to searchdiv
+	//Listbox newlb = makeUsername_Listbox(mDiv);
+	Listbox newlb = makeVWListbox(mDiv, username_lb_headers, "username_lb", 5);
+	newlb.addEventListener("onSelect", new usernamelb_Listener());
+
+    //sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+    if(sql == NULL) return;
+	sqlstatem = "select origid,ar_code,username,fullname,locked,deleted from " + WEBREPORT_USERTABLE + " where deleted=0";
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+
+	if(tlist.size() == 0 || tlist == null) return;
+
+	newlb.setRows(10);
+
+	for(ilist : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(ilist.get("origid").toString());
+		kabom.add(ilist.get("ar_code"));
+
+		usname = ilist.get("username");
+		if(usname.equals("")) usname = "-undefined-";
+		kabom.add(usname);
+
+		funame = ilist.get("fullname");
+		if(funame.equals("")) funame = "-undefined-";
+		kabom.add(funame);
+
+		istatus = (ilist.get("locked") == 1) ? "Locked" : "Access";
+		kabom.add(istatus);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+	
+	// whathuh.clearDetails();
+
+} // end of startUsername_Search()
+
+// Insert new user into table
+void createNewUser()
+{
+	//sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+    if(sql == NULL) return;
+	
+	sqlstatem = "insert into " + WEBREPORT_USERTABLE + " (ar_code,username,password,fullname,designation,email,handphone,accesslevel,deleted,locked,branch) " +
+		"values ('','','','','','','',0,0,0,'')";
+	sql.execute(sqlstatem);
+	sql.close();
+	
+	// refresh listbox - usernamelb_div is hardcoded below
+	startUsername_Search(usernamelb_div);
+	
+} // end of createNewUser()
+	
+void updateUsernameDetails()
+{
+	// must put code to check against dup username -- big big problem if dups allowed
+	
+	whathuh.updateDetails();
+	startUsername_Search(usernamelb_div);
+
+	showMessageBox("User details updated");
+
+}
+
+// Encrypt and update password for user
+void resetPassword()
+{
+	iorigid = whathuh.origid.getValue();
+	if(iorigid.equals("")) return;
+	
+	ipassword = whathuh.password.getValue();
+	if(ipassword.equals("")) return;
+	
+	encrypt_password = als_MD5_Encrypter(ipassword);
+	
+	//sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+    if(sql == NULL) return;
+	
+	sqlstatem = "update " + WEBREPORT_USERTABLE + " set password='" + encrypt_password + "' where origid=" + iorigid;
+	sql.execute(sqlstatem);
+	sql.close();
+	
+	showMessageBox("Password reset");
+
+}
+
+// Lock or unlock account
+void lockAccount()
+{
+	iorigid = whathuh.origid.getValue();
+	if(iorigid.equals("")) return;
+
+	//sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+    if(sql == NULL) return;
+	
+	kkk = (whathuh.user_status == 0) ? "1" : "0";
+
+	sqlstatem = "update " + WEBREPORT_USERTABLE + " set locked=" + kkk + " where origid=" + iorigid;
+	sql.execute(sqlstatem);
+	sql.close();
+	
+	startUsername_Search(usernamelb_div);
+	whathuh.showDetails();
+}
+
+// Set deleted flag in table - won't delete account permanently
+void deleteUsername()
+{
+	iorigid = whathuh.origid.getValue();
+	if(iorigid.equals("")) return;
+
+	if (Messagebox.show("Delete user", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		//sql = als_mysoftsql();
+		sql = alsportal_Mysql();
+		if(sql == NULL) return;
+		sqlstatem = "update " + WEBREPORT_USERTABLE + " set deleted=1 where origid=" + iorigid;
+		sql.execute(sqlstatem);
+		sql.close();
+
+		startUsername_Search(usernamelb_div); // refresh
+	}
+}
+
+
+// Simple customer-picker popup - copy these couple of supporting funcs and the <popup>
+
+Object[] customerpicker_lb_headers = {
+	new listboxHeaderObj("AR Code",true),
+	new listboxHeaderObj("Customer.Name",true),
+};
+
+// Popup-clicker to search customer - make use of pckcust_customername_tb to search Customer database
+void searchCustomer_popup_clicker()
+{
+	custname = replaceSingleQuotes(pckcust_customername_tb.getValue());
+	if(custname.equals("")) return;
+	
+	Listbox newlb = makeVWListbox(customersearch_div, customerpicker_lb_headers, "customerpicker_lb", 5);
+	
+	//sql = als_mysoftsql();
+	sql = alsportal_Mysql();
+	if(sql == NULL) return;
+	sqlstm = "select top 50 ar_code,customer_name from Customer where customer_name like '%" + custname + "%'";
+	custrecs = sql.rows(sqlstm);
+	sql.close();
+	
+	if(custrecs.size() == 0) return;
+	
+	newlb.setRows(15);
+	
+	for(custr : custrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(custr.get("ar_code"));
+		kabom.add(custr.get("customer_name"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+// Real-picker for search customer popup.. will insert the customer details into the customer-info popup
+void pickcustomer_realPicker()
+{
+	if(customersearch_div.getFellowIfAny("customerpicker_lb") == null) return;
+	if(customerpicker_lb.getSelectedIndex() == -1) return;
+	
+	thear_code = customerpicker_lb.getSelectedItem().getLabel(); // first col is the ar_code di
+	//clientrec = getCompanyRecord(ar_code);
+	//if(clientrec == null) return;
+	
+	whathuh.ar_code.setValue(thear_code);	// this is where to customize where to put the selected ar_code
+	pickcustomer_popup.close();
+}
+
+// check if origid is setup - else don't popup customer-picker
+void popupCustomerPicker()
+{
+	origidchk = whathuh.origid.getValue();
+	if(origidchk.equals("")) return;
+	pickcustomer_popup.open(custpick_btn);	
+}
+
+// End of simple customer-pickup popup support funcs
+
+]]>
+</zscript>
+
+<popup id="pickcustomer_popup">
+<groupbox width="400px">
+	<caption label="Pick customer" />
+	<vbox style="padding:2px">
+		<hbox>
+			<label value="Customer name" style="font-size:9px" />
+			<textbox id="pckcust_customername_tb" width="150px" style="font-size:9px" />
+			<separator width="5px" />
+			<button label="Search" style="font-size:9px" onClick="searchCustomer_popup_clicker()" />
+		</hbox>
+		<separator height="5px" />
+		<div id="customersearch_div" />
+	</vbox>
+	<separator height="5px" />
+	<button label="Pick" style="font-size:9px" onClick="pickcustomer_realPicker()" />
+	<button label="Close" style="font-size:9px" onClick="pickcustomer_popup.close()" />
+</groupbox>
+</popup>
+
+<window id="webreport_usersetup_win" title="WebReport User Management v.1" width="560px" height="450px" position="center"
+ mode="overlapped" border="normal" closable="true"
+ onCancel="globalCloseWindow(myincludeid)" onClose="globalCloseWindow(myincludeid)">
+<div>
+
+<groupbox mold="3d" width="100%">
+<caption label="Users" />
+<div id="usernamelb_div" />
+</groupbox>
+
+<groupbox id="usernameform_gb" mold="3d" width="100%">
+<caption label="Details" />
+
+<grid>
+<columns>
+  <column label="" />
+</columns>
+
+<rows>
+	<row>
+		<hbox>
+		
+			<textbox id="k_origid" visible="false"/>
+			
+			<label value="Username" />
+			<textbox id="k_username" width="150px"/>
+			
+			<separator width="24px" />
+			
+			<label value="Password" />
+			<textbox id="k_password" width="150px" />
+		</hbox>
+	</row>
+	
+	<row>
+		<hbox>
+			<label value="Fullname" />
+			<separator width="5px" />
+			<textbox id="k_fullname" width="150px"/>
+			
+			<separator width="10px" />
+			
+			<label value="Designation" />
+			<textbox id="k_designation" width="150px" />
+		</hbox>
+	</row>
+	
+	<row>
+		<hbox>
+			<label value="Email" />
+			<separator width="28px" />
+			<textbox id="k_email" width="150px"/>
+
+			<separator width="9px" />
+			
+			<label value="Access level" />
+			<listbox id="k_accesslevel" mold="select" />
+		</hbox>
+	</row>
+
+	<row>
+		<hbox>
+			<label value="Phone" />
+			<separator width="21px" />
+			<textbox id="k_handphone" width="150px" />
+			<separator width="9px" />
+			<label value="Branch" />
+			<separator width="28px" />
+			<listbox id="branch_drd" mold="select" />
+		</hbox>
+	</row>
+
+	<row>
+		<hbox>
+			<label value="AR code" />
+			<separator width="13px" />
+			<textbox id="k_ar_code" width="150px" />
+			<separator width="5px" />
+			<button id="custpick_btn" label="Select client code" style="font-size:9px" onClick="popupCustomerPicker()" />
+		</hbox>
+	</row>
+</rows>
+</grid>
+
+</groupbox>
+
+<separator height="5px" />
+
+<hbox>
+<button label="New user" style="font-size:9px" onClick="createNewUser()" />
+<button label="Update" style="font-size:9px" onClick="updateUsernameDetails()" />
+<button label="Reset password" style="font-size:9px" onClick="resetPassword()" />
+<button id="locktiktok" label="Lock account" style="font-size:9px" onClick="lockAccount()" />
+<button label="Delete" style="font-size:9px" onClick="deleteUsername()" />
+<button label="Close window" style="font-size:9px" onClick="globalCloseWindow(myincludeid)" />
+</hbox>
+
+</div>
+
+<zscript>
+startUsername_Search(usernamelb_div);
+
+populateDropdownListbox(k_accesslevel, dd_accesslevel);
+populateDropdownListbox(branch_drd, dd_branches);
+
+// Textbox iorigid, Textbox iusername, Textbox ipassword, Textbox ifullname, Textbox idesignation, Textbox iemail, Textbox ihandphone, Listbox iaccesslevel)
+tUsernameForm = new usernameForm(k_origid,k_username,k_password,k_fullname,k_designation,k_email,k_handphone,k_accesslevel,branch_drd,k_ar_code);
+whathuh = tUsernameForm;
+
+</zscript>
+
+</window>
+
+</zk>

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="shwjobnoteswi"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "JOB NOTES";
+MYVERSION = "v0.1";
+MY_ID = "shjobnotesw";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+param_jn = Executions.getCurrent().getParameter("jn");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+]]>
+</zscript>
+
+<style>
+
+.subhead2 {
+	font-size:24px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+.subhead1 {
+	font-size:18px;
+	font-weight:bold;
+	color:#ffffff;
+	text-shadow: 1px 1px #000000;
+}
+
+</style>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div id="workarea" >
+<label id="error_message" sclass="subhead1" style="color:#cc0000" />
+
+	<div style="background:#555753; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="650px" id="jobnotes_div" visible="false" >
+		<label id="jnheader1" sclass="subhead1">JOB NOTES</label>
+		<separator height="3px" />
+		<div id="jobnotes_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+				onClick="jobNoteFunc(self,param_jn)" />
+		</hbox>
+		<separator height="2px" />
+		<div id="jobnotes_entry_holder">
+			<grid>
+				<rows>
+					<row visible="false">
+						<label value="To" style="font-size:9px" />
+						<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Subject" style="font-size:9px" />
+						<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+					</row>
+					<row>
+						<label value="Notes" style="font-size:9px" />
+						<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+					</row>
+				</rows>
+			</grid>
+			<separator height="2px" />
+			<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,param_jn)" />
+			<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,param_jn)" />
+			
+		</div>
+	</div>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+if(param_jn != null)
+{
+	shjobnotesw.setTitle(MYTITLE + " : " + param_jn);
+	jnheader1.setValue("JOB NOTES : " + param_jn);
+	showJobNotes(param_jn,jobnotes_holder,"jobnotes_lb"); // customize accordingly here..
+	jobnotes_div.setVisible(true);
+}
+else
+{
+	error_message.setValue("ERROR: NO BOM FOUND..");
+}
+
+]]>
+</zscript>
+
+</window>
+</zk>

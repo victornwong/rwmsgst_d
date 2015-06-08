@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="auditlogs_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+*/
+import org.victor.*;
+myincludeid = Executions.getCurrent().getParameter("myid");
+param_folderno = Executions.getCurrent().getParameter("folderno");
+
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+lbhandler = new ListboxHandler();
+sqlhand = new SqlFuncs();
+
+void showAllAuditLogs(Div idiv, String ilinkingcode)
+{
+	Object[] auditlogs_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Date",true),	
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Audit.Notes",true),
+	};
+
+	Listbox newlb = lbhandler.makeVWListbox(idiv, auditlogs_lb_headers, "auditlogs_lb", 5);
+
+	sql = sqlhand.als_mysoftsql();
+    if(sql == null) return;
+	sqlstm = "select origid,audit_notes,username,datecreated from elb_systemaudit where linking_code='" + ilinkingcode + "' order by datecreated desc";
+	audrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(audrecs.size() == 0) return;
+	newlb.setRows(15);
+
+	for(dpi : audrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("username"));
+		kabom.add(dpi.get("audit_notes"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhandler.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+]]>
+</zscript>
+
+<window id="auditlogs_win" width="750px" height="300px" title="Audit-Logs" position="center" mode="overlapped" border="normal" closable="true"
+onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<div>
+<groupbox mold="3d">
+	<caption label="Logs" />
+	<div id="auditlogs_holder" />
+</groupbox>
+</div>
+
+<zscript>
+auditlogs_win.setTitle("Audit-Logs: " + param_folderno);
+showAllAuditLogs(auditlogs_holder,param_folderno);
+
+</zscript>
+
+</window>
+</zk>

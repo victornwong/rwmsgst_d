@@ -1,0 +1,953 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billingbrowser_v1"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+<zscript src="../alsglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+VERSION: 1.0
+
+Title: New radical folder browser
+Written by: Victor Wong
+
+**NOTES**
+09/03/2010: it's a knockoff from browsejobs_v2.zul - make it as version 3
+22/03/2010: knockoff from radbrowsejobs_v3.zul
+
+*/
+
+import java.util.*;
+import java.text.*;
+import java.io.*;
+
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.util.media.AMedia;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+/*boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+*/
+
+documentLinkObj documentLinkProp = new documentLinkObj();
+
+selected_arcode = "";
+selected_folderno = "";
+
+void viewFolderDetails()
+{
+	if(selected_folderno.equals("")) return;
+	theparam = "folderno=" + selected_folderno;
+	uniqwindowid = makeRandomId("vlx");
+	globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+// onSelect event for listClientsWithFolders()
+class folderslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_folderno = getListcellItemLabel(selitem,3);
+
+		showDocumentsList(selected_folderno);
+		documents_label.setLabel("Documents: " + selected_folderno);
+
+		document_gb.setVisible(true);
+
+		forigid = extractFolderNo(selected_folderno);
+		showJobNotes(forigid);
+		jobnotes_gb.setVisible(true);
+	}
+}
+
+void listFoldersByClient(String tarcode)
+{
+Object[] clientsfolders_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Dated",true),
+	new listboxHeaderObj("Samples",true),
+	new listboxHeaderObj("Folder",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("InvDate",true),
+	new listboxHeaderObj("PostDate",true),
+	};
+
+	if(tarcode.equals("")) return;
+
+	// some vars and gui reset
+	selected_folderno = "";
+	if(doculist_holder.getFellowIfAny("doculinks_lb") != null) doculinks_lb.setParent(null);
+	document_gb.setVisible(false);
+
+	jobnotes_tb.setValue(""); // clear job notes text-box
+	jobnotes_gb.setVisible(false);
+
+	sdate = getDateFromDatebox(startdate);
+	edate = getDateFromDatebox(enddate);
+
+	sqlstm = "select jobfolders.origid, jobfolders.datecreated, jobfolders.folderno_str, " + 
+	"count(jobsamples.origid) as samplescount, jobfolders.invoicedate, jobfolders.invpostdate, jobfolders.folderstatus " +
+	"from jobfolders " +
+	"left join jobsamples on jobsamples.jobfolders_id = jobfolders.origid " +
+	"where jobfolders.ar_code='" + tarcode + "' and " +
+	"jobfolders.datecreated between '" + sdate + "' and '" + edate + "' " +
+	"and jobfolders.deleted=0 and jobsamples.deleted=0 " +
+	"group by jobfolders.origid,jobfolders.folderno_str,jobfolders.datecreated," + 
+	"jobfolders.invoicedate,jobfolders.invpostdate,jobfolders.folderstatus";
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+    therows = sql.rows(sqlstm);
+    sql.close();
+
+   	Listbox newlb = makeVWListbox(folders_holder, clientsfolders_headers, "folders_lb", 5);
+    if(therows.size() == 0) return;
+
+	newlb.setRows(22);
+	newlb.addEventListener("onSelect", new folderslb_Listener());
+	newlb.setMultiple(true);
+
+	for(dpi : therows)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("samplescount").toString());
+		kabom.add(dpi.get("folderno_str"));
+		kabom.add(dpi.get("folderstatus"));
+
+		invdatestr = checkNullDate(dpi.get("invoicedate"),"---");
+		kabom.add(invdatestr);
+
+		postdatestr = checkNullDate(dpi.get("invpostdate"),"---");
+		kabom.add(postdatestr);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"");
+	}
+}
+
+// Show invoices by customer (ar_code) from elb_invoice
+void listInvoicesByCustomer(String tarcode)
+{
+Object[] invoices_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("InvNo",true),
+	new listboxHeaderObj("InvDate",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("PostDate",true),
+	new listboxHeaderObj("Username",true),
+	};
+
+	sqlstm = "select origid,invoiceno,invoicedate,invstatus,postdate,username from elb_invoice " + 
+	"where ar_code='" + tarcode + "' order by invoicedate";
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+    therows = sql.rows(sqlstm);
+    sql.close();
+
+   	Listbox newlb = makeVWListbox(invoices_holder, invoices_headers, "invoices_lb", 5);
+    if(therows.size() == 0) return;
+
+	newlb.setRows(15);
+	//newlb.addEventListener("onSelect", new folderslb_Listener());
+
+	for(dpi : therows)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(dpi.get("invoiceno"));
+
+		invdate = checkNullDate(dpi.get("invoicedate"),"---");
+		kabom.add(invdate);
+
+		kabom.add(dpi.get("invstatus"));
+
+		postdate = checkNullDate(dpi.get("postdate"),"---");
+		kabom.add(postdate);
+
+		kabom.add(dpi.get("username"));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"");
+	}
+}
+
+// onSelect event for listClientsWithFolders()
+class clientfolderslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_arcode = getListcellItemLabel(selitem,0);
+
+		customername = getListcellItemLabel(selitem,2);
+		folders_label.setLabel("Folders: " + customername);
+
+		folders_gb.setVisible(true);
+		listFoldersByClient(selected_arcode);
+
+		invoicemaker_gb.setVisible(true);
+		listInvoicesByCustomer(selected_arcode);
+	}
+}
+
+void listClientsWithFolders(int itype)
+{
+Object[] clients_headers = {
+	new listboxHeaderObj("AR Code",true),
+	new listboxHeaderObj("Folders",true),
+	new listboxHeaderObj("Client name",true),
+	};
+
+	sdate = getDateFromDatebox(startdate);
+    edate = getDateFromDatebox(enddate);
+	cnm = replaceSingleQuotes(clientsearch_tb.getValue());
+
+	// list by client but no input, return lor
+	if(itype == 2 && cnm.equals("")) return;
+
+	byclientname = "";
+	if(itype == 2) byclientname = " and customer.customer_name like '%" + cnm + "%'";
+
+	sqlstm = "select distinct jobfolders.ar_code, customer.customer_name, count(jobfolders.origid) as folderscount " +
+	"from jobfolders " +
+	"left join customer on jobfolders.ar_code = customer.ar_code " +
+	"where datecreated between '" + sdate + "' and '" + edate + "' " +
+	"and jobfolders.ar_code <> '' and jobfolders.deleted=0 " + byclientname +
+	" group by jobfolders.ar_code,customer.customer_name ";
+
+	Listbox newlb = makeVWListbox(clients_holder, clients_headers, "clients_lb", 5);
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+    therows = sql.rows(sqlstm);
+    sql.close();
+
+    if(therows.size() == 0) return;
+
+    newlb.setRows(20);
+    newlb.addEventListener("onSelect", new clientfolderslb_Listener());
+
+    for(dpi : therows)
+    {
+	    ArrayList kabom = new ArrayList();
+	    kabom.add(dpi.get("ar_code"));
+	    kabom.add(dpi.get("folderscount").toString());
+   	    kabom.add(dpi.get("customer_name"));
+	    strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"");
+    }
+
+//alert(therows);
+
+}
+
+// ---- Linking documents funcs ---
+
+void doViewDoculinkPopup()
+{
+	if(selected_folderno.equals("")) return;
+	documentLinkProp.global_eq_origid = selected_folderno;
+	documentLinkProp.refreshListbox.populateDocumentLinks(documentLinkProp.global_eq_origid, documentLinkProp.document_idprefix);
+
+	// show CRUD buttons for admin
+	if(useraccessobj.accesslevel == 9)
+	{
+		documentLinkProp.refreshListbox.showCrudButtons();
+		documentLinkProp.refreshListbox.showAdminButtons();
+	}
+	doculink_popup.open(viewdoculinks_btn);
+}
+
+// 10/03/2011: modification from original simpler funcs - this will show "sent" status
+void showDocumentsList(String selected_folderno)
+{
+	Object[] documentlinkslb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("D.Created",true),
+	new listboxHeaderObj("Owner",true),
+	new listboxHeaderObj("Sent",true),
+	};
+
+	duclink = "DOCS" + selected_folderno;
+
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,datecreated,username from DocumentTable " +
+	"where docu_link='" + duclink + "' and deleted=0";
+
+	if(useraccessobj.accesslevel == 9) // admin can send everything..
+	{
+		sqlstm = "select origid,file_title,datecreated,username from DocumentTable " +
+		"where docu_link='" + duclink + "' ";
+	}
+
+	docrecs = ds_sql.rows(sqlstm);
+	ds_sql.close();
+
+	Listbox newlb = makeVWListbox(doculist_holder,documentlinkslb_headers,"doculinks_lb",5);
+
+	if(docrecs.size() == 0) return;
+	newlb.setMultiple(true);
+	//newlb.addEventListener("onSelect", new doculinks_lb_Listener());
+	newlb.setRows(10);
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	for(dpi : docrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		doculink = dpi.get("origid").toString();
+		kabom.add(doculink);
+		kabom.add(dpi.get("file_title"));
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("username"));
+
+		sqlstm = "select top 1 origid from stuff_emailed where linking_code='" + selected_folderno + "' and docu_link=" + doculink;
+		sentrec = sql.firstRow(sqlstm);
+		sentflag = "---";
+		if(sentrec != null) sentflag = "YES";
+		kabom.add(sentflag);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+
+	sql.close();
+}
+
+void viewDocument()
+{
+	if(!check_ListboxExist_SelectItem(doculist_holder,"doculinks_lb")) return;
+	eorigid = doculinks_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = makeRandomId("vd");
+	globalActivateWindow("miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+// ---- ENDOF Linking documents funcs ---
+
+// ---- Email SRN and whatever document funcs
+
+// List out email addresses def in customer_emails
+void showEmailsbyCustomer()
+{
+	Object[] custemails_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("Name",true,"contact_name",1),
+	new dblb_HeaderObj("E-Mail",true,"contact_email",1),
+	};
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+	sqlstm = "select origid,contact_name,contact_email from customer_emails where ar_code='" + selected_arcode + "' order by contact_name";
+	Listbox newlb = makeVWListbox_onDB(emails_holder,custemails_lb_headers,"custemails_lb",10,sql,sqlstm);
+	newlb.setMultiple(true);
+	sql.close();
+}
+
+// knockoff from send_email_coa.zul .. if update there, do here too
+// The real-thing, send out selected documents to client via email
+// 09/03/2011: added email type - 1=SRN , 2=normal
+void sendOutCOA_clicker(int itype)
+{
+	if(!check_ListboxExist_SelectItem(emails_holder,"custemails_lb")) return;
+	if(!check_ListboxExist_SelectItem(doculist_holder,"doculinks_lb")) return;
+
+	dialogmsg = "Send document(s) to client..";
+	if(itype == 1) dialogmsg = "Really send SRN + document(s) to client..";
+
+	if (Messagebox.show(dialogmsg, "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	seldocs = doculinks_lb.getSelectedItems();
+	emails = custemails_lb.getSelectedItems();
+
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) { showMessageBox("Cannot connect to document server.."); return; }
+
+	receivers = "";
+	String[] recv_names = new String[emails.size()];
+	String[] recv_emails = new String[emails.size()];
+	cctt = 0;
+
+	// get the list of email addresses selected
+	for(dpi : emails)
+	{
+		receivers += getListcellItemLabel(dpi,2) + ",";
+		recv_names[cctt] = getListcellItemLabel(dpi,1);
+		recv_emails[cctt] = getListcellItemLabel(dpi,2);
+		cctt++;
+	}
+
+	String[] tmpfnames = new String[seldocs.size()];
+	String[] dorigid = new String[seldocs.size()];
+	fnamecount = 0;
+
+	// make tmp-file out of documents
+	for(dpi : seldocs)
+	{
+		dorigid[fnamecount] = getListcellItemLabel(dpi,0); // get document origid
+		sqlstm = "select file_name,file_data from DocumentTable where origid=" + dorigid[fnamecount];
+		docrec = ds_sql.firstRow(sqlstm);
+		
+		if(docrec != null)
+		{
+			kfilename = docrec.get("file_name");
+			kblob = docrec.get("file_data");
+			kbarray = kblob.getBytes(1,(int)kblob.length());
+			tmpfnames[fnamecount] = session.getWebApp().getRealPath("tmp/" + kfilename);
+			outstream = new FileOutputStream(tmpfnames[fnamecount]);
+			outstream.write(kbarray);
+			outstream.close();
+			fnamecount++;
+		}
+	}
+	ds_sql.close();
+
+	// 09/03/2011: default compose the email with attachments
+	subjstr = "[E-DOCUMENT] " + selected_folderno;
+	msgtxt =  "Job/Folder No.: " + selected_folderno + "\n";
+	msgtxt += "This email contains the electronic version of the requested document(s).\n\n";
+	msgtxt += "Please contact our customer service or sales person if you have any enquiries.\n\n";
+	msgtxt += "ALS | Malaysia - Indonesia\n9 Jalan Astaka U8/84, Bukit Jelutong\n40150 Shah Alam, Selangor\n\n";
+	msgtxt += "PHONE +60 3 7845 8257\nFAX +60 3 7845 8258\nEMAIL info@alsglobal.com.my\n";
+	msgtxt += "WEB http://www.alsglobal.com\n\n-Please consider the environment before printing this email-";
+
+	sql = als_mysoftsql();
+    if(sql == NULL) return;
+    
+    if(itype == 1)
+    {
+    ifoldernumber = extractFolderNo(selected_folderno);
+
+	sqlstm = "select count(origid) as samplecount from " + JOBSAMPLES_TABLE + " where deleted=0 and jobfolders_id=" + ifoldernumber;
+   	nsrec = sql.firstRow(sqlstm);
+   	numsamples = 0;
+   	if(nsrec != null) numsamples = nsrec.get("samplecount");
+	
+	subjstr = "[NOTIFICATION] SAMPLE(S) RECEIVED : " + selected_folderno;
+	msgtxt = 
+    "Lab identification number: " + selected_folderno + "\n\n" +
+    "We have recently received " + numsamples.toString() + " sample(s) from your company.\n" +
+    "Your sample(s) are being processed at the moment.\n\n" +
+    "If you required any assistance, please contact the account manager assigned to you. Please quote " + selected_folderno + " during enquiry.\n\n" +
+    "**THIS NOTIFICATION IS AUTO-GENERATED**";
+    }
+
+	sendEmailWithAttachment(SMTP_SERVER,"info@alsglobal.com.my",receivers,subjstr,msgtxt,tmpfnames);
+
+	// delete temporary files before cabut
+	for(i=0;i<tmpfnames.length;i++)
+	{
+		File f = new File(tmpfnames[i]);
+		if(f.exists()) f.delete();
+	}
+
+	todaysdate = getDateFromDatebox(hiddendatebox);
+
+	// update tables on stuff sent out
+
+	for(i=0;i <dorigid.length; i++)
+	{
+		for(j=0; j<recv_names.length; j++)
+		{
+			sqlstm = "insert into stuff_emailed (linking_code,docutype,docu_link,datesent,contact_name,contact_email,username,subject) values " +
+			"('" + selected_folderno + "','DOCUMENTS'," + dorigid[i] + ",'" + todaysdate + "','" + 
+			recv_names[j] + "','" + recv_emails[j] + "','" + useraccessobj.username + "','" + subjstr + "')";
+
+			sql.execute(sqlstm);
+		}
+	}
+	sql.close();
+
+	// put a bit of audit-trail later
+
+	dialogmsg = "Document(s) sent..";
+	if(itype == 1) dialogmsg = "SRN + Document(s) sent..";
+	showMessageBox(dialogmsg);
+
+	showDocumentsList(selected_folderno); // refresh
+}
+
+void sendDocViaEmail_clicker()
+{
+	if(!check_ListboxExist_SelectItem(doculist_holder,"doculinks_lb")) return;
+	showEmailsbyCustomer();
+	senddocemail.open(sendemail_doc_btn);
+}
+
+// Uses pop-up to show what's been sent related by folder-number
+void viewSentHistory_clicker()
+{
+Object[] senthistorylb_headers = {
+	new listboxHeaderObj("Sent",true),
+	new listboxHeaderObj("User",true),
+	new listboxHeaderObj("To",true),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("Filename",true),
+	};
+
+	if(selected_folderno.equals("")) return;
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+
+	sqlstm = "select docu_link,subject,datesent,contact_email,username " + 
+	"from stuff_emailed where linking_code='" + selected_folderno + "' order by datesent desc";
+
+	sentrecs = sql.rows(sqlstm);
+	sql.close();
+
+	// senthistory_holder - at popup
+	Listbox newlb = makeVWListbox(senthistory_holder,senthistorylb_headers,"senthistory_lb", 5);
+
+	if(sentrecs.size() == 0) return;
+	newlb.setRows(10);
+	
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+
+	for(dpi : sentrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("datesent").toString().substring(0,10));
+		kabom.add(dpi.get("username"));
+		kabom.add(dpi.get("contact_email"));
+
+		doculink = dpi.get("docu_link");
+		
+		filetitle = "---";
+		filename = "---";
+
+		dcsqlstm = "select file_title,file_name from documenttable where origid=" + doculink;
+		drec = ds_sql.firstRow(dcsqlstm);
+		if(drec != null)
+		{
+			filetitle = drec.get("file_title");
+			filename = drec.get("file_name");
+		}
+
+		kabom.add(filetitle);
+		kabom.add(filename);
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+	
+	ds_sql.close();
+
+	senthistory_popup.open(senthistory_btn);
+}
+
+// ---- ENDOF send email srn or whatever
+
+//----------- Job-notes stuff : added 22/02/2011
+
+void showJobNotes(String ifoldno)
+{
+	foldrec = getFolderJobRec(ifoldno);
+	if(foldrec == null) return;
+	jobnotes_tb.setValue(foldrec.get("jobnotes"));
+}
+
+void saveUpdateJobNotes()
+{
+	if(selected_folderno.equals("")) return;
+
+	forigid = convertFolderNoToInteger(selected_folderno).toString();
+	jobnotes = replaceSingleQuotes(jobnotes_tb.getValue());
+
+	if(!forigid.equals(""))
+	{
+		sql = als_mysoftsql();
+		if(sql == null ) return;
+		todaysdate = getDateFromDatebox(hiddendatebox);
+
+		// 19/7/2010: TeckMaan suggested to include a history feature for notes - incase others accidentally delete lines
+		// get old JobFolders.jobnotes
+		sqlstm1 = "select jobnotes from JobFolders where origid=" + forigid;
+		oldj = sql.firstRow(sqlstm1);
+		// insert into JobNotes_History table
+		insertJobNotesHistory_Rec(forigid, oldj.get("jobnotes"), jobnotes, todaysdate,useraccessobj.username); // samplereg_funcs.zs
+		// update JobFolders.jobnotes and JobFolders.lastjobnotesdate
+		sqlstm = "update JobFolders set jobnotes='" + jobnotes + "', lastjobnotesdate='" + todaysdate + "' where origid=" + forigid;
+		sql.execute(sqlstm);
+		sql.close();
+		showMessageBox("Job notes saved..");
+	}
+}
+
+// This will show historical job-notes - to make sure every changes to the job notes are recorded
+// noteshistory_btn jobnotes_lb_div global_sjn_folder
+void jobNotesHistory_clicker()
+{
+Object[] jobnoteshistory_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Prev.Notes",true),
+	new listboxHeaderObj("Chg.By",true),
+	new listboxHeaderObj("Chg.Date",true),
+};
+	if(selected_folderno.equals("")) return;
+	forigid = convertFolderNoToInteger(selected_folderno).toString();
+
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select origid,oldjobnotes,change_date,user_changed from JobNotes_History where jobfolders_id=" + forigid;
+	histrecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(histrecs.size() == 0)
+	{
+		showMessageBox("Sorry.. no job-notes history found");
+		return;
+	}
+
+	Listbox newlb = makeVWListbox(historyjobnotes_lb_div,jobnoteshistory_lb_headers,"jobnoteshistory_lb", 5);
+
+	for(dpi : histrecs)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+		jnotes = trimListitemLabel(dpi.get("oldjobnotes"),50);
+		kabom.add(jnotes);
+		kabom.add(dpi.get("user_changed"));
+		kabom.add(dpi.get("change_date").toString().substring(0,10));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+	}
+	jobnotes_history_popup.open(noteshistory_btn);
+}
+
+// To view the prev job-notes.. cannot run away.
+// prev_jn_btn
+void jobnoteshistory_viewprev_clicker()
+{
+	if(historyjobnotes_lb_div.getFellowIfAny("jobnoteshistory_lb") == null) return;
+	if(jobnoteshistory_lb.getSelectedIndex() == -1) return;
+
+	pjn_origid = jobnoteshistory_lb.getSelectedItem().getLabel(); // 1st col is JobNotes_History.origid
+	pjnrec = getJobNotesHistory_Rec(pjn_origid);
+	if(pjnrec == null) return;
+	prevjn_tb.setValue(pjnrec.get("oldjobnotes"));
+	viewprev_jn_popup.open(prev_jn_btn);
+}
+//----------- end of Job-notes stuff
+
+//----------- All invoice handling funcs
+
+// DB func: check if invoice-number(based on folder-number) exist in elb_invoice
+boolean invoiceExist(String tfolderno)
+{
+	retval = false;
+	sql = als_mysoftsql();
+	if(sql == null ) return retval;
+	sqlstm = "select origid from elb_invoice where invoiceno='" + tfolderno + "'";
+	existrec = sql.firstRow(sqlstm);
+	sql.close();
+	if(existrec != null) retval = true;
+	return retval;
+}
+
+// DB func: check if jobfolders.parentinvoice is filled based on folder-number passed
+String parentInvoiceExist(String tfolderno)
+{
+	retval = "";
+	sql = als_mysoftsql();
+	if(sql == null ) return retval;
+	sqlstm = "select parentinvoice from jobfolders where folderno_str='" + tfolderno + "'";
+	existrec = sql.firstRow(sqlstm);
+	sql.close();
+	if(existrec.get("parentinvoice") != null) retval = existrec.get("parentinvoice");
+	return retval;
+}
+
+// DB func: insert invoice-rec into elb_invoice. invoiceno = folder-number as well
+boolean createInvoiceRec(String tarcode, String invoiceno, String idate, String iusername)
+{
+	comprec = getCompanyRecord(tarcode);
+	if(comprec == null) return false;
+	compname = comprec.get("customer_name");
+	addr1 = comprec.get("address1");
+	addr2 = comprec.get("address2");
+	addr3 = comprec.get("address3");
+	attention = comprec.get("contact_person1");
+
+	sql = als_mysoftsql();
+	if(sql == null ) return false;
+
+	sqlstm = "insert into elb_invoice (invoiceno,ar_code,invoicedate,customer_name,address1,address2,address3,attention,invstatus,folderno_str,username) values " +
+	"('" + invoiceno + "','" + tarcode + "','" + idate + "','" + compname + "'," +
+	"'" + addr1 + "','" + addr2 + "','" + addr3 + "','" + attention + "'," +
+	"'NEW','" + invoiceno + "','" + iusername + "')";
+
+	sql.execute(sqlstm);
+
+	sqlstm = "update jobfolders set invoiceno='" + invoiceno + "',invoicedate='" + idate + "' where folderno_str='" + invoiceno + "'";	
+	sql.execute(sqlstm);
+
+	sql.close();
+	return true;
+}
+
+// Create an invoice entry into elb_invoice
+void makeInvoice_Entry()
+{
+	numselfolders = folders_lb.getSelectedCount();
+	selitems = folders_lb.getSelectedItems();
+	foldnums = "(";
+
+	for(dpi : selitems)
+	{
+		forig = getListcellItemLabel(dpi,0);
+		foldnums += forig + ",";
+	}
+
+	foldnums = foldnums.substring(0,foldnums.length()-1) + ")";
+
+	sql = als_mysoftsql();
+	if(sql == null ) return false;
+	sqlstm = "select count(origid) as comcount from jobfolders where origid in " + foldnums + " and folderstatus='" + FOLDERCOMMITED + "'";
+	cntcom = sql.firstRow(sqlstm);
+	sql.close();
+
+	commitcount = 0;
+	if(cntcom != null) commitcount = cntcom.get("comcount");
+
+	if(commitcount != numselfolders) { showMessageBox("Not all folders you've selected are committed. Cannot issue invoice"); return; }
+	
+	return;
+	
+	foldrec = getFolderJobRec(extractFolderNo(selected_folderno));
+	if(foldrec == null) { showMessageBox("Cannot retrieve folder details. Please notify system-admin"); return; }
+	if(!foldrec.get("folderstatus").equals(FOLDERCOMMITED)) { showMessageBox("Folder is not committed. Cannot issue invoice"); return; }
+
+	if(invoiceExist(selected_folderno))
+	{
+		showMessageBox("Invoice has been issued for : " + selected_folderno + " . Please check..");
+		return;
+	}
+
+/*
+	parentInvoice = parentInvoiceExist(selected_folderno);
+
+	if(!parentInvoice.equals(""))
+	{
+		showMessageBox("Cannot create invoice for this folder. Folder is billed in " + parentInvoice);
+		return;
+	}
+*/
+	todaydate = getDateFromDatebox(hiddendatebox);
+	
+	if(!createInvoiceRec(selected_arcode, selected_folderno, todaydate, useraccessobj.username))
+	{
+		showMessageBox("Cannot create invoice. Please notify system-admin");
+		return;
+	}
+
+	listInvoicesByCustomer(selected_arcode); // refresh
+	listFoldersByClient(selected_arcode);
+
+}
+
+//----------- endof All invoice handling funcs
+
+
+]]>
+</zscript>
+
+<!-- Linking documents popup -->
+<popup id="doculink_popup">
+<div width="400px">
+<include id="linkingdoc_include" src="alsglobal/doculink.zul"/>
+<separator height="5px" />
+<hbox>
+	<button label="Close" onClick="showDocumentsList(selected_folderno); doculink_popup.close()" style="font-size:9px" />
+</hbox>
+</div>
+</popup>
+<!-- ENDOF Linking documents popup -->
+
+<!-- send document via email popup -->
+<popup id="senddocemail" >
+<div width="400px">
+<hbox>
+<groupbox>
+<caption label="E-Mail Addresses" />
+<div id="emails_holder" />
+<separator height="3px" />
+<hbox>
+<button label="E-mail SRN + document(s)" style="font-size:9px" onClick="sendOutCOA_clicker(1)" />
+<button label="E-Mail document(s) ONLY" style="font-size:9px" onClick="sendOutCOA_clicker(2)" />
+</hbox>
+</groupbox>
+</hbox>
+</div>
+</popup>
+
+<popup id="senthistory_popup">
+<div width="450px">
+<div id="senthistory_holder" />
+<separator height="3px" />
+<button label="Close" style="font-size:9px" onClick="senthistory_popup.close()" />
+</div>
+</popup>
+
+<!-- end of send document via email popup -->
+
+<!-- Job notes related popup -->
+
+<popup id="jobnotes_history_popup">
+<groupbox width="400px">
+	<caption label="Job Notes History" />
+	<div style="padding:3px">
+		<div id="historyjobnotes_lb_div" />
+	</div>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button id="prev_jn_btn" label="View previous note" style="font-size:9px" onClick="jobnoteshistory_viewprev_clicker()" />
+	<button label="Close" onClick="jobnotes_history_popup.close()" style="font-size:9px" />
+</hbox>
+</popup>
+
+<popup id="viewprev_jn_popup">
+<groupbox>
+	<caption label="Previous job-notes" />
+	<textbox id="prevjn_tb" multiline="true" width="400px" height="50px" style="font-size:9px;padding:3px" />
+</groupbox>
+</popup>
+
+<!-- end of Job notes related popup -->
+
+<div width="1200px">
+<panel id="billingbrowser_1" title="Billing v.1" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<hbox>
+<groupbox mold="3d" width="380px">
+<caption label="Clients" />
+<grid>
+	<columns>
+		<column label="" />
+		<column label="" />
+		<column label="" />
+		<column label="" />
+		<column label="" />
+	</columns>
+	<rows>
+		<row>
+			<label value="Start" style="font-size:9px" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+			<label value="End" style="font-size:9px" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+			<button label="Load" style="font-size:9px" onClick="listClientsWithFolders(1)" />
+		</row>
+		<row spans=",3">
+			<label value="Client" style="font-size:9px" />
+			<textbox id="clientsearch_tb" width="190px" style="font-size:9px" />
+			<button label="Find" style="font-size:9px" onClick="listClientsWithFolders(2)" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<div id="clients_holder" />
+</groupbox>
+
+<groupbox id="folders_gb" mold="3d" width="350px" visible="false">
+<caption id="folders_label" label="Folders" />
+<div id="folders_holder" />
+<separator height="3px" />
+<button label="View details" style="font-size:9px" onClick="viewFolderDetails()" />
+</groupbox>
+
+<vbox>
+<groupbox id="document_gb" mold="3d" visible="false">
+<caption id="documents_label" label="Documents" />
+<div id="doculist_holder" />
+<separator height="3px" />
+<button label="View document" style="font-size:9px" onClick="viewDocument()" />
+<button id="viewdoculinks_btn" label="Upload COC/PO/Documents" onClick="doViewDoculinkPopup()" style="font-size:9px" />
+<button id="sendemail_doc_btn" label="E-Mail SRN + COC/PO" style="font-size:9px" onClick="sendDocViaEmail_clicker()" />
+<button id="senthistory_btn" label="Sent history" style="font-size:9px" onClick="viewSentHistory_clicker()" />
+</groupbox>
+
+<groupbox id="jobnotes_gb" mold="3d" visible="false">
+<caption label="Job Notes" />
+<div id="jobnotes_found_div" />
+<separator height="3px" />
+<grid>
+	<columns>
+		<column label="" />
+		<column label="" />
+	</columns>
+	<rows>
+		<row>
+		<label value="Job notes" style="font-size:9px" />
+		<textbox id="jobnotes_tb" style="font-size:9px" multiline="true" width="350px" height="70px" />
+		</row>
+	</rows>
+</grid>
+<separator height="3px" />
+<hbox>
+<button label="Save notes" style="font-size:9px" onClick="saveUpdateJobNotes()" />
+<button id="noteshistory_btn" label="Notes history" style="font-size:9px" onClick="jobNotesHistory_clicker()" />
+</hbox>
+</groupbox>
+</vbox>
+</hbox>
+
+<hbox>
+<groupbox id="invoicemaker_gb" mold="3d" visible="false">
+<caption label="Invoicing" />
+<groupbox mold="3d" width="350px">
+<hbox>
+	<button label="New invoice" style="font-size:9px" onClick="makeInvoice_Entry()" />
+	<button label="Hold" style="font-size:9px" />
+</hbox>
+<separator height="3px" />
+<div id="invoices_holder" />
+</groupbox>
+</groupbox>
+
+</hbox>
+
+<zscript>
+<![CDATA[
+
+setTodayDatebox(hiddendatebox);
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+
+documentLinkProp.document_idprefix = "DOCS";
+setDocumentLink_DynamicProperty(linkingdoc_include, documentLinkProp, useraccessobj);
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>

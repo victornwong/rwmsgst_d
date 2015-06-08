@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="anncemntmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../documents/documan2_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "iBoard";
+MYVERSION = "v0.1";
+MYPANEL = "annwallpanl";
+/*
+Title : Wall-modules - announcements
+Written by : Victor Wong
+Dated : 01/08/2014
+
+*NOTES*
+05/08/2014: Joanna name this iBoard -- ok le
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+DOCUPREFIX = "PST";
+
+selected_posting = selected_subdirectory = "";
+
+void clearModerFields()
+{
+	p_message.setValue("");
+	p_title.setValue("");
+	postselected_lbl.setValue("");
+	if(docu_holder.getFellowIfAny("postfiles_lb") != null) postfiles_lb.setParent(null); // clear the docu list
+}
+
+void showPostingMeta(String iwhat)
+{
+	if(iwhat.equals("")) return;
+	sqlstm = "select posting,title from elb_postings where origid=" + iwhat;
+	r = sqlhand.gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+	p_message.setValue(r.get("posting"));
+	p_title.setValue(r.get("title"));
+	postselected_lbl.setValue("[ " + iwhat + " ]");
+}
+
+class postdivclicker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getTarget();
+		selected_posting = selected_subdirectory = selitem.getId();
+	}
+}
+postcliker = new postdivclicker();
+
+void showPostings()
+{
+	chd = postings.getChildren().toArray();
+	for(i=0;i<chd.length;i++) // clear any prev postings before reloading
+	{
+		chd[i].setParent(null);
+	}
+
+	sqlstm = "select top 3 * from elb_postings where active=1 order by datecreated desc";
+	trs = sqlhand.gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	for(d : trs)
+	{
+		pdiv = new Div();
+		pdiv.addEventListener("onClick", postcliker);
+		pdiv.setParent(postings);
+		pdiv.setSclass("shadowbox"); pdiv.setStyle("background:#e2c05a");
+		pdiv.setId(d.get("origid").toString());
+
+		ksp = new Separator(); ksp.setHeight("3px");
+		ksp.setParent(postings);
+
+		vbx = new Vbox(); vbx.setParent(pdiv);
+
+		itit = new Label(); itit.setParent(vbx);
+		itit.setValue(dtf2.format(d.get("datecreated")) + " :: " + kiboo.checkNullString(d.get("title")) );
+		itit.setStyle("font-weight:bold;color:#76777f;");
+
+		ipt = new Label(); ipt.setMultiline(true); ipt.setParent(vbx);
+		ipt.setValue( kiboo.checkNullString(d.get("posting")) );
+		ipt.setStyle("font-size:9px");
+
+		duclink = DOCUPREFIX + d.get("origid").toString();
+		sqlstm2 = "select origid from DocumentTable where docu_link='" + duclink + "' and deleted=0 order by origid";
+		kats = dmshand.dmsgpSqlGetRows(sqlstm2); // load file attachments if any
+		if(kats.size() != 0)
+		{
+			for(px : kats)
+			{
+				viewTheDocument_DM_mini(pdiv,px.get("origid").toString(),"480px","400px");
+				ksp = new Separator(); ksp.setHeight("3px");
+				ksp.setParent(pdiv);
+			}
+		}
+	}
+}
+
+void postFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = refresh_postman = false;
+	sqlstm = dmsqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("modpost_b"))
+	{
+		pn = kiboo.replaceSingleQuotes(p_message.getValue().trim());
+		pti = kiboo.replaceSingleQuotes(p_title.getValue().trim());
+		if(pn.equals("") || pti.equals("")) { guihand.showMessageBox("Title and message must have something.."); return; }
+		if(selected_posting.equals(""))
+			sqlstm = "insert into elb_postings (datecreated,username,posting,active,title) values " +
+			"('" + todaydate + "','" + unm + "','" + pn + "',1,'" + pti + "')";
+		else
+			sqlstm = "update elb_postings set posting='" + pn + "', title='" + pti + "' where origid=" + selected_posting;
+
+		selected_posting = "";
+		clearModerFields(); // clear after posting..
+	}
+
+	if(itype.equals("modclr_b"))
+	{
+		clearModerFields();
+		selected_posting = "";
+	}
+
+	if(itype.equals("totactive_b")) // toggle post active flag
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(manposts_holder,"postings_lb")) return;
+		di = lbhand.getListcellItemLabel(postings_lb.getSelectedItem(),0);
+		sqlstm = "update elb_postings set active=1-active where origid=" + di;
+		refresh_postman = refresh = true;
+	}
+
+	if(itype.equals("delpost_b")) // only ADMIN can delete post for now
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(manposts_holder,"postings_lb")) return;
+		di = lbhand.getListcellItemLabel(postings_lb.getSelectedItem(),0);
+		if(Messagebox.show("Hard delete this post #" + di, "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		dol = DOCUPREFIX + di;
+		dmsqlstm = "delete from DocumentTable where docu_link='" + dol + "';";
+		sqlstm = "delete from elb_postings where origid=" + di;
+		refresh_postman = refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(!dmsqlstm.equals("")) dmshand.dmsgpSqlExecuter(dmsqlstm);
+	if(refresh_postman) loadShowPostings();
+	if(refresh) showPostings();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void loadShowPostings()
+{
+	Object[] posthds = {
+	new listboxHeaderObj("PID",true),
+	new listboxHeaderObj("Dated",true),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("User",true),
+	new listboxHeaderObj("Act",true),
+};
+	Listbox newlb = lbhand.makeVWListbox(manposts_holder, posthds, "postings_lb", 5);
+	sqlstm = "select origid,datecreated,username,title,active from elb_postings order by datecreated";
+	trecs = sqlhand.gpSqlGetRows(sqlstm);
+	if(trecs.size() == 0) return;
+	newlb.setRows(21); newlb.setMold("paging");
+	String[] fl = { "origid", "datecreated","title","username","active"};
+	ArrayList kabom = new ArrayList();
+	for(d : trecs)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+]]>
+</zscript>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" sclass="k9" />
+					<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+				</row>
+				<row>
+					<label value="Description" sclass="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<hbox>
+			<button id="uploaddoc_btn" label="Upload file" onClick="uploadfile_popup.close(); docuFunc_DM(self.getId())" sclass="k9mo" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="managepostingpop">
+	<div sclass="shadowbox" style="background:#042a6c" width="500px">
+		<div id="manposts_holder" />
+		<separator height="3px" />
+		<hbox>
+			<button id="totactive_b" label="Toggle active" sclass="k9" onClick="postFunc(self.getId())" />
+			<button id="delpost_b" label="Delete post" style="font-weight:bold;font-size:9px;color:#ff0000" visible="false" onClick="postFunc(self.getId())" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="moderatorpop">
+	<div sclass="shadowbox" style="background:#042a6c" width="500px">
+		<vbox>
+			<hbox>
+				<label sclass="subhead1" value="Moderator" />
+				<label id="postselected_lbl" style="color:#ffffff" />
+				<button label="Manage postings" sclass="k9mo" onClick="loadShowPostings(); managepostingpop.open(self)" />
+			</hbox>
+			<separator height="3px" bar="true" />
+			<label value="Post title" sclass="k9b" />
+			<textbox id="p_title" sclass="k9" width="480px" />
+			<label value="Message" sclass="k9b" />
+			<textbox id="p_message" sclass="k9" multiline="true" width="480px" height="70px" />
+			<hbox>
+				<button id="modpost_b" label="Post/Update" sclass="k9mo" onClick="moderatorpop.close(); postFunc(self.getId())" />
+				<button id="modclr_b" label="Clear" sclass="k9mo" onClick="postFunc(self.getId())" />
+			</hbox>
+		</vbox>
+		<separator height="3px" />
+		<vbox>
+			<div id="docu_holder" />
+			<hbox>
+				<button label="Upload file" sclass="k9mo" onClick="uploadfile_popup.open(self)" />
+				<button id="viewdocfile_btn" label="View" sclass="k9mo" onClick="docuFunc_DM(self.getId())" />
+				<button id="deletedoc_btn" label="Delete" sclass="k9mo" onClick="docuFunc_DM(self.getId())" />
+			</hbox>
+		</vbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+{
+border: none; overflow: hidden; zoom: 1;
+border-top: none; border-left: none; border-right: none; border-bottom: none;
+} 
+</style>
+
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#3a3b50">
+
+	<hbox>
+		<image src="/rwimg/Refresh-button.png" width="25px"  style="position:absolute;right:0px" onClick="showPostings()" />
+		<image id="moderatoricon" src="/rwimg/mod.png" width="50px" onClick="openModeratorThings(self)" visible="false" />
+	</hbox>
+
+	<div id="postings" />
+
+	<label id="docutitle_lbl" visible="false" /> <!-- used by documan2_funcs.viewTheDocument_DM() -->
+	<label id="docudesc_lbl" visible="false" />
+
+<zscript>
+<![CDATA[
+
+void openModeratorThings(Object iwhat)
+{
+	showPostingMeta(selected_posting);
+	if(!selected_posting.equals("")) fillDocumentsList_DM(DOCUPREFIX, selected_posting, docu_holder, "postfiles_lb");
+	moderatorpop.open(iwhat);
+}
+
+usern = useraccessobj.username;
+
+if(usern.equals("padmin") || usern.equals("joanna"))
+{
+	moderatoricon.setVisible(true);
+}
+
+if(useraccessobj.accesslevel == 9)
+{
+	delpost_b.setVisible(true);
+}
+else
+{
+	annwallpanl.setClosable(false);
+}
+
+showPostings();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+
+</zk>

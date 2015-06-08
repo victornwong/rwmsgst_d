@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="marchdoctracking_module"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript>
+<![CDATA[
+/*
+Title: Update documents-sent status - airway bill # , preprinted barcode or whatever
+Developer : Victor Wong
+*/
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+void playFolderDriller(String ifoldno)
+{
+		theparam = "folderno=" + ifoldno;
+		uniqwindowid = makeRandomId("xxfoldxx");
+		globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+void localPlayDriller()
+{
+	if(folderjobs_lb.getSelectedIndex() == -1) return;
+	
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	playFolderDriller(ifolderno);
+
+}
+
+// onSelect event for makeALSTestParametersListbox()
+class folderjobslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+		playFolderDriller(ifolderno);
+	}
+}
+
+// Hand-coded listbox creation
+Listbox makeFoldersListbox(Div mDiv, int totalrecs)
+{
+	// if there's previously a listbox, remove before adding a new one.
+	Listbox oldlb = mDiv.getFellowIfAny("folderjobs_lb");
+	if(oldlb != null) oldlb.setParent(null);
+
+    Listbox newlb = new Listbox();
+
+    newlb.setId("folderjobs_lb");
+    newlb.setVflex(true);
+
+    //newlb.setContext("dispatchSchedulingContext");
+    // newlb.setPopup("testmypop");
+	
+	//newlb.addEventListener("onSelect", new folderjobslb_Listener());
+
+    newlb.setParent(mDiv);
+
+    Listhead newhead = new Listhead();
+    newhead.setSizable(true);
+    newhead.setParent(newlb);
+	
+    Listheader hd1 = new Listheader();
+    hd1.setLabel("FolderNo");
+    hd1.setSort("auto");
+    hd1.setParent(newhead);
+
+    Listheader hd2 = new Listheader();
+    hd2.setLabel("RecvDate");
+    hd2.setSort("auto");
+    hd2.setParent(newhead);
+	
+    Listheader hd5 = new Listheader();
+    hd5.setLabel("TAT");
+    hd5.setSort("auto");
+    hd5.setParent(newhead);
+	
+    Listheader hd6 = new Listheader();
+    hd6.setLabel("DueDate");
+    hd6.setSort("auto");
+    hd6.setParent(newhead);
+	
+    Listheader hd8 = new Listheader();
+    hd8.setLabel("Samples");
+    hd8.setSort("auto");
+    hd8.setParent(newhead);
+	
+    Listheader hd3 = new Listheader();
+    hd3.setLabel("Customer");
+    hd3.setSort("auto");
+    hd3.setParent(newhead);
+	
+	Listheader hd9 = new Listheader();
+    hd9.setLabel("Status");
+    hd9.setSort("auto");
+    hd9.setParent(newhead);
+
+    Listfoot newfooter = new Listfoot();
+    newfooter.setParent(newlb);
+
+    Listfooter fd1 = new Listfooter();
+    fd1.setLabel("Found:");
+    fd1.setParent(newfooter);
+
+    Listfooter fd2 = new Listfooter();
+    fd2.setLabel(totalrecs.toString() + " folders");
+    fd2.setParent(newfooter);
+
+    newlb.setRows(20);
+
+    return newlb;
+
+} // end of makeFoldersListbox()
+
+Object[] folders_lb_headers = {
+
+	new listboxHeaderObj("FolderNo",true),
+	new listboxHeaderObj("RecvDate",true),
+	new listboxHeaderObj("TAT",true),
+	new listboxHeaderObj("DueDate",true),
+	new listboxHeaderObj("Samples",true),
+	new listboxHeaderObj("Customer",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Brnch",true)
+};
+
+
+// Do the search and populate listbox
+void startFolderJobsSearch(Datebox startd, Datebox endd, Textbox icustomer_tb)
+{
+	sdate = getDateFromDatebox(startd);
+    edate = getDateFromDatebox(endd);
+	cnm = icustomer_tb.getValue();
+	
+	if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	sqlstatem = "select top 510 * from JobFolders where datecreated between '" + sdate + "' and '" + edate + "'" + 
+	" and deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') order by datecreated desc";
+	
+	// 25/3/2010: new select cmd to search based on s.date, e.date and customer-name - req by Zainab
+	if(!cnm.equals(""))
+	{
+		xcnm = replaceSingleQuotes(cnm); // play safe
+		sqlstatem = "select jobfolders.origid, jobfolders.ar_code, jobfolders.datecreated, jobfolders.folderstatus," + 
+			"jobfolders.duedate, jobfolders.tat, " + 
+			"customer.ar_code,customer.customer_name " +
+			"from jobfolders left join customer " +
+			"on customer.ar_code = jobfolders.ar_code where " +
+			"jobfolders.datecreated between '" + sdate + "' and '" + edate + "'" + 
+			"and customer.customer_name like '%" + xcnm + "%' " +
+			"and deleted=0 and folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') " +
+			"group by " + 
+			"jobfolders.origid, jobfolders.ar_code, jobfolders.datecreated, jobfolders.folderstatus," +
+			"jobfolders.duedate, jobfolders.tat, " +
+			"customer.ar_code, customer.customer_name";
+	}
+	
+	tlist = sql.rows(sqlstatem);
+	
+	sql.close();
+	
+    // found some records but must be within limit else the browser will crash
+	reccount = tlist.size();
+
+	// create a new listbox and attach to searchdiv
+	Listbox newlb = makeFoldersListbox(folders_searchdiv,reccount);
+	
+	if(reccount > 0 && reccount <= 500)
+	{
+		String[] strarray = new String[7];
+		total_numsamples = 0;
+
+        // showMessageBox(tlist.get(0).get("Date_Created").toString());
+		for(ilist : tlist)
+		{
+			ifolderno = ilist.get("origid");
+			
+            strarray[0] = JOBFOLDERS_PREFIX + padZeros5(ifolderno);
+			
+            strarray[1] = ilist.get("datecreated").toString().substring(0,10);
+			
+			strarray[2] = ilist.get("tat") + " day(s)";
+			strarray[3] = ilist.get("duedate").toString().substring(0,10);
+			
+			// 27/2/2010: get number of samples for this folder
+			numsamples = getNumberOfSamples_InFolder(ifolderno);
+			strarray[4] = numsamples.toString();
+
+			total_numsamples = total_numsamples + numsamples;
+
+			// get customer name from ar_code - will be slow if alot, scan 1 by 1
+			iar_code = ilist.get("ar_code");
+			icompanyname = "Undefined";
+
+			if(!iar_code.equals(""))
+				icompanyname = getCompanyName(iar_code);
+
+			strarray[5] = icompanyname;
+			
+			strarray[6] = ilist.get("folderstatus");
+
+            insertListItems(newlb,strarray,JOBFOLDERS_PREFIX);
+		}
+		
+		// 8/3/2010: hardcoded numofsamples_lbl def in UI section. To show total number of samples collected
+		numofsamples_lbl.setValue("Total samples : " + total_numsamples.toString());
+		
+	}
+
+} // end of startFolderJobsSearch()
+
+void playDocumentTrailDriller(String ifoldno)
+{
+/*
+		theparam = "folderno=" + ifoldno;
+		uniqwindowid = makeRandomId("xxfoldxx");
+		globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+		*/
+		
+		alert("papertrail : " + ifoldno);
+}
+
+void localDocumentTrail()
+{
+	if(folderjobs_lb.getSelectedIndex() == -1) return;
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	playDocumentTrailDriller(ifolderno);
+}
+
+]]>
+</zscript>
+
+<div width="990px">
+<panel id="marchdoctracking_panel" title="Documents Tracking" border="normal" collapsible="true" closable="true">
+<panelchildren>
+
+<vbox>
+
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+
+<hbox>
+	<label value="Start date" />
+	<datebox id="startdate" format="yyyy-MM-dd" />
+
+	<separator width="10px"/>
+
+	<label value="End date" />
+	<datebox id="enddate" format="yyyy-MM-dd" />
+	
+	<button label="Search/Refresh" onClick="startFolderJobsSearch(startdate,enddate,customer_tb)" />
+	
+	<separator width="10px" />
+	<label id="numofsamples_lbl" />
+	
+	<separator width="30px" />
+	<button label="Folder details" onClick="localPlayDriller()" />
+	<button label="Documents trail" onClick="localDocumentTrail()" />
+	
+	<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+		
+</hbox>
+
+<hbox>
+	<label value="Customer" />
+	<textbox id="customer_tb" width="200px" />
+</hbox>
+
+<!--
+<hbox>
+	<button label="Upload to MySoft" onClick="uploadToMysoft()" />
+	<button label="Upload to STARLiMS" onClick="uploadToStarlims()" />
+</hbox>
+-->
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+
+<vbox>
+
+<div id="folders_searchdiv" />
+
+</vbox>
+
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+// Set search startdate and enddate to today's date
+Calendar kkk = Calendar.getInstance();
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+setTodayDatebox(hiddendatebox);
+
+startFolderJobsSearch(startdate,enddate,customer_tb);
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+
+</zk>
+

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="shwbombuildwin"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="./rentalsBOM_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "BOM - Build Details";
+MYVERSION = "v0.1";
+MY_ID = "showbombuildwind";
+/*
+Written by	: Victor Wong
+Dated		: 13/08/2013
+NOTES:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+param_bomid = Executions.getCurrent().getParameter("bom");
+param_assettag = Executions.getCurrent().getParameter("ass");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+
+<popup id="auditlogs_pop">
+<div style="background:#ef2929; -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000;
+	box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" width="500px" >
+<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+<separator height="3px" />
+<div id="auditlogs_holder" />
+<separator height="3px" />
+<button label="Ok" style="font-size:9px" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<div id="workarea" width="680px">
+
+<div id="buildform_holder" />
+
+</div>
+<zscript>
+<![CDATA[
+
+glob_buildformmaker = dynamicForm(buildform_holder, "build_details_grid", "2");
+
+// parts check audit-log buttons -- need these lines if uses formkeeper
+class partsauditbtn implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		ibtn = event.getTarget();
+		showPartsAuditLog(ibtn);
+	}
+}
+
+if(param_bomid != null && param_assettag != null)
+{
+	sqlstm = "select origid from stockrentalitems_det where parent_id=" + param_bomid + " and asset_tag='" + param_assettag + "'";
+	kr = sqlhand.gpSqlFirstRow(sqlstm);
+	if(kr != null)
+	{
+		showBuild_metadata(kr.get("origid").toString());
+
+		pauditclick = new partsauditbtn();
+
+		Object[] lisn = { pickcpu_butt, pickram_butt, pickram2_butt, pickram3_butt, pickram4_butt,
+			pickhdd_butt, pickhdd2_butt, pickhdd3_butt, pickhdd4_butt,
+			pickpoweradapt_butt, pickbatt_butt, pickgfx_butt, pickmonitor_butt };
+
+		for(i=0;i<lisn.length;i++)
+		{
+			lisn[i].addEventListener("onClick", pauditclick);
+		}
+	}
+}
+
+]]>
+</zscript>
+
+</window>
+</zk>

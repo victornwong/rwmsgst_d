@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="purchase_items_setup"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+
+<zscript>
+<![CDATA[
+/*
+Title: Direct access to StockMasterDetails to add/mod of type "Stock Item" ONLY.
+Written by: Victor Wong
+Start date: 29/7/2010
+
+**NOTES**
+
+*/
+
+import java.util.*;
+import java.text.*;
+import java.math.BigDecimal;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+/*
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,1);
+
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+*/
+
+global_selected_mysoftcode = "";
+
+Object[] stockitems_lb_headers = {
+	new listboxHeaderObj("mysoftcode",false),
+	new listboxHeaderObj("###",true),
+	new listboxHeaderObj("Stock.Code",true),
+	new listboxHeaderObj("Item.name",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Cost.Price",true),
+	new listboxHeaderObj("Last.Price",true),
+};
+
+// Look for "Stock Item" only in StockMasterDetails
+// stockitems_searchdiv
+void findThoseStockItems_clicker()
+{
+	itemname = itemname_tb.getValue();
+	if(itemname.equals("")) return;
+	itemname = replaceSingleQuotes(itemname);
+	
+	Listbox newlb = makeVWListbox(stockitems_searchdiv, stockitems_lb_headers, "stock_items_lb", 5);
+	
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select id,stock_code,description,description2,last_purchase_price,cost_price,nominal_code " +
+		"from stockmasterdetails where item_type='Stock Item' and groupcode<>'SUBCONTRACT' and " +
+		"description like '%" + itemname + "%' order by description";
+	stockitems = sql.rows(sqlstm);
+	sql.close();
+	
+	if(stockitems.size() == 0) return;
+
+	lbrows = (stockitems.size() > 25) ? 20 : stockitems.size();
+	newlb.setRows(lbrows);
+
+	NumberFormat nf = NumberFormat.getCurrencyInstance();
+	rowcounter = 1;
+
+	for(dpi : stockitems)
+	{
+		ArrayList kabom = new ArrayList();
+		
+		kabom.add(dpi.get("id").toString()); // <-- this is the mysoftcode
+		kabom.add(rowcounter.toString() + ".");
+		kabom.add(dpi.get("stock_code"));
+		kabom.add(dpi.get("description"));
+		desc2 = dpi.get("description2");
+		desc2 = (desc2.equals("")) ? "------" : desc2;
+		kabom.add(desc2);
+		
+		kabom.add(nf.format(dpi.get("cost_price")));
+		kabom.add(nf.format(dpi.get("last_purchase_price")));
+
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(newlb,strarray,"false");
+		
+		rowcounter++;
+	}
+}
+
+// Let user add a new stock-item
+void newStockitem_clicker()
+{
+	// clear previous stuff in input boxes
+	global_selected_mysoftcode = "";
+
+	si_groupbox_caption.setLabel("Stock item details");
+
+	si_stockcode.setValue("");
+	si_dept_number.setSelectedIndex(0);
+	si_description.setValue("");
+	si_description2.setValue("");
+
+	biggnum = new BigDecimal(0);
+	si_cost_price.setValue(biggnum);
+
+	si_nominal_code_lb.setSelectedIndex(0);
+	si_purchasecode_lb.setSelectedIndex(0);
+
+	// show the groupbox
+	stockitem_fields_gb.setVisible(true);
+}
+
+// Edit existing stock-item ..
+void editStockitem_clicker()
+{
+	if(stockitems_searchdiv.getFellowIfAny("stock_items_lb") == null) return;
+	if(stock_items_lb.getSelectedIndex() == -1) return;
+
+	global_selected_mysoftcode = stock_items_lb.getSelectedItem().getLabel(); // 1st col is the mysoftcode
+
+	stockrec = getMySoftMasterProductRec(global_selected_mysoftcode);
+	if(stockrec == null) return;
+
+	// populate inputboxes
+	si_stockcode.setValue(stockrec.get("Stock_Code"));
+
+	brnch = stockrec.get("Dept_Number");
+	if(brnch.equals("0")) brnch="ALL";
+
+	matchListboxItems(si_dept_number,brnch);
+
+	si_description.setValue(stockrec.get("Description"));
+	si_description2.setValue(stockrec.get("Description2"));
+
+	biggnum = new BigDecimal(stockrec.get("Cost_Price"));
+	si_cost_price.setValue(biggnum);
+
+	nomcode = stockrec.get("Nominal_Code");
+	matchListboxItemsColumn(si_nominal_code_lb, nomcode, 1);
+
+	purcode = stockrec.get("PurchaseCode");
+	matchListboxItemsColumn(si_purchasecode_lb, purcode, 1);
+
+	// reset groupbox caption
+	si_groupbox_caption.setLabel(stockrec.get("Stock_Code") + " : " + stockrec.get("Description"));
+
+	// show the groupbox
+	stockitem_fields_gb.setVisible(true);
+}
+
+Object[] glcode_lb_headers = {
+	new listboxHeaderObj("Account",true),
+	new listboxHeaderObj("code",false),
+};
+
+// Grab/show code + accountname from Accountchart - si_nominal_code_lb si_purchasecode_lb
+void populateGLCode_listbox()
+{
+	sql = als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select code,name from accountchart where code like '51100.%'";
+	accts = sql.rows(sqlstm);
+
+	for(dpi : accts)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_nominal_code_lb,strarray,"false");
+	}
+	
+	sqlstm = "select code,name from accountchart where code like '61100.%'";
+	purchasecodes = sql.rows(sqlstm);
+
+	for(dpi : purchasecodes)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("code") + " : " + dpi.get("name"));
+		kabom.add(dpi.get("code"));
+		strarray = convertArrayListToStringArray(kabom);
+		insertListItems(si_purchasecode_lb,strarray,"false");
+	}
+	
+	sql.close();
+}
+
+]]>
+</zscript>
+
+<div width="1100px">
+<panel id="pr_items_panel" title="Purchase Items Setup" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<vbox>
+
+<groupbox mold="3d" width="100%">
+<caption label="Search stock items" />
+<hbox>
+	<label value="Item name" style="font-size:9px" />
+	<textbox id="itemname_tb" width="200px" style="font-size:9px" />
+	<separator width="10px" />
+	<button label="Search/Refresh" style="font-size:9px" onClick="findThoseStockItems_clicker()" />
+</hbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+<vbox>
+<div id="stockitems_searchdiv" />
+
+<hbox>
+	<button id="new_stockitem_btn" label="New stock-item" style="font-size:9px" onClick="newStockitem_clicker()" />
+	<button id="edit_stockitem_btn" label="Edit item" style="font-size:9px" onClick="editStockitem_clicker()" />
+	<button id="delete_stockitem_btn" label="Delete" style="font-size:9px" visible="false" />
+</hbox>
+<separator height="5px" />
+
+<groupbox id="stockitem_fields_gb" width="100%" visible="false">
+<caption id="si_groupbox_caption" label="Stock item details" />
+<div style="padding:2px" >
+	<hbox>
+		<label value="Stock.Code" style="font-size:9px" />
+		<separator width="3px" />
+		<textbox id="si_stockcode" width="200px" style="font-size:9px" />
+		<separator width="5px" />
+		<label value="Branch.Code" style="font-size:9px" />
+		<listbox id="si_dept_number" mold="select" style="font-size:9px" />
+		
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<label value="Item.Name" style="font-size:9px" />
+		<separator width="5px" />
+		<textbox id="si_description" width="350px" style="font-size:9px" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<label value="Description" style="font-size:9px" />
+		<separator width="3px" />
+		<textbox id="si_description2" width="350px" style="font-size:9px" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<label value="Cost.Price" style="font-size:9px" />
+		<separator width="8px" />
+		<decimalbox id="si_cost_price" width="80px" format="#.#" style="font-size:9px" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<label value="Sale.Code" style="font-size:9px" />
+		<separator width="38px" />
+		<listbox id="si_nominal_code_lb" mold="select" style="font-size:9px" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<label value="Purchase.Code" style="font-size:9px" />
+		<separator width="5px" />
+		<listbox id="si_purchasecode_lb" mold="select" style="font-size:9px" />
+	</hbox>
+
+	<separator height="8px"/>
+	<hbox>
+		<button id="si_saveitem_btn" label="Save item" style="font-size:9px" onClick='alert("Not yet...")' />
+		<button id="si_cancel_btn" label="Cancel" style="font-size:9px" onClick="newStockitem_clicker()" />
+	</hbox>
+	
+</div>
+</groupbox>
+	
+</vbox>
+</groupbox>
+
+<zscript>
+<![CDATA[
+setTodayDatebox(hiddendatebox);
+
+populateGLCode_listbox();
+populateDropdownListbox(si_dept_number, dd_branches);
+
+// Admin only stuff
+if(useraccessobj.accesslevel == 9)
+{
+	delete_stockitem_btn.setVisible(true);
+}
+
+// documentLinkProp.document_idprefix = "DOCS";
+// setDocumentLink_DynamicProperty(linkingdoc_include, documentLinkProp, useraccessobj);
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+
+</zk>
+

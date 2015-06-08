@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="outsouceuploadutwin"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Load/View Outsource-Partner Audit-Forms";
+MYVERSION = "v0.1";
+MY_ID = "outsoruceaiodppael";
+/*
+@Title View outsource-partner uploaded audit-forms
+@Author Victor Wong
+@Since 18/08/2014
+@NOTES
+03/09/2014: modified to link to GCO for the ADT-form uploaded by oursource
+
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals(); sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+ADTPREFIX = "OSA";
+selected_file_id = glob_sel_gco = "";
+glob_sel_outsouce = "1"; // default 1=EIS
+
+Object[] gcolbhds = 
+{
+	new listboxHeaderWidthObj("fc6",false,""),
+	new listboxHeaderWidthObj("GCO",true,"60px"),
+	new listboxHeaderWidthObj("Dated",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("DueDate",true,"70px"),
+};
+
+class gcolbClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_gco = lbhand.getListcellItemLabel(isel,1);
+		gco_tit.setValue(glob_sel_gco);
+		fillDocumentsList(documents_holder, ADTPREFIX, glob_sel_gco); // show 'em outsourcer uploaded audit-forms for GCO
+		//showGCOMeta(glob_sel_gco);
+	}
+}
+gcoclkier = new gcolbClick();
+
+void showPartnerGCOList(Div idiv, String ilbid)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, gcolbhds, ilbid, 3);
+
+	sqlstm = "select origid,datecreated,res_date,customer_name,fc6_custid from rw_goodscollection " +
+	"where opartner='EIS' order by origid desc"; // HARDCODED for 'EIS' only
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+	newlb.setRows(20); newlb.setMold("paging");
+	newlb.addEventListener("onSelect", gcoclkier);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "fc6_custid","origid","datecreated","customer_name" };
+	for(d : rcs)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		rdd = kiboo.checkNullDate(d.get("res_date"),"");
+		if(rdd.equals("1900-01-01")) rdd = "";
+		kabom.add(rdd);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+]]>
+</zscript>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="updateFileDescription(documents_holder,ADTPREFIX,glob_sel_gco)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<style src="/real-world.css" />
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<div style="background:#41301F">
+
+<hbox>
+	<div id="gcosholder" width="500px" sclass="shadowbox" style="background:#606B2D" />
+	<vbox>
+		<hbox>
+			<label value="GCO:" sclass="subhead1" />
+			<label id="gco_tit" sclass="subhead1" />
+		</hbox>
+		<div id="pitems_holder" sclass="shadowbox" style="background:#606B2D" />
+
+		<div sclass="shadowbox" style="background:#2e3436" width="450px">
+			<label sclass="subhead1">Audit-forms / Attachments</label>
+			<separator height="3px" />
+			<hbox>
+				<button visible="false" id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="showUploadPopup(ADTPREFIX,glob_sel_gco)" />
+				<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+				<button visible="false" id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+				<button id="deletedoc_btn" label="Delete" visible="false" style="font-size:9px" onClick="deleteFile(documents_holder,ADTPREFIX,glob_sel_gco)" />
+			</hbox>
+			<separator height="3px" />
+			<div id="documents_holder" />
+		</div>
+
+	</vbox>
+
+</hbox>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+showPartnerGCOList(gcosholder,"gco_lb");
+
+//fillDocumentsList(documents_holder,ADTPREFIX,"1"); // show 'em outsourcer uploaded audit-forms
+/*
+if(useraccessobj.accesslevel == 9)
+{
+	deletedoc_btn.setVisible(true);
+}
+*/
+/*
+	<hbox>
+		<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+		<button id="deletedoc_btn" label="Delete" visible="false" class="k9" onClick="deleteFile(documents_holder,AUDITITEM_PREFIX,glob_sel_audit)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="documents_holder" width="700px" />
+
+<groupbox visible="false">
+<caption id="updatefiledesc_label" visible="false" />
+<textbox id="fileupl_file_title" visible="false" />
+<textbox id="fileupl_file_description" visible="false" />
+<textbox id="update_file_description" visible="false" />
+</groupbox>
+ */
+]]>
+</zscript>
+</window>
+</zk>

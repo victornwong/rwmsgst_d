@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="DOCOAINV_TAT_win"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/dispatchschedule.zs" />
+<zscript src="../alsglobal/alsglobal_birtreport.zs" />
+<zscript>
+<![CDATA[
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+/*
+param_branch = Executions.getCurrent().getParameter("mybranch");
+param_startdate = Executions.getCurrent().getParameter("startdate");
+param_enddate = Executions.getCurrent().getParameter("enddate");
+*/
+
+void doBIRT(Div iparentdiv, Datebox isdate, Datebox iedate)
+{
+	sdate = getDateFromDatebox(isdate);
+    edate = getDateFromDatebox(iedate);
+	//cnm = scustomername.getValue();
+	// dubra = ibranch.getSelectedItem().getLabel();
+
+	parameters_makeme = "&StartDate=" + sdate + "&EndDate=" + edate; // + "&customername_inp=" + cnm;
+
+	Iframe newiframe = new Iframe();
+	newiframe.setWidth("100%");
+	newiframe.setHeight("550px");
+	newiframe.setId("birtframe");
+	thesrc = BIRT_WEBVIEWER + BIRT_DOCOAINVTAT_FILENAME + parameters_makeme;
+	newiframe.setSrc(thesrc);
+	newiframe.setParent(iparentdiv);
+
+	// Uses AMedia to load the PDF. Can be used to load other stuff too.. check AMedia API ref
+	// URL url = new URL(theurl);
+	// http://alsslws007:18080/BIRT/frameset?__report=test.rptdesign&sample=my+parameter
+	// 2/2/2010: hardcoded now .. check rptdesign filename, acctbase3 for testing, acctbase1 for production
+	// thesrc = "http://alsslws007:18080/BIRT/frameset?__report=SRA_v1_acctbase1.rptdesign&jobfolder_id=" + param_jobfolder_id;
+	/*
+	AMedia amedia = new AMedia(url,"application/pdf",null);
+	newiframe.setContent(amedia);
+	*/
+	//generatereport_btn.setVisible(false);
+}
+
+void generateReportClicker()
+{
+	if(birt_div.getFellowIfAny("birtframe") != null) birtframe.setParent(null);
+	doBIRT(birt_div,startdate,enddate);
+}
+
+]]>
+</zscript>
+
+<window id="print_potsing_box" width="900px" height="630px" title="Billing/TAT Report" position="center" mode="overlapped" border="normal" closable="true" sizable="true" 
+onClose="globalCloseWindow(myincludeid)" onCancel="globalCloseWindow(myincludeid)" onOk="globalCloseWindow(myincludeid)">
+<separator height="3px" />
+<groupbox>
+<hbox>
+	<button label="Close window" style="font-size:9px" onClick="globalCloseWindow(myincludeid)" />
+	<separator width="20px" />
+	<label value="Start date" style="font-size:9px" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+	<separator width="10px"/>
+	<label value="End date" style="font-size:9px" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+	<separator width="5px" />
+	<button id="generatereport_btn" label="Generate report" style="font-size:9px" onClick="generateReportClicker()" />	
+</hbox>
+</groupbox>
+<div id="birt_div" />
+
+<zscript>
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+//populateDropdownListbox(branch_drd, dd_branches);
+</zscript>
+</window>
+</zk>

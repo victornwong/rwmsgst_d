@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chklisttempman_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MOD_TITLE = "Check-list Templates Manager";
+MYVERSION = "v0.1";
+/*
+Title : Check-list templates manager (WINDOW)
+Written by : Victor Wong
+Dated : 04/07/2012
+
+check-list templates management - allow import of templates into mods that use check-list
+
+*/
+import org.victor.*;
+Generals kiboo = new Generals();
+SqlFuncs sqlhand = new SqlFuncs();
+ListboxHandler lbhand = new ListboxHandler();
+LookupFuncs luhand = new LookupFuncs();
+SecurityFuncs sechand = new SecurityFuncs();
+GuiFuncs guihand = new GuiFuncs();
+gridhand = new GridHandler();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+/*
+param_lookup = Executions.getCurrent().getParameter("lu");
+param_wintitle = Executions.getCurrent().getParameter("wt");
+param_notstandalone = Executions.getCurrent().getParameter("st");
+*/
+
+selected_checklist_id = "";
+selected_checkitem = null;
+last_checkitem = null;
+
+class chkitems_onClick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getTarget();
+		if(selitem == last_checkitem) return;
+		last_checkitem = selitem;
+		c_item_input.setValue(selitem.getLabel());
+	}
+}
+
+void showCheckItems()
+{
+	// remove previous chk-items grid if any
+	if(checkitems_holder.getFellowIfAny("checkitems_grid") != null) checkitems_grid.setParent(null);
+
+	// create the grid
+	thegrid = new Grid();
+	thegrid.setId("checkitems_grid");
+
+	gridrows = new Rows();
+	gridrows.setId("checkitems_rows");
+	gridrows.setParent(thegrid);
+
+	ckrec = sqlhand.getChecklistTemplate_Rec(selected_checklist_id);
+	
+	if(ckrec != null)
+	{
+		// lets draw them checkboxes is available
+		String[] chkitems = sqlhand.clobToString(ckrec.get("list_items")).split("~");
+		//ticked = clobToString(ckrec.get("ticked_items"));
+
+		for(i=0; i<chkitems.length; i++)
+		{
+			if(!chkitems[i].equals(""))
+			{
+			chki_row = gridhand.gridMakeRow("","","",gridrows);
+			ckbox = new Checkbox();
+			ckbox.setStyle("font-size:9px");
+			ckbox.setLabel(chkitems[i]);
+			ckbox.setParent(chki_row);
+			ckbox.addEventListener("onFocus", new chkitems_onClick());
+
+			//if(ticked.indexOf(chkitems[i]) != -1) ckbox.setChecked(true);
+			}
+		}
+	}
+
+	thegrid.setParent(checkitems_holder);
+}
+
+class chklistlb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = event.getReference();
+		selected_checklist_id = lbhand.getListcellItemLabel(selitem,0);
+		c_list_name.setValue(lbhand.getListcellItemLabel(selitem,1));
+		showCheckItems();
+	}
+}
+
+void showCheckList(Div iholder)
+{
+	Object[] chklistlb_headers = {
+	new dblb_HeaderObj("N.",true,"origid",2),
+	new dblb_HeaderObj("List names",true,"list_name",1),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+
+	selected_checklist_id = ""; // reset
+	selected_checkitem = null;
+	last_checkitem = null;
+	c_list_name.setValue("");
+	c_item_input.setValue("");
+
+	// remove previous chk-items grid if any
+	if(checkitems_holder.getFellowIfAny("checkitems_grid") != null) checkitems_grid.setParent(null);
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null ) return;
+	sqlstm = "select origid,list_name,username from elb_checklist_templates order by origid";
+	Listbox newlb = lbhand.makeVWListbox_onDB(iholder,chklistlb_headers,"checklist_temp_lb",25,sql,sqlstm);
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", new chklistlb_onSelect());
+	sql.close();
+}
+
+void insertCheckList()
+{
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+
+	sqlstm = "insert into elb_checklist_templates (datecreated,username,list_name,list_items) values " +
+	"('" + todate + "','" + useraccessobj.username + "','NEW TEMPLATE','')";
+
+	sqlhand.gpSqlExecuter(sqlstm);
+	showCheckList(checklist_holder); // refresh
+}
+
+// itype: 1=new checklist, 2=delete, 3=save check-items and list-name
+void checkListFunc(int itype)
+{
+	switch(itype)
+	{
+		case 1:
+			insertCheckList();
+			break;
+
+		case 2:
+			if(selected_checklist_id.equals("")) return;
+			if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+			sqlstm = "delete from elb_checklist_templates where origid=" + selected_checklist_id;
+			sqlhand.gpSqlExecuter(sqlstm);
+			
+			checkitems_grid.setParent(null); // remove check-items grid
+			showCheckList(checklist_holder); // refresh
+			break;
+
+		case 3:
+			if(selected_checklist_id.equals("")) return;
+
+			rowlist = checkitems_rows.getChildren().toArray();
+			chkistr = "";
+
+			for(i=0;i<rowlist.length;i++)
+			{
+				mi = rowlist[i].getChildren().get(0);
+				milab = kiboo.replaceSingleQuotes(mi.getLabel().replaceAll("~","-"));
+				chkistr += milab + "~";
+				//if(mi.isChecked()) tickistr += milab + "~";
+			}
+
+			listname = kiboo.replaceSingleQuotes(c_list_name.getValue().trim());
+
+			sqlstm = "update elb_checklist_templates set list_name='" + listname + "',list_items='" + chkistr + "' " + 
+			"where origid=" + selected_checklist_id;
+
+			sqlhand.gpSqlExecuter(sqlstm);
+			showCheckList(checklist_holder); // refresh
+
+			break;
+	}
+}
+
+// itype: 1=update, 2=new, 3=delete
+void checkItemsFunc(int itype)
+{
+	if(selected_checklist_id.equals("")) return;
+
+	clearme = false;
+	istri = c_item_input.getValue().trim();
+	if(istri.equals("")) return;
+
+	switch(itype)
+	{
+		case 1: // update item
+			if(last_checkitem == null) return;
+			last_checkitem.setLabel(istri);
+			break;
+
+		case 2: // new item
+			chki_row = gridhand.gridMakeRow("","","",checkitems_rows);
+			ckbox = new Checkbox();
+			ckbox.setStyle("font-size:9px");
+			ckbox.setLabel(istri);
+			ckbox.setParent(chki_row);
+			ckbox.addEventListener("onFocus", new chkitems_onClick());
+
+			clearme = true;
+			break;
+
+		case 3: // delete item
+			if(last_checkitem == null) return;
+			granpa = last_checkitem.getParent();
+			last_checkitem.setParent(null);
+			granpa.setParent(null);
+			clearme = true;
+			break;
+	}
+	
+	if(clearme)
+	{
+		last_checkitem = null;
+		c_item_input.setValue("");
+	}
+
+}
+
+]]>
+</zscript>
+
+<window id="chklisttempman_win" width="800px" height="430px" title="${MOD_TITLE} ${MYVERSION}"
+position="center" mode="overlapped" border="normal" closable="true" sizable="true">
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<div>
+<label id="testolabel" />
+
+<hbox>
+	<button label="New check-list template" style="font-size:9px" onClick="checkListFunc(1)" />
+	<button label="Delete" style="font-size:9px" onClick="checkListFunc(2)" />
+</hbox>
+<separator height="3px" />
+
+<hbox>
+<div width="350px">
+	<div id="checklist_holder" />
+</div>
+
+<div width="420px" >
+<grid>
+	<rows>
+		<row spans=",2">
+			<label value="Name" style="font-size:9px" />
+			<textbox id="c_list_name" width="99%" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Item" style="font-size:9px" />
+			<textbox id="c_item_input" style="font-size:9px" multiline="true" width="99%" height="30px" />
+			<hbox>
+				<button label="*" style="font-weight:bold" onClick="checkItemsFunc(1)" />
+				<button label="+" style="font-weight:bold" onClick="checkItemsFunc(2)" />
+				<button label="-" style="font-weight:bold" onClick="checkItemsFunc(3)" />
+			</hbox>
+		</row>
+		<row spans="3">
+			<div id="checkitems_holder" width="400px" height="260px" style="border:1px solid gray;overflow:auto;padding:2px;" />
+		</row>
+		<row spans="3">
+			<hbox>
+				<button label="Save template.." style="font-size:9px" onClick="checkListFunc(3)" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+
+</div>
+
+</hbox>
+
+
+</div>
+
+<zscript>
+<![CDATA[
+
+showCheckList(checklist_holder);
+
+// show stuff only admin can see --
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+]]>
+</zscript>
+</window>
+</zk>

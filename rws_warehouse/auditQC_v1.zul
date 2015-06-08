@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="qcautoeditmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="./auditQC_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "QC / Audit";
+MYVERSION = "v0.3";
+MYPANEL = "qcquatditpan";
+/*
+@Title QC/Audit tracking
+@Authors Victor Wong
+@Since 27/02/2014
+
+19/04/2014: able to update FC6 product by asset-tag - grade-classification, maybe later pallet no. if req
+23/05/2014: can only mass-update grading if T.GRN already got MRN
+09/03/2015: added chargedate,si_no to track damages charges
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+lastlisttype = 0;
+glob_sel_audit = glob_sel_status = glob_sel_user = glob_sel_audititem = glob_sel_gcono = glob_sel_mrnno = "";
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	usname = useraccessobj.username;
+	refresh = false;
+	sqlstm = msgtext = "";
+
+	if(itype.equals("newqc_b"))
+	{
+		sqlstm = "insert into rw_qcaudit (username,datecreated,astatus) values (" +
+		"'" + useraccessobj.username + "','" + todaydate + "','DRAFT')";
+		refresh = true;
+	}
+
+	if(itype.equals("updadt_b")) // update audit meta-form
+	{
+		adtmeta_pop.close();
+		if(glob_sel_audit.equals("")) return;
+		atr = kiboo.replaceSingleQuotes( adtremarks_tb.getValue().trim() );
+		if(atr.equals("")) return;
+		sqlstm = "update rw_qcaudit set remarks='" + atr + "' where origid=" + glob_sel_audit;
+		refresh = true;
+	}
+
+	myst = stdate = "";
+
+	if(itype.equals("startaudit_b"))
+	{
+		if(glob_sel_audit.equals("")) return;
+		if(useraccessobj.accesslevel != 9)
+		{
+			if(!usname.equals(glob_sel_user)) return; // audit-form must belong to user
+			if(!glob_sel_status.equals("DRAFT")) return;
+		}
+		myst = "WIP";
+		stdate = "startaudit";
+		glob_sel_status = "WIP";
+
+		toggButts(1,true); // disable buttons when audit-starts
+		toggButts(2,true);
+	}
+
+	if(itype.equals("compaudit_b"))
+	{
+		if(glob_sel_audit.equals("")) return;
+		if(useraccessobj.accesslevel != 9)
+		{
+			if(!usname.equals(glob_sel_user)) return;
+			if(!glob_sel_status.equals("WIP")) return;
+		}
+		myst = "COMPLETE";
+		stdate = "completed";
+		glob_sel_status = "COMPLETE";
+	}
+
+	if(itype.equals("updgco_b")) // manual update GCO no. if import from T.GRN
+	{
+		gn = 0;
+		try { gn = Integer.parseInt( kiboo.replaceSingleQuotes( gcono_tb.getValue().trim() ) ); } catch (Exception e) {}
+		if(gn != 0)
+		{
+			sqlstm = "update rw_goodscollection set qc_id=" + glob_sel_audit + " where origid=" + gn.toString() + ";";
+			sqlstm += "update rw_qcaudit set gcn_no=" + gn.toString() + " where origid=" + glob_sel_audit;
+			msgtext = "GCO's audit-form updated..";
+			refresh = true;
+		}
+		else
+		{
+			msgtext = "ERR: GCO must be numbers..";
+		}
+	}
+
+	if(!myst.equals(""))
+	{
+		sqlstm = "update rw_qcaudit set astatus='" + myst + "', " + stdate + "='" + todaydate + "' where origid=" + glob_sel_audit;
+		refresh = true;
+
+		if(myst.equals("COMPLETE")) // TODO send notif email
+		{
+			/*
+			topeople = "billing@rentwise.com";
+			emailsubj = "RE: New " + lnkc + " submitted!!";
+			emailmsg = "A new GCO has been submitted. Do take the appropriate action ASAP.";
+			gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
+			*/
+		}
+	}
+
+	if(itype.equals("updcharges_b")) // 09/03/2015: update damages charges column
+	{
+		if(glob_sel_audit.equals("")) return;
+		sidate = kiboo.getDateFromDatebox(k_chargedate);
+		sino = kiboo.replaceSingleQuotes(k_si_no.getValue().trim());
+		sqlstm = "update rw_qcaudit set chargedate='" + sidate + "', si_no='" + sino + "' where origid=" + glob_sel_audit;
+		refresh = true;
+		//k_si_no.setValue("");
+	}
+
+	if(itype.equals("clrcharges_b"))
+	{
+		if(glob_sel_audit.equals("")) return;
+		if (Messagebox.show("Clear damages charge details..", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "update rw_qcaudit set chargedate=null,si_no=null where origid=" + glob_sel_audit;
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listAudits(lastlisttype);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void itemFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = refreshqc = false;
+	sqlstm = msgtext = "";
+
+	if(glob_sel_audit.equals("")) return;
+
+	if(itype.equals("newitm_b"))
+	{
+		sqlstm = "insert into rw_qcaudit_items (parent_id,item,qty,istatus,regrade,charge) values (" +
+		glob_sel_audit + ",'NEW ITEM',1,'UNCHECK','X',0)";
+		refresh = true;
+	}
+
+	if(itype.equals("rmitm_b"))
+	{
+		if(audititems_lb.getSelectedCount() == 0) return;
+
+		if(glob_sel_audititem.equals("")) return;
+		if (Messagebox.show("HARD delete item(s)..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		kk = audititems_lb.getSelectedItems().toArray();
+		rt = "";
+		for(i=0;i<kk.length;i++)
+		{
+			rt += lbhand.getListcellItemLabel(kk[i],aitmorigidpos) + ",";
+		}
+		try { rt = rt.substring(0,rt.length()-1); } catch (Exception e) {}
+		sqlstm = "delete from rw_qcaudit_items where origid in (" + rt + ")";
+		refresh = true;
+	}
+
+	if(itype.equals("impgcn_b"))
+	{
+		igcn_tb.setValue("");
+		if(impgcnitems_holder.getFellowIfAny("impgcni_lb") != null) impgcni_lb.setParent(null);
+		impgcn_pop.open(iwhat);
+	}
+
+	if(itype.equals("realimpgcn_b"))
+	{
+		impgcn_pop.close();
+		if(impgcnitems_holder.getFellowIfAny("impgcni_lb") == null) return;
+		ki = impgcni_lb.getItems().toArray();
+		for(i=0;i<ki.length;i++)
+		{
+			isn = lbhand.getListcellItemLabel(ki[i],1);
+			iat = lbhand.getListcellItemLabel(ki[i],0);
+			ids = lbhand.getListcellItemLabel(ki[i],2).replaceAll("\"","");
+			sqlstm += "insert into rw_qcaudit_items (parent_id,asset_tag,item,serial_num,qty,istatus,regrade,charge) values (" +
+			glob_sel_audit + ",'" + iat + "','" + ids + "','" + isn + "',1,'UNCHECK','X',0);";
+		}
+
+		gcn = kiboo.replaceSingleQuotes( igcn_tb.getValue().trim() );
+		sqlstm += "update rw_qcaudit set gcn_no=" + gcn + " where origid=" + glob_sel_audit + ";";
+		sqlstm += "update rw_goodscollection set qc_id=" + glob_sel_audit + " where origid=" + gcn + ";";
+		refresh = refreshqc = true;
+	}
+
+	if(itype.equals("impgrn_b"))
+	{
+		itgrn_tb.setValue("");
+		if(imptgrnitems_holder.getFellowIfAny("imptgrni_lb") != null) imptgrni_lb.setParent(null);
+		imptgrn_pop.open(iwhat);
+	}
+
+	if(itype.equals("realimptgrn_b"))
+	{
+		imptgrn_pop.close();
+		if(imptgrnitems_holder.getFellowIfAny("imptgrni_lb") == null) return;
+		ki = imptgrni_lb.getItems().toArray();
+		for(i=0; i<ki.length; i++)
+		{
+			isn = lbhand.getListcellItemLabel(ki[i],1);
+			iat = lbhand.getListcellItemLabel(ki[i],0);
+			ids = lbhand.getListcellItemLabel(ki[i],2).replaceAll("\"","");
+			iqy = lbhand.getListcellItemLabel(ki[i],3);
+			sqlstm += "insert into rw_qcaudit_items (parent_id,asset_tag,item,serial_num,qty,istatus,regrade,charge) values (" +
+			glob_sel_audit + ",'" + iat + "','" + ids + "','" + isn + "'," + iqy + ",'UNCHECK','X',0);";
+		}
+
+		sqlstm += "update rw_qcaudit set tempgrn='" + kiboo.replaceSingleQuotes( itgrn_tb.getValue().trim() ) +
+		"' where origid=" + glob_sel_audit + ";";
+
+		refresh = refreshqc = true;
+	}
+
+	if(itype.equals("upditem_b"))
+	{
+		if(glob_sel_audititem.equals("")) return;
+		atg = kiboo.replaceSingleQuotes( i_asset_tag.getValue().trim() );
+		isn = kiboo.replaceSingleQuotes( i_serial_num.getValue().trim() );
+		itm = kiboo.replaceSingleQuotes( i_item.getValue().trim() );
+		iqy = "0";
+		try { iqy = Integer.parseInt( kiboo.replaceSingleQuotes(i_qty.getValue().trim()) ).toString(); } catch (Exception e) {}
+		grd = i_regrade.getSelectedItem().getLabel();
+		irm = kiboo.replaceSingleQuotes( i_remarks.getValue().trim() );
+		chg = (i_charge.getSelectedItem().getLabel().equals("YES")) ? "1" : "0";
+		chm = "0";
+		try { chm = Float.parseFloat( kiboo.replaceSingleQuotes(i_charge_amount.getValue().trim()) ).toString(); } catch (Exception e) {}
+
+		sqlstm = "update rw_qcaudit_items set asset_tag='" + atg + "', serial_num='" + isn + "', item='" + itm + "'," +
+		"qty=" + iqy + ", regrade='" + grd + "', remarks='" + irm + "', charge=" + chg + ", charge_amount=" + chm +
+		", istatus='CHECKED' where origid=" + glob_sel_audititem;
+
+		refresh = true;
+		itemdet_pop.close();
+	}
+
+	if(itype.equals("updgrade_b")) // 23/05/2014: update equip grading into FC6
+	{
+		if(glob_sel_mrnno.equals("")) { guihand.showMessageBox("No linking MRN, cannot update items grades"); return; } // no MRN - return
+		if(audititems_lb.getSelectedCount() == 0) return;
+		ks = audititems_lb.getSelectedItems().toArray();
+		for(i=0; i<ks.length; i++)
+		{
+			gd = lbhand.getListcellItemLabel(ks[i],aitmgradepos);
+			atg = lbhand.getListcellItemLabel(ks[i],0);
+			/*
+			msgtext += "update u0001 set gradeyh='" + gd + "' " +
+			"where extraid=(select eoff from mr001 where ltrim(rtrim(code2))='" + atg + "');";
+			*/
+		}
+	}
+
+	if(itype.equals("impmrn_b"))
+	{
+		impmrn_pop.close();
+		if(impmrnitems_holder.getFellowIfAny("impmrni_lb") == null) return;
+		ki = impmrni_lb.getItems().toArray();
+		for(i=0; i<ki.length; i++)
+		{
+			isn = lbhand.getListcellItemLabel(ki[i],1);
+			iat = lbhand.getListcellItemLabel(ki[i],0);
+			ids = lbhand.getListcellItemLabel(ki[i],2).replaceAll("\"","");
+			iqy = lbhand.getListcellItemLabel(ki[i],3);
+			sqlstm += "insert into rw_qcaudit_items (parent_id,asset_tag,item,serial_num,qty,istatus,regrade,charge) values (" +
+			glob_sel_audit + ",'" + iat + "','" + ids + "','" + isn + "'," + iqy + ",'UNCHECK','X',0);";
+		}
+		/*
+		sqlstm += "update rw_qcaudit set tempgrn='" + kiboo.replaceSingleQuotes( itgrn_tb.getValue().trim() ) +
+		"' where origid=" + glob_sel_audit + ";";
+		*/
+		refresh = refreshqc = true;
+	}
+
+	if(itype.equals("upddmgcost_b")) // 09/03/2015: mass update damages charges
+	{
+		if(audititems_lb.getSelectedCount() == 0) return;
+		kk = u_charge_amount.getValue().trim();
+		wop = 0.0;
+		try { wop = Float.parseFloat(kk); } catch (Exception e) { return; }
+		ks = audititems_lb.getSelectedItems().toArray();
+		for(i=0; i<ks.length; i++)
+		{
+			iorigid = lbhand.getListcellItemLabel(ks[i],aitmorigidpos);
+			lbhand.setListcellItemLabel(ks[i], aitmchargepos, nf2.format(wop));
+			sqlstm += "update rw_qcaudit_items set charge_amount=" + nf2.format(wop) + " where origid=" + iorigid + ";";
+		}
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listAuditItems(glob_sel_audit,aitems_holder);
+	if(refreshqc) listAudits(lastlisttype);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = refreshqc = false;
+	sqlstm = msgtext = "";
+
+	if(glob_sel_audit.equals("")) return;
+
+	if(itype.equals("deladt_b"))
+	{
+		if (Messagebox.show("HARD delete audit form and items..", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm  = "delete from rw_qcaudit where origid=" + glob_sel_audit + ";";
+		sqlstm += "delete from rw_qcaudit_items where parent_id=" + glob_sel_audit + ";";
+	}
+
+	if(itype.equals("clrgco_b"))
+	{
+		if (Messagebox.show("Will clear the links..", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "update rw_qcaudit set gcn_no=null where origid=" + glob_sel_audit + ";";
+		if(!glob_sel_gcono.equals("")) // clear GCO's qc_id too
+			sqlstm += "update rw_goodscollection set qc_id=null where origid=" + glob_sel_gcono + ";";
+	}
+
+	if(itype.equals("setdraft_b"))
+	{
+		sqlstm = "update rw_qcaudit set astatus='DRAFT' where origid=" + glob_sel_audit;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		listAudits(lastlisttype);
+	}
+
+	if(refresh) listAuditItems(glob_sel_audit,aitems_holder);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	if(itype.equals("deladt_b") && !sqlstm.equals(""))
+	{
+		glob_sel_audit = glob_sel_status = glob_sel_user = glob_sel_audititem = ""; // reset all
+		workarea.setVisible(false);
+	}
+}
+
+void exportADTList()
+{
+	try {
+	exportExcelFromListbox(audits_lb, kasiexport, audhds, "qcauditlist.xls","itulist");
+	} catch (Exception e) {}
+}
+
+]]>
+</zscript>
+
+<popup id="adminpop">
+	<vbox>
+		<button id="setdraft_b" label="Set DRAFT" class="k9" onClick="adminFunc(self)" />
+		<button id="clrgco_b" label="Clear GCO" class="k9" onClick="adminFunc(self)" />
+		<button id="deladt_b" label="DELETE" class="k9" onClick="adminFunc(self)" />
+	</vbox>
+</popup>
+
+<popup id="adtmeta_pop">
+	<div sclass="shadowbox" style="background:#f10c4f;" width="550px">
+		<label style="font-weight:bold;color:#ffffff" value="Remarks" />
+		<textbox id="adtremarks_tb" multiline="true" width="99%" height="60px" />
+		<separator height="2px" />
+		<button id="updadt_b" label="Update audit-form" onClick="doFunc(self)" />
+	</div>
+</popup>
+
+<popup id="itemdet_pop">
+	<div sclass="shadowbox" style="background:#f10c4f;" width="550px">
+		<div id="itmdetform_holder" />
+		<separator height="2px" />
+		<button id="upditem_b" label="Update.." onClick="itemFunc(self)" />
+	</div>
+</popup>
+
+<popup id="impmrn_pop">
+	<div sclass="shadowbox" style="background:#56815e;" width="450px">
+		<hbox>
+			<label value="MRN" style="color:#ffffff" />
+			<textbox id="itmrn_tb" width="60px" />
+			<button label="Dig" class="k9" onClick="showFCMRNitems(itmrn_tb.getValue())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="impmrnitems_holder" />
+		<separator height="2px" />
+		<button id="impmrn_b" label="Import items" class="k9" onClick="itemFunc(self)" />
+	</div>
+</popup>
+
+<popup id="imptgrn_pop">
+	<div sclass="shadowbox" style="background:#56815e;" width="450px">
+		<hbox>
+			<label value="Temp.GRN" style="color:#ffffff" />
+			<textbox id="itgrn_tb" width="60px" />
+			<button label="Dig" class="k9" onClick="showFCTempGRNitems(itgrn_tb.getValue())" />
+		</hbox>
+		<separator height="2px" />
+		<div id="imptgrnitems_holder" />
+		<separator height="2px" />
+		<button id="realimptgrn_b" label="Import items" class="k9" onClick="itemFunc(self)" />
+	</div>
+</popup>
+
+<popup id="impgcn_pop">
+	<div sclass="shadowbox" style="background:#56815e;" width="450px">
+		<hbox>
+			<label value="GCN" style="color:#ffffff" />
+			<textbox id="igcn_tb" width="60px" />
+			<button label="Dig" onClick="showGCNItems(igcn_tb)" />
+		</hbox>
+		<separator height="2px" />
+		<div id="impgcnitems_holder" />
+		<separator height="2px" />
+		<button id="realimpgcn_b" label="Import items" onClick="itemFunc(self)" />
+	</div>
+</popup>
+
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" class="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" class="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" class="k9" onClick="updateFileDescription(documents_holder,AUDITITEM_PREFIX,glob_sel_audit)" />
+			<button label="Close" class="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" class="k9" />
+					<textbox id="fileupl_file_title" width="200px" class="k9" />
+				</row>
+				<row>
+					<label value="Description" class="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" class="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,AUDITITEM_PREFIX,glob_sel_audit)" class="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()" class="k9" />
+	</hbox>
+</popup>
+
+<popup id="manupdgcopop">
+	<div class="shadowbox" style="background:#E36619" width="350px">
+		<label value="GCO" />
+		<textbox id="gcono_tb" width="60px" />
+		<button id="updgco_b" label="Update" class="k9" onClick="doFunc(self)" />
+	</div>
+</popup>
+
+<popup id="updateCharges_pop">
+	<div class="shadowbox" style="background:#E36619">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#E36619">
+					<label value="Charge date" sclass="k9" />
+					<datebox id="k_chargedate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+				</row>
+				<row style="background:#E36619">
+					<label value="SI No." sclass="k9" />
+					<textbox id="k_si_no" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		<hbox>
+			<button id="updcharges_b" label="Update damages charge" sclass="k9mo" onClick="updateCharges_pop.close(); doFunc(self)" />
+			<button id="clrcharges_b" label="Remove charge" sclass="k9mo" onClick="updateCharges_pop.close(); doFunc(self)" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="updateItemDamageCharges">
+	<div class="shadowbox" style="background:#E52A2A">
+		<hbox>
+			<label value="Charge amount" sclass="k9mo" style="color:#ffffff" />
+			<textbox id="u_charge_amount" sclass="k9" />
+			<button id="upddmgcost_b" label="Update charges" sclass="k9mo" onClick="updateItemDamageCharges.close(); itemFunc(self)" />
+		</hbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	} 
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#A81848">
+
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<hbox>
+			<label value="Start" class="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End" class="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<button label="Load by date" style="font-size:9px;font-weight:bold" onClick="listAudits(1)" />
+			<textbox id="searhtxt_tb" width="99%" sclass="k9" visible="false" />
+			<button label="Search" sclass="k9" onClick="listAudits(2)" visible="false" />
+			<textbox id="adtno_tb" width="60px" sclass="k9" />
+			<button label="by ADT" sclass="k9" onClick="listAudits(3)" />
+			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+		</hbox>
+		<separator bar="true" />
+		<hbox>
+			<button id="newqc_b" label="New QC/audit-form" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="startaudit_b" label="Start audit" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="compaudit_b" label="Complete" sclass="k9mo" onClick="doFunc(self)" />
+			<button label="Update charging" sclass="k9mo" onClick="updateCharges_pop.open(self)" />
+			<button label="Export excel" sclass="k9mo" onClick="exportADTList()" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+
+	<div sclass="shadowbox" style="background:#9db91d;" id="audits_holder" visible="false" >
+		<label sclass="subhead1" value="Audit/QC Form" />
+	</div>
+	<separator height="3px" />
+
+	<tabbox id="workarea" visible="false"> <!-- WORKAREA accordion -->
+		<tabs>
+			<tab id="tab0" label="Audit/QC Items" />
+			<tab id="tab1" label="DOCUS / EMAILS / etc" />
+		</tabs>
+		<tabpanels>
+			<tabpanel>
+				<div sclass="shadowbox" style="background:#2e3436;">
+					<separator height="2px" />
+					<hbox>
+						<button id="newitm_b" label="New item" class="k9" onClick="itemFunc(self)" />
+						<button id="rmitm_b" label="Remove" class="k9" onClick="itemFunc(self)" />
+						<button id="impgcn_b" label="Import GCO" class="k9" onClick="itemFunc(self)" />
+						<button id="impgrn_b" label="Import TempGRN" class="k9" onClick="itemFunc(self)" />
+						<button id="impmrnmain_b" label="Import MRN" class="k9" onClick="impmrn_pop.open(self)" />
+						<separator width="30px" />
+						<button label="Update damage charges" class="k9mo" style="color:#D73621" onClick="updateItemDamageCharges.open(self)" />
+						<button id="updgrade_b" label="Update grading into FC6" class="k9" onClick="itemFunc(self)" />
+						<button id="updgconomain_b" label="Update GCO no." class="k9" onClick="manupdgcopop.open(self)" />
+					</hbox>
+					<separator height="2px" />
+					<div id="aitems_holder" />
+				</div>
+			</tabpanel>
+			<tabpanel>
+				<hbox>
+					<button id="uploaddoc_btn" label="Upload file" class="k9" onClick="showUploadPopup(AUDITITEM_PREFIX,glob_sel_audit)" />
+					<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+					<button id="editdoc_btn" label="Update" class="k9" onClick="updatefiledesc_popup.open(self)" />
+					<button id="deletedoc_btn" label="Delete" class="k9" onClick="deleteFile(documents_holder,AUDITITEM_PREFIX,glob_sel_audit)" />
+				</hbox>
+				<separator height="3px" />
+				<div id="documents_holder" />
+			</tabpanel>
+		</tabpanels>
+	</tabbox>
+
+	<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+itmformd = dynamicForm(itmdetform_holder, "audititem_form", "34");
+
+if(useraccessobj.accesslevel == 9)
+{
+	admin_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

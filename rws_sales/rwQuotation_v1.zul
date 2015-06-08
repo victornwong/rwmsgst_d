@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rwquotmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rws_warehouse/assignJobID_funcs.zs" />
+<zscript src="./rwQuotation_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Quotations Management";
+MYVERSION = "v0.1.1";
+MYPANEL = "rwquotepan";
+/*
+Title		: Quotations management for RENTWISE only!
+Written by	: Victor Wong
+Dated		: 08/10/2013
+
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.math.BigDecimal;
+import org.apache.poi.hssf.usermodel.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+dmshand = new DMSFuncs();
+
+glob_qt_rec = null; // to store selected QT record - can maybe speed-up some shit
+global_selected_customerid = global_selected_customername = global_selected_customer = "";
+glob_sel_quote = glob_sel_qstatus = glob_sel_username = "";
+
+String JN_linkcode()
+{
+	if(glob_sel_quote.equals("")) return "";
+	return QUOTE_PREFIX + glob_sel_quote;
+}
+// callback from fc6_CustomerSelector.zs
+void pickcustomer_Callback()
+{
+	custr = getFocus_CustomerRec(global_selected_customerid);
+	locstr = kiboo.checkNullString(custr.get("address1yh")) + ",\n" + kiboo.checkNullString(custr.get("address2yh")) + ",\n" +
+		kiboo.checkNullString(custr.get("address3yh")) + ",\n" + kiboo.checkNullString(custr.get("address4yh"));
+
+	locstr = locstr.replaceAll(",,",",");
+	q_cust_address.setValue(locstr);
+	q_contact_person1.setValue( kiboo.checkNullString(custr.get("contactyh")) );
+	q_telephone.setValue( kiboo.checkNullString(custr.get("telyh")) );
+	q_fax.setValue( kiboo.checkNullString(custr.get("faxyh")) );
+	q_email.setValue( kiboo.checkNullString(custr.get("emailyh")) );
+	global_selected_customer = global_selected_customername;
+}
+
+// Assign job-id to something -- BOM,DO and etc.. modi popup to set link-code and sqlstm accordingly
+// sel_assign_job = global set when job-listitem click (def in assignJobID_funcs.zs)
+void assignJobLink(String ilnk)
+{
+	if(ilnk.equals("")) return;
+	if(sel_assign_job.equals("")) return;
+	p_job_id.setValue(sel_assign_job);
+	sqlstm = "update purchaserequisition set job_id=" + sel_assign_job + " where origid=" + ilnk; // modi this for other mod
+	sqlhand.gpSqlExecuter(sqlstm);
+	linkjobs_pop.close();
+}
+
+void doFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = false;
+	sqlstm = msgtext = "";
+
+	if(itype.equals("newquote_b"))
+	{
+		sqlstm = "insert into rw_quotations (customer_name,qstatus,datecreated,username) values " +
+		"('UNDEF','DRAFT','" + todaydate + "','" + useraccessobj.username + "') ";
+
+		refresh = true;
+	}
+
+	if(itype.equals("updqt_b"))
+	{
+		if(glob_sel_quote.equals("")) return;
+
+		Object[] ob = { customername, q_cust_address, q_contact_person1, q_telephone, q_fax, q_email,
+		q_creditterm, q_curcode, q_exchangerate, q_quote_discount, q_notes, q_qt_type, q_qt_validity };
+
+		dt = getString_fromUI(ob);
+
+		sqlstm = "update rw_quotations set customer_name='" + dt[0] + "', cust_address='" + dt[1] + "'," +
+		"contact_person1='" + dt[2] + "', telephone='" + dt[3] + "', fax='" + dt[4] + "', email='" + dt[5] + "'," +
+		"creditterm='" + dt[6] + "', curcode='" + dt[7] + "', exchangerate='" + dt[8] + "',quote_discount='" + dt[9] + "'," +
+		"notes='" + dt[10] + "',qt_type='" + dt[11] + "', qt_validity='" + dt[12] + "' where origid=" + glob_sel_quote;
+
+		refresh = true;
+	}
+
+	if(itype.equals("commitquote_b"))
+	{
+		if(glob_sel_quote.equals("")) return;
+		if( !glob_sel_username.equals(useraccessobj.username) )
+		{
+			if(!useraccessobj.username.equals("padmin"))
+			{
+				guihand.showMessageBox("Sorry, you're not the quotation owner, cannot COMMIT!");
+				return;
+			}
+		}
+		sqlstm = "update rw_quotations set qstatus='COMMIT' where origid=" + glob_sel_quote;
+		refresh = true;
+		add_RWAuditLog(JN_linkcode(), "", "Commit quotation", useraccessobj.username);
+	}
+
+	if(itype.equals("cancelquote_b"))
+	{
+		if(glob_sel_quote.equals("")) return;
+		if(!glob_sel_qstatus.equals("DRAFT")) { guihand.showMessageBox("You can only cancel DRAFT quotation.."); return; }
+
+		sqlstm = "update rw_quotations set qstatus='CANCEL' where origid=" + glob_sel_quote;
+		refresh = true;
+
+		// TODO maybe need to update audit-logs
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listQuotations();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void adminFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+
+	if(glob_sel_quote.equals("")) return;
+
+	if(itype.equals("setprdate_b"))
+	{
+		sqlstm = "update rw_quotations set datecreated='" + todaydate + "' where origid=" + glob_sel_quote;
+	}
+
+	if(itype.equals("setnewpr_b"))
+	{
+		sqlstm = "update rw_quotations set qstatus='DRAFT' where origid=" + glob_sel_quote;
+	}
+
+	if(itype.equals("delpr_b"))
+	{
+		if (Messagebox.show("Hard delete this quotation", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "delete from rw_quotations where origid=" + glob_sel_quote;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) listQuotations();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+
+	adminpop.close();
+}
+
+void itemFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	refresh = true;
+	sqlstm = msgtext = "";
+
+	if(glob_sel_quote.equals("")) return;
+	
+	kb = "font-weight:bold;";
+
+	if(itype.equals("newqtitm_b"))
+	{
+		checkMakeItemsGrid();
+		irow = gridhand.gridMakeRow("","","",qtitems_rows);
+		gpMakeCheckbox(irow,"", "","");
+
+		vbx1 = new Div();
+		vbx1.setParent(irow);
+
+		desb = gpMakeTextbox(vbx1,"","ITEMS/MODEL/WHATEVER",kb,"99%");
+		gpMakeSeparator(2,"2px",vbx1);
+		spcs = gpMakeTextbox(vbx1,"","THE DETAIL SPECS",kb+"font-size:9px;","99%");
+		spcs.setMultiline(true);
+		spcs.setHeight("70px");
+
+		gpMakeTextbox(irow,"","",kb,"99%"); // qty
+		gpMakeTextbox(irow,"","",kb,"99%"); // unit price
+		gpMakeTextbox(irow,"","",kb,"99%"); // rental period
+		gpMakeTextbox(irow,"","",kb,"99%"); // discount
+		gpMakeLabel(irow,"","",kb); // sub-total
+	}
+
+	if(itype.equals("remqtitm_b"))
+	{
+		if(qtitems_holder.getFellowIfAny("qtitems_grid") == null) return;
+		cds = qtitems_rows.getChildren().toArray();
+		dones = false;
+		for(i=0; i<cds.length; i++)
+		{
+			c1 = cds[i].getChildren().toArray();
+			if(c1[0].isChecked())
+			{
+				cds[i].setParent(null);
+				dones = true;
+			}
+		}
+
+		if(dones)
+		{
+			calcQTItems();
+			saveQTItems(glob_sel_quote);
+		}
+	}
+
+	if(itype.equals("calcqtitems_b")) calcQTItems();
+	if(itype.equals("saveitems_b")) saveQTItems(glob_sel_quote);
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	//if(refresh) showPRList();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="adminpop">
+<div width="400px">
+	<button id="setprdate_b" label="set ToDate" onClick="adminFunc(self)" />
+	<button id="setnewpr_b" label="set DRAFT" onClick="adminFunc(self)" />
+	<button id="delpr_b" label="DELETE" onClick="adminFunc(self)" />
+	<button id="shwappr_b"  label="show approvers" onClick="adminFunc(self)" />
+</div>
+</popup>
+
+<popup id="linkjobs_pop">
+<div sclass="shadowbox" style="background:#204a87;" width="700px" >
+	<label id="linkjob_header" style="color:#ffffff;font-weight:bold" multiline="true" />
+	<separator height="3px" />
+	<hbox>
+		<div id="jobs_holder" />
+		<button label="Assign job" style="font-weight:bold" onClick="assignJobLink(glob_sel_quote)"  />
+	</hbox>
+	<separator height="3px" />
+	<div id="jobitems_holder" />
+	<separator height="3px" />
+	<button label="Close" sclass="k9" onClick="linkjobs_pop.close()" />
+</div>
+</popup> <!-- ENDOF linkjobs_pop -->
+
+<popup id="auditlogs_pop">
+<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+	<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+	<separator height="3px" />
+	<div id="auditlogs_holder" />
+	<separator height="3px" />
+	<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<!-- modded title to show "supplier" -->
+<popup id="pickcustomer_popup">
+<div sclass="shadowbox" style="background:#f9b12d;">
+	<hbox>
+		<label sclass="k9">Customer</label>
+		<textbox id="searchcust_tb" sclass="k9" />
+		<button label="Find" sclass="k9" onClick="findCustomers()" />
+	</hbox>
+	<separator height="2px" />
+	<hbox>
+		<div id="foundcusts_holder" width="400px" />
+		<separator width="5px" />
+		<div width="400px" id="custfound_wa" visible="false" >
+			<label id="fcustomername" style="font-size:13px;font-weight:bold;text-decoration:underline" />
+			<separator height="2px" />
+			<label id="fcustomerdetails" multiline="true" width="99%" height="100px" style="font-weight:bold" />
+			<separator height="3px" />
+			<button label="Select this customer" sclass="k9" onClick="assignCustomer()" />
+		</div>
+	</hbox>
+	<label id="selectcustid" visible="false" />
+</div>
+</popup> <!-- ENDOF pickcustomer_popup -->
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" sclass="k9" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" sclass="k9" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" sclass="k9" onClick="updateFileDescription(documents_holder,QUOTE_PREFIX,glob_sel_quote)" />
+		<button label="Close" sclass="k9" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" sclass="k9" />
+				<textbox id="fileupl_file_title" width="200px" sclass="k9" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" sclass="k9" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile(documents_holder,QUOTE_PREFIX,glob_sel_quote)" sclass="k9" />
+	<button label="Close" onClick="uploadfile_popup.close()" sclass="k9" />
+</hbox>
+</popup>
+
+<popup id="viewjob_popup">
+<div sclass="shadowbox" style="background:#204a87;" width="600px" >
+	<label id="vj_jobid_label" style="font-size:18;font-weight:bold;color:#ffffff" />
+	<separator height="2px" />
+	<div id="vj_jobitems_holder" />
+</div>
+</popup>
+
+<style>
+.subhead2 { font-size:18px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.subhead1 {	font-size:16px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px }
+.k9b { font-size:9px;color:#ffffff }
+.k9 { font-size:9px; }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div sclass="shadowbox" style="background:#555753; ">
+<hbox>
+	<label value="Start date" sclass="k9b" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<label value="End date" sclass="k9b" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<label value="Search" sclass="k9b" />
+	<separator width="10px" />
+	<textbox id="searhtxt_tb" width="200px" style="font-size:9px" />
+	<button label="Load/Search" sclass="k9" onClick="listQuotations()" />
+</hbox>
+
+<separator height="3px" bar="true" />
+
+<hbox>
+	<button id="newquote_b" label="New quotation" onClick="doFunc(self)" />
+	<button id="commitquote_b" label="Commit" style="font-weight:bold" onClick="doFunc(self)" />
+	<button id="cancelquote_b" label="Cancel" onClick="doFunc(self)" />
+
+	<button label="View job" style="font-weight:bold"
+		onClick="viewJobWindow(p_job_id.getValue(),rwquotepan);" />
+
+	<separator width="10px" />
+	<button id="admin_bb" label="ADMIN" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+</hbox>
+</div>
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#2e3436;">
+
+<hbox>
+	<button id="blind_listarea" label="-" sclass="k9" onClick="blindTings_withTitle(self,listarea_holder,listarea_header)" />
+	<label id="listarea_header" sclass="subhead1" value="Quotations List" visible="false" />
+	<hbox id="listarea_holder" >
+		<div id="quotes_holder" width="850px" />
+	</hbox>
+</hbox>
+
+</div> <!-- ENDOF listarea -->
+<separator height="2px" />
+
+<div sclass="shadowbox" style="background:#2e3436;" id="workarea" visible="false" >
+
+<hbox>
+	<button id="blind_workarea" label="-" sclass="k9" onClick="blindTings_withTitle(self,workarea_holder,workarea_header)" />
+	<label id="workarea_header" sclass="subhead1" value="The Quotation" visible="false" />
+
+	<hbox id="workarea_holder" >
+		<vbox>
+			<grid>
+				<rows>
+					<row style="background:#97b83a" >
+						<label value="QT#" />
+						<label id="q_origid" style="font-size:14px;font-weight:bold" />
+						<hbox>
+							<label value="Dated: " />
+							<label id="q_datecreated" />
+						</hbox>
+						<label value="JobID" />
+						<label id="p_job_id" style="font-weight:bold" />
+					</row>
+					<row spans="1,3,1" >
+						<label value="Customer" sclass="k9" />
+						<textbox id="customername" width="99%" style="font-weight:bold" />
+						<button id="asssupp_b" label="Get customer" onClick="pickcustomer_popup.open(self)" />
+					</row>
+				</rows>
+			</grid>
+			<hbox>
+				<button id="updqt_b" label="Update quote meta" style="font-weight:bold" onClick="doFunc(self)" />
+			</hbox>
+			<div id="qtform_holder" width="580px" />
+
+			<vbox>
+				<div style="background:#628821;padding:2px">
+				<label sclass="subhead1">Quote Items</label>
+				</div>
+				<hbox>
+					<button id="newqtitm_b" label="New item" onClick="itemFunc(self)" />
+					<button id="remqtitm_b" label="Remove" onClick="itemFunc(self)" />
+					<button id="calcqtitems_b" label="CALC" style="font-weight:bold" onClick="itemFunc(self)" />
+					<button id="saveitems_b" label="SAVE" style="font-weight:bold" onClick="itemFunc(self)" />
+				</hbox>
+				<div id="qtitems_holder" width="900px" />
+
+				<hbox>
+					<separator width="700px" />
+					<label sclass="subhead1" value="Total:" />
+					<separator width="10px" />
+					<label id="grandtotal_lbl" style="color:#ffffff" sclass="subhead2" />
+				</hbox>
+
+			</vbox> <!-- ENDOF quote-items vbox -->
+
+		</vbox>
+
+	</hbox>
+</hbox>
+
+</div> <!-- ENDOF workarea -->
+
+
+<zscript>
+<![CDATA[
+
+listQuotations();
+qtmetaform = dynamicForm(qtform_holder, "qtmetaform_grid", "17");
+kiboo.setTodayDatebox(q_et_action);
+if(useraccessobj.accesslevel == 9)
+{
+	admin_bb.setVisible(true);
+}
+
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

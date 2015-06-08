@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="insurmdo"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/BPM_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Insurance - Rental Equipments";
+MYVERSION = "v0.1";
+MYPANEL = "insuranpan";
+/*
+Title		: Insurance for rental-equips - out recs for insurance-company and self
+Written by	: Victor Wong
+Dated		: 07/04/2014
+
+Revisions:
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); dmshand = new DMSFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_sel_voucherno = "";
+
+Object getFC6_DOitems(String iwhat, String itmtype)
+{
+	if(iwhat.equals("")) return null;
+
+	kk = iwhat.split("/");
+	ds = "";
+	for(i=0; i<kk.length; i++)
+	{
+		ds += "'" + kk[i].trim() + "',";
+	}
+	try { ds = ds.substring(0,ds.length()-1); } catch (Exception e) {}
+
+	sqlstm = "select distinct ro.name product_name from data d " +
+	"left join mr001 p on p.masterid = d.productcode " +
+	"left join u0001 pd on pd.extraid = d.productcode " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"where d.vouchertype=6144 and d.productcode<>0 " +
+	"and pd.itemtypeyh='" + itmtype + "' " +
+	"and d.voucherno in (" + ds + ")";
+
+	return sqlhand.rws_gpSqlGetRows(sqlstm);
+}
+
+void showRWitems(String iwhat, Object owhere)
+{
+	Object[] rwitmslb_hds =
+	{
+		new listboxHeaderWidthObj("No.",true,"35px"),
+		new listboxHeaderWidthObj("Item",true,""),
+		new listboxHeaderWidthObj("Spec1",true,""),
+		new listboxHeaderWidthObj("Spec2",true,""),
+		new listboxHeaderWidthObj("Qty",true,"70px"),
+		new listboxHeaderWidthObj("P/Unit",true,""),
+		new listboxHeaderWidthObj("Total",true,""),
+	};
+	Listbox newlb = lbhand.makeVWListbox_Width(rwitms_holder, rwitmslb_hds, "rwitems_lb", 10);
+
+	sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross, iy.input0 as unitqty, " +
+	"iy.rate as perunit, iy.input1 as rentperiod, iy.output2 as mthtotal from data d " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join u011b u on u.extraid = d.extraoff " +
+	"where d.vouchertype=3329 and d.voucherno='" + iwhat + "' order by d.bodyid;";
+
+	recs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(recs.size() == 0) return;
+	//newlb.addEventListener("onSelect", rwinscliker );
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "product_name", "spec1yh", "spec2yh", "unitqty", "perunit", "gross" }; 
+	lnc = 1;
+	for(d : recs)
+	{
+		kabom.add(lnc.toString() + ".");
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+		lnc++;
+	}
+
+	rwidets_pop.open(owhere);
+}
+
+Object[] rwilb_hds =
+{
+	new listboxHeaderWidthObj("Dated",true,"65px"),
+	new listboxHeaderWidthObj("Invoice",true,"65px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("GrossNB",true,"70px"),
+	new listboxHeaderWidthObj("GrossDT",true,"70px"),
+	new listboxHeaderWidthObj("GrossSVR",true,""),
+	new listboxHeaderWidthObj("NB.Ins",true,"70px"),
+	new listboxHeaderWidthObj("NB 0.06",true,"70px"),
+	new listboxHeaderWidthObj("NB(x3 yrs)",true,"70px"),
+	new listboxHeaderWidthObj("DT.Ins",true,"70px"),
+	new listboxHeaderWidthObj("DT 0.06",true,"70px"),
+	new listboxHeaderWidthObj("DT(x3 yrs)",true,"70px"),
+	new listboxHeaderWidthObj("SVR.Ins",true,"70px"),
+	new listboxHeaderWidthObj("SVR 0.06",true,"70px"),
+	new listboxHeaderWidthObj("SVR(x3 yrs)",true,"70px"),
+	new listboxHeaderWidthObj("T.Premium",true,"70px"),
+};
+
+class rwinsclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_voucherno = lbhand.getListcellItemLabel(isel,1);
+		showRWitems(glob_sel_voucherno,isel);
+	}
+}
+rwinscliker = new rwinsclik();
+
+void showInvGotInsurance(int itype)
+{
+	scht = kiboo.replaceSingleQuotes(searhtxt_tb.getValue()).trim();
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	Listbox newlb = lbhand.makeVWListbox_Width(rwinsurholder, rwilb_hds, "rwinsurance_lb", 5);
+
+	sqlstm = "select convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, d.voucherno, a.name as customer_name, " +
+	"dbo.grossByItemType(d.voucherno,'NB') as nb_gross, " +
+	"dbo.grossByItemType(d.voucherno,'DT') as dt_gross, " +
+	"dbo.grossByItemType(d.voucherno,'SVR') as svr_gross " +
+	"from data d left join mr008 ro on ro.masterid = d.tags6 " +
+	"left join mr000 a on a.masterid = d.bookno " +
+	"left join u001b ri on ri.extraid=d.extraheaderoff " +
+	"where d.vouchertype=3329 " +
+	"and ro.name like '%insurance%' and (ri.remarksyh not like '%partial%' or ri.remarksyh not like 'Partial%') " +
+	"and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' " +
+	"order by d.voucherno,d.bodyid;";
+
+	recs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(recs.size() == 0) return;
+	newlb.setRows(21); newlb.setMold("paging");
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", rwinscliker );
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "vdate", "voucherno", "customer_name", "nb_gross", "dt_gross", "svr_gross" }; 
+	for(d : recs)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+
+		nbins = (d.get("nb_gross") == null) ? 0 : d.get("nb_gross") * 0.0058;
+		//nb6 = (d.get("nb_gross") == null) ? 0 : d.get("nb_gross") * 0.0006;
+		nb6 = nbins * 0.06;
+		nbtot = (nbins + nb6) * 3;
+
+		dtins = (d.get("dt_gross") == null) ? 0 : d.get("dt_gross") * 0.0035;
+		//dt6 = (d.get("dt_gross") == null) ? 0 : d.get("dt_gross") * 0.0006;
+		dt6 = dtins * 0.06;
+		dttot = (dtins + dt6) * 3;
+
+		svrins = (d.get("svr_gross") == null) ? 0 : d.get("svr_gross") * 0.0035; // TODO follow DT rate
+		svr6 = (d.get("svr_gross") == null) ? 0 : d.get("svr_gross") * 0.0006;
+		svrtot = (svrins + svr6) * 3;
+		alltot = nbtot + dttot + svrtot;
+
+		kabom.add(nf2.format(nbins));
+		kabom.add(nf2.format(nb6));
+		kabom.add(nf2.format(nbtot));
+		kabom.add(nf2.format(dtins));
+		kabom.add(nf2.format(dt6));
+		kabom.add(nf2.format(dttot));
+		kabom.add(nf2.format(svrins));
+		kabom.add(nf2.format(svr6));
+		kabom.add(nf2.format(svrtot));
+		kabom.add(nf2.format(alltot));
+
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+
+	rwinsurholder.setVisible(true);
+}
+
+void exportInsuranceSched()
+{
+	if(rwinsurholder.getFellowIfAny("rwinsurance_lb") == null) return;
+	exportExcelFromListbox(rwinsurance_lb, kasiexport, rwilb_hds, "RWinsurance_t.xls","Insurance_Sch");
+	/*
+	if(rwinsurholder.getFellowIfAny("rwinsurance_lb") == null) return;
+	if(rwinsurance_lb.getItemCount() == 0) return;
+
+	Workbook wb = new HSSFWorkbook();
+	Sheet sheet = wb.createSheet("Insurance_Sch");
+	Font wfont = wb.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+	rowcount = 0;
+
+	for(i=0;i<rwilb_hds.length;i++)
+	{
+		POI_CellSetAllBorders(wb,excelInsertString(sheet,rowcount,i,rwilb_hds[i].header_str),wfont,true,"");
+	}
+
+	rowcount++;
+	rx = rwinsurance_lb.getItems().toArray();
+
+	for(i=0; i<rx.length; i++)
+	{
+		//cb = rx[i];
+		for(j=0; j<rwilb_hds.length; j++)
+		{
+			kk = lbhand.getListcellItemLabel(rx[i],j);
+			try
+			{
+				ck = Float.parseFloat(kk);
+				excelInsertNumber(sheet,rowcount,j,kk);
+			}
+			catch (Exception e)
+			{
+				excelInsertString(sheet,rowcount,j,kk);
+			}
+		}
+
+		rowcount++;
+	}
+	jjfn = "RWinsurance_t.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + jjfn);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wb.write(fileOut); // Write Excel-file
+	fileOut.close();
+	downloadFile(kasiexport,jjfn,outfn);
+	*/
+}
+
+Object[] allrisk_hds =
+{
+	new listboxHeaderWidthObj("RW/LC",true,"65px"),
+	new listboxHeaderWidthObj("DO",true,"65px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Delivery.Addr",true,""),
+	new listboxHeaderWidthObj("Inception",true,"70px"), // 4
+	new listboxHeaderWidthObj("Ins.Expire",true,"70px"),
+	new listboxHeaderWidthObj("Item.Desc",true,""),
+	new listboxHeaderWidthObj("Qty",true,"70px"),
+	new listboxHeaderWidthObj("T.Rental",true,"80px"),
+
+/*
+	new listboxHeaderWidthObj("MT.Qty",true,"70px"),
+	new listboxHeaderWidthObj("NB.Qty",true,"70px"),
+	new listboxHeaderWidthObj("Rate",true,"70px"),
+	new listboxHeaderWidthObj("0.06%",true,"70px"),
+	new listboxHeaderWidthObj("Ins.Tot",true,"70px"),
+	new listboxHeaderWidthObj("Ins.Yrs",true,"70px"),
+	new listboxHeaderWidthObj("G.Tot",true,"70px"),
+*/
+};
+INCEPTION_DATE_POS = 4;
+DELADDRESS_POS = 3;
+
+Object getFC6_CustomerAddress(String iwhat)
+{
+	sqlstm = "select address1yh,address2yh,address3yh,address4yh from u0000 where extraid=" + iwhat;
+	return sqlhand.rws_gpSqlFirstRow(sqlstm);
+}
+
+void showAllRiskSched()
+{
+	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue()).trim();
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	Listbox newlb = lbhand.makeVWListbox_Width(allriskholder, allrisk_hds, "allrisks_lb", 5);
+
+	byname = "";
+	if(!st.equals("")) byname = " and a2.name like '%" + st + "%' ";
+
+	sqlstm = "select convert(datetime, focus5012.dbo.ConvertFocusDate(d.date_), 112) as vdate, d.voucherno, a.name as customer_name, " +
+	"(select top 1 ri.dorefyh from data d2 left join u001b ri on ri.extraid=d.extraheaderoff where d2.voucherno=d.voucherno ) as DONo, " +
+	"(select top 1 ri.deliverytoyh from data d2 left join u001b ri on ri.extraid=d.extraheaderoff where d2.voucherno=d.voucherno ) as DelAddr, " +
+	"(select top 1 case u.contractstartyh when 0 then null else convert(datetime, focus5012.dbo.ConvertFocusDate(u.contractstartyh), 112) " +
+	"end from data d2 left join u011b u on u.extraid = d2.extraoff where d2.voucherno=d.voucherno ) as InsIncept, " +
+	"(select top 1 case u.contractendyh when 0 then null else convert(datetime, focus5012.dbo.ConvertFocusDate(u.contractendyh), 112) " +
+	"end from data d2 left join u011b u on u.extraid = d2.extraoff where d2.voucherno=d.voucherno ) as InsExp, " +
+/*
+	"dbo.grossByItemType(d.voucherno,'NB') as nb_gross, " +
+	"dbo.grossByItemType(d.voucherno,'DT') as dt_gross, " +
+	"dbo.grossByItemType(d.voucherno,'MT') as mt_gross, " +
+	"dbo.grossByItemType(d.voucherno,'SVR') as svr_gross, " +
+	"dbo.qtyByItemType(d.voucherno,'NB') as nb_qty, " +
+	"dbo.qtyByItemType(d.voucherno,'DT') as dt_qty, " +
+	"dbo.qtyByItemType(d.voucherno,'MT') as mt_qty, " +
+	"dbo.qtyByItemType(d.voucherno,'SVR') as svr_qty, " +
+*/
+
+	"ro.name as itemname, " +
+	"iy.gross, iy.input0 as unitqty, " +
+	"ri.remarksyh, d.bookno " +
+	"from data d left join mr000 a on a.masterid = d.bookno " +
+	"left join mr008 ro on ro.masterid = d.tags6 " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"left join u001b ri on ri.extraid=d.extraheaderoff where d.voucherno in " +
+	"(select d2.voucherno from data d2 left join mr008 ro2 on ro2.masterid = d2.tags6 " +
+	"left join mr000 a2 on a2.masterid = d2.bookno " +
+	"left join u001b ri2 on ri2.extraid=d2.extraheaderoff " +
+	"where d2.vouchertype=3329 and ro2.name like '%insurance%' and (ri2.remarksyh not like '%partial%' or ri2.remarksyh not like 'Partial%') " +
+	"and convert(datetime, dbo.ConvertFocusDate(d2.date_), 112) between '" + sdate + "' and '" + edate + "' " + byname + ") order by d.voucherno";
+
+	recs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(recs.size() == 0) return;
+	newlb.setRows(20); newlb.setMold("paging");
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "voucherno","DONo","customer_name","DelAddr","InsIncept","InsExp","itemname","unitqty","gross" };
+	SimpleDateFormat ddate = new SimpleDateFormat("dd");
+
+	for( d: recs)
+	{
+		cki = d.get("itemname").toUpperCase();
+		if(cki.indexOf("INSURANCE") == -1)
+		{
+			ckd = ddate.format(d.get("InsIncept"));
+			pimpidt = ""; //dtf2.format(d.get("InsIncept"));
+			if(!ckd.equals("1")) // pimp inception-date to next month if it's not 1st of Month
+			{
+				Calendar mmd = Calendar.getInstance();
+				mmd.setTime(d.get("InsIncept"));
+				mmd.add(Calendar.MONTH,1);
+				mmd.set(Calendar.DATE,1);
+				pimpidt = dtf2.format(mmd.getTime());
+			}
+
+			ngfun.popuListitems_Data(kabom,fl,d);
+
+			ki = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+			lbhand.setListcellItemLabel(ki, INCEPTION_DATE_POS, pimpidt); // inject calc-incep-date
+
+			// 09/04/2014: if del-addrss is empty or "same as above" , use address from account-table (req by Shopa)
+			cka = d.get("DelAddr").toUpperCase();
+			if(cka.equals("") || cka.indexOf("ABOVE") != -1)
+			{
+				madr = getFC6_CustomerAddress(d.get("bookno").toString());
+				kx = madr.get("address1yh") + ",\n" + madr.get("address2yh") + ",\n" + madr.get("address3yh") + ",\n" + madr.get("address4yh");
+				lbhand.setListcellItemLabel(ki, DELADDRESS_POS, kx);
+			}
+
+			kabom.clear();
+		}
+
+	}
+	allriskholder.setVisible(true);
+}
+
+void exportAllRiskSched()
+{
+	if(allriskholder.getFellowIfAny("allrisks_lb") == null) return;
+	if(allrisks_lb.getItemCount() == 0) return;
+
+	Workbook wb = new HSSFWorkbook();
+	Sheet sheet = wb.createSheet("AllRisk_Sch");
+	Font wfont = wb.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+	rowcount = 3;
+
+	SimpleDateFormat ddate = new SimpleDateFormat("M yyyy");
+	woki = ddate.format(startdate.getValue());
+	excelInsertString(sheet,0,0, "All Risk Insurance - " + woki);
+	excelInsertString(sheet,1,0, "Risk Details and Hold Cover Instruction");
+
+	String[] fl = { "Rate","0.06%","Total","Yrs","Ins.Total" };
+
+	for(i=0;i<allrisk_hds.length;i++)
+	{
+		POI_CellSetAllBorders(wb,excelInsertString(sheet,rowcount,i,allrisk_hds[i].header_str),wfont,true,"");
+	}
+
+	for(i=0; i<fl.length; i++)
+	{
+		POI_CellSetAllBorders(wb,excelInsertString(sheet,rowcount,i+allrisk_hds.length,fl[i]),wfont,true,"");
+	}
+
+	rowcount++;
+	rx = allrisks_lb.getItems().toArray();
+
+	for(i=0; i<rx.length; i++)
+	{
+		//cb = rx[i];
+		for(j=0; j<allrisk_hds.length; j++)
+		{
+			kk = lbhand.getListcellItemLabel(rx[i],j);
+			try
+			{
+				ck = Float.parseFloat(kk);
+				excelInsertNumber(sheet,rowcount,j,kk);
+			}
+			catch (Exception e)
+			{
+				excelInsertString(sheet,rowcount,j,kk);
+			}
+		}
+		rowcount++;
+	}
+	jjfn = "RW_AllRiskInsurance_t.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + jjfn);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wb.write(fileOut); // Write Excel-file
+	fileOut.close();
+	downloadFile(kasiexport,jjfn,outfn);
+}
+
+]]>
+</zscript>
+<style src="/real-world.css" />
+
+<popup id="adminpop">
+<div width="400px">
+</div>
+</popup>
+
+<popup id="rwidets_pop">
+<div sclass="shadowbox" style="background:#355c97" width="580px">
+<div id="rwitms_holder" />
+</div>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#e9b96e">
+<div sclass="shadowbox" style="background:#06333a">
+<hbox>
+	<label value="Start date" sclass="k9b" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<label value="End date" sclass="k9b" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+	<label value="Search" sclass="k9b" />
+	<textbox id="searhtxt_tb" width="200px" style="font-size:9px" />
+	<button label="Insurance schedule" sclass="k9" onClick="showInvGotInsurance(1)" />
+	<button label="All-risk schedule" sclass="k9" onClick="showAllRiskSched()" />
+	<separator width="10px" />
+	<button label="Export insurance schedule" sclass="k9" onClick="exportInsuranceSched()" />
+	<button label="Export all-risk schedule" sclass="k9" onClick="exportAllRiskSched()" />
+
+	<separator width="10px" />
+	<button id="admin_bb" label="ADMIN" style="font-size:9px;color:#ff0000" visible="false" onClick="adminpop.open(self)" />
+</hbox>
+</div>
+<separator height="3px" />
+
+<div id="rwinsurholder" sclass="shadowbox" style="background:#355c97" visible="false">
+<label sclass="subhead1" value="Insurance schedule" />
+</div>
+<separator height="3px" />
+<div id="allriskholder" sclass="shadowbox" style="background:#355c97" visible="false">
+<label sclass="subhead1" value="All-risk schedule" />
+</div>
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

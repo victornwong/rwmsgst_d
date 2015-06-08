@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="folder_jobs_dbman"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript>
+<![CDATA[
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+
+Version				: 1.5
+Function			: To manage folders and samples - admin login only
+Coding began date	: 4/3/2010
+Developer			: Victor Wong
+
+*NOTES*
+18/03/2011: added some functions
+
+*/
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+if(useraccessobj.accesslevel != 9)
+{
+	sechand.showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhandler = new ListboxHandler();
+samphand = new SampleReg();
+guihand = new GuiFuncs();
+
+global_search_type = 0;
+
+// 17/9/2010: added search-type = itype. 1 = normal (date+branch), 2 = folder-num
+void startFolderJobsSearch(Datebox startd, Datebox endd, Listbox ibranch_dd, int itype)
+{
+	Object[] folders_lb_headers = {
+	new listboxHeaderObj("FolderNo",true),
+	new listboxHeaderObj("RecvDate",true),
+	new listboxHeaderObj("DueDate",true),
+	new listboxHeaderObj("Customer",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("Lab.Stat",true),
+	new listboxHeaderObj("Del",true),
+	new listboxHeaderObj("Brnch",true),
+	new listboxHeaderObj("PKD",true),
+	};
+
+	global_search_type = itype;
+
+	sdate = kiboo.getDateFromDatebox(startd);
+    edate = kiboo.getDateFromDatebox(endd);
+	
+	if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+
+	branch_str = "";
+
+	if(ibranch_dd.getSelectedIndex() != -1)
+	{
+		kkk = ibranch_dd.getSelectedItem().getLabel();
+		if(!kkk.equals("ALL")) branch_str = "and branch='" + kkk + "' ";
+	}
+
+	sqlstatem = "select top 200 origid,branch,folderno_str,datecreated,duedate,ar_code,folderstatus,labfolderstatus,deleted,pkd_samples from JobFolders " +
+	"where datecreated between '" + sdate + "' and '" + edate + "' " + branch_str + " order by datecreated desc";
+
+	if(itype == 2)
+	{
+		foldno = byfolderno.getValue(); // hardcoded textbox below
+
+		sqlstatem = "select top 200 origid,branch,folderno_str,datecreated,duedate,ar_code,folderstatus,labfolderstatus,deleted,pkd_samples from JobFolders " +
+		"where folderno_str like '%" + foldno + "%' order by datecreated desc";
+	}
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+	if(tlist.size() == 0) return;
+
+	reccount = tlist.size();
+	Listbox newlb = lbhandler.makeVWListboxWithFooter(folders_searchdiv, folders_lb_headers, "folderjobs_lb", 40, reccount.toString() + " folders");
+
+	for(ilist : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+
+		ifolderno = ilist.get("folderno_str");
+
+		// folderbranch = ilist.get("branch");
+		// folderprefix = folderPrefixByBranch(folderbranch);
+		//strarray[0] = folderprefix + padZeros5(ifolderno);
+		kabom.add(ifolderno);
+
+		kabom.add(ilist.get("datecreated").toString().substring(0,10));
+		kabom.add(ilist.get("duedate").toString().substring(0,10));		
+
+		// get customer name from ar_code - will be slow if alot, scan 1 by 1
+		iar_code = ilist.get("ar_code");
+		iar_code = iar_code.toUpperCase().trim();
+		icompanyname = sqlhand.getCompanyName(iar_code);
+
+		if(iar_code.equals("CASH") || iar_code.equals("CASH USD"))
+		{
+			csrec = samphand.getCashSalesCustomerInfo_Rec(ifolderno);	// get rec based on folder no
+			if(csrec != null)
+				icompanyname = "CshAct: " + csrec.get("customer_name");
+			else
+				icompanyname = "CshAct: Undefined";
+		}
+
+		kabom.add(icompanyname);
+		kabom.add(ilist.get("folderstatus"));
+		kabom.add(ilist.get("labfolderstatus"));
+
+		ides = (ilist.get("deleted") == 1) ? "-D-" : "---";
+		kabom.add(ides);
+		kabom.add(ilist.get("branch"));
+
+		pkdwop = "---";
+		if(ilist.get("pkd_samples") != null)
+			pkdwop = (ilist.get("pkd_samples") == 0) ? "---" : "-Y-";
+
+		kabom.add(pkdwop);
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhandler.insertListItems(newlb,strarray,JOBFOLDERS_PREFIX,"");
+	}
+} // end of startFolderJobsSearch()
+
+void showFolderDetails_Samples()
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	theparam = "folderno=" + ifolderno;
+	uniqwindowid = kiboo.makeRandomId("dxfoldxd");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+// Set folder status - draft,logged,committed as defined in alsglobaldefs.zs
+void setFolderStatus_Flag(String iflag)
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	ifno = Integer.parseInt(samphand.extractFolderNo(ifolderno));
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstatem = "update JobFolders set folderstatus='" + iflag + "' where origid=" + ifno.toString();
+	sql.execute(sqlstatem);
+	sql.close();
+	startFolderJobsSearch(startdate,enddate,branch_drd,global_search_type); // refresh
+}
+
+// Set lab-folder status - wip,released as defined in alsglobaldefs.zs
+void setLabFolderStatus_Flag(String iflag)
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	ifno = Integer.parseInt(samphand.extractFolderNo(ifolderno));
+	sql = als_mysoftsql();
+	if(sql == null) return;
+	sqlstatem = "update JobFolders set labfolderstatus='" + iflag + "'"; 
+
+	if(iflag.equals(FOLDERWIP)) sqlstatem += ",releasedby='',releaseddate=''";
+
+	sqlstatem += " where origid=" + ifno.toString();
+	sql.execute(sqlstatem);
+	sql.close();
+	startFolderJobsSearch(startdate,enddate,branch_drd,global_search_type); // refresh
+}
+
+// deleted flag toggler for folder
+void softDeleteFolder()
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	ifno = Integer.parseInt(samphand.extractFolderNo(ifolderno));
+	ifnostr = ifno.toString();
+
+	// if really corrupted folder num, just return
+	if(ifno == 0) return;
+
+	foldrec = samphand.getFolderJobRec(ifnostr);
+
+	if(foldrec != null)
+	{
+		delflg = foldrec.get("deleted");
+		deltog = (delflg == 1) ? "0" : "1";
+
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+
+		sqlstatem = "update JobFolders set deleted=" + deltog + " where origid=" + ifnostr;
+		sql.execute(sqlstatem);
+		sql.close();
+
+		// refresh the folders listbox
+		startFolderJobsSearch(startdate,enddate,branch_drd,global_search_type);
+
+		// maybe need to write extra codes to set deleted flag for each samples for this folder
+		// hmm.. not necessary for now as users won't be able to see deleted folders anyway.
+	}
+}
+
+// do delete sql command.. dangerous, must be really sure.
+// 5/3/2010: don't activate the sql.execute command
+void hardDeleteFolder()
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	ifno = Integer.parseInt(samphand.extractFolderNo(ifolderno));
+	ifnostr = ifno.toString();
+
+	if (Messagebox.show("(NOT REALLY YET) Will remove completely from database: " + ifolderno, "Hard delete?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+
+		// delete all samples assigned to folder first
+		// get a list of samples assigned to folder
+		sqlstat1 = "select origid from JobSamples where jobfolders_id=" + ifnostr;
+		samprecs = sql.rows(sqlstat1);
+
+		if(samprecs != null)
+		{
+			// extract and made samples origid string
+			sampstr = "(";
+			for(kki : samprecs)
+			{
+				smpid = kki.get("origid").toString();
+				sampstr = sampstr + smpid + ",";
+				
+				// Delete test parameters linked to this sample id - to be coded
+				sqlstat3 = "delete from JobTestParameters where jobsamples_id=" + smpid;
+				alert(sqlstat3);
+			}
+			// chop off extra , at the end
+			ism = sampstr.substring(0,sampstr.length()-1);
+			sampstr = ism + ")";
+			
+			sqlstat2 = "delete from JobSamples where origid in " + sampstr;
+			alert(sqlstat2);
+		}
+		
+		sqlstatem = "delete from JobFolders where origid=" + ifno.toString();
+		// sql.execute(sqlstatem);
+		//alert(sqlstatem);
+		sql.close();
+	}
+	
+}
+
+// 17/9/2010: let admin view audit-logs for folder
+void viewAuditLogs()
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+	ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+	theparam = "folderno=" + ifolderno;
+	uniqwindowid = kiboo.makeRandomId("audlog");
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","adminmodules/auditlogs.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="folder_jobs_dbman_panel" title="Folders/Jobs/Samples Manager" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<vbox>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+<hbox>
+	<label value="Start date" style="font-size:9px" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+	<separator width="10px"/>
+	<label value="End date" style="font-size:9px" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="self.value = new Date()" />
+	<label value="Branch" style="font-size:9px" />
+	<listbox id="branch_drd" mold="select" style="font-size:9px" />
+	<button label="Search/Refresh" style="font-size:9px" onClick="startFolderJobsSearch(startdate,enddate,branch_drd,1)" />
+
+	<label value="Folder#" style="font-size:9px" />
+	<textbox id="byfolderno" style="font-size:9px" />
+	<button label="by Folder" style="font-size:9px" onClick="startFolderJobsSearch(startdate,enddate,branch_drd,2)" />
+</hbox>
+<hbox>
+	<button label="Set DRAFT" style="font-size:9px" onClick="setFolderStatus_Flag(FOLDERDRAFT)" />
+	<button label="Set LOGGED" style="font-size:9px" onClick="setFolderStatus_Flag(FOLDERLOGGED)" />
+	<button label="Set COMMITED" style="font-size:9px" onClick="setFolderStatus_Flag(FOLDERCOMMITED)" />
+	<button label="Set RELEASED" style="font-size:9px" onClick="setLabFolderStatus_Flag(FOLDERRELEASED)" />
+	<button label="Set WIP" style="font-size:9px" onClick="setLabFolderStatus_Flag(FOLDERWIP)" />
+	<button label="Un/delete" style="font-size:9px" onClick="softDeleteFolder()" />
+	<button label="Hard delete" style="font-size:9px" onClick="hardDeleteFolder()" />
+	<button label="View folder details" style="font-size:9px" onClick="showFolderDetails_Samples()" />
+	<button label="View audit-log" style="font-size:9px" onClick="viewAuditLogs()" />
+</hbox>
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+<vbox>
+<div id="folders_searchdiv" />
+</vbox>
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+lbhandler.populateDropdownListbox(branch_drd, dd_branches);
+
+//startFolderJobsSearch(startdate,enddate,branch_drd);
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+</div>
+</zk>

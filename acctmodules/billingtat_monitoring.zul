@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="billingtat_monitoring_mod"?>
+<!--
+
+Title				: Monitor TAT for all folders
+Developers			: Victor
+
+Notes:
+
+8/5/2010: Show linking data between JobFolders -> DeliveryOrderMaster -> Invoice
+Workflow.. 
+1. Once tests been assigned to folder, it can be uploaded to MySoft, populating DeliveryOrderMaster
+2. To create Invoice, user will need to pickup the DO in MySoft
+3. Once invoice created, the payment ageing will start - best to create invoice once COA is released - this will reflect
+	the actual ageing properly
+	
+3 prong-monitoring of works
+
+1. billing team for folders commitment date
+2. lab for COA release date
+3. credit-control debt chasing
+
+Need to actually check in MySoft->Invoice table for knock-off flag, customer already paid for the invoice..
+can assist credit-control to monitor payment
+
+-->
+
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+<zscript src="../alsglobal/samplereg_funcs.zs" />
+<zscript src="../alsglobal/doculink_funcs.zs" />
+
+<zscript>
+<![CDATA[
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+// check usergroup access - no access, just close the panel.. min. level 1 can browser through the folder/job list
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,3);
+
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+documentLinkObj documentLinkProp = new documentLinkObj();
+
+void localPlayDriller()
+{
+	if(!check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+	lstitem = folderjobs_lb.getSelectedItem();
+	ifoldno = getListcellItemLabel(lstitem,1);
+	theparam = "folderno=" + ifoldno;
+	uniqwindowid = makeRandomId("xxfoldxx");
+	globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+}
+
+void playGenerateReport()
+{
+	uniqwindowid = makeRandomId("xgenrepx");
+	globalActivateWindow("miscwindows","acctmodules/birt_docoainvtat.zul", uniqwindowid, "", useraccessobj);
+}
+
+// onSelect event for makeALSTestParametersListbox()
+class folderjobslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		ifolderno = folderjobs_lb.getSelectedItem().getLabel();
+		playFolderDriller(ifolderno);
+	}
+}
+
+Object[] foldersdoinvoice_lb_headers = {
+
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("FolderNo",true),
+	new listboxHeaderObj("Customer",true),
+	new listboxHeaderObj("RecvDate",true),
+	new listboxHeaderObj("Foldstat",true),
+	new listboxHeaderObj("COA.Date",true),
+
+	new listboxHeaderObj("DO.Date",true),
+	new listboxHeaderObj("DO.Total",true),
+
+	new listboxHeaderObj("INV.Date",true),
+	new listboxHeaderObj("Gross",true),
+	new listboxHeaderObj("Dscnt",true),
+	new listboxHeaderObj("Total",true),
+};
+
+/*
+Folders search thinggy..
+
+select jobfolders.origid,jobfolders.folderno_str, jobfolders.deleted, jobfolders.folderstatus, jobfolders.ar_code, jobfolders.branch,
+deliveryordermaster.DONo, deliveryordermaster.name,
+deliveryordermaster.entrydate, deliveryordermaster.GrossAmount,
+invoice.salesorder, invoice.InvoiceNo, invoice.entrydate, invoice.invoicedate,invoice.duedate from jobfolders
+left join deliveryordermaster
+on deliveryordermaster.DONo = jobfolders.folderno_str 
+left join invoice
+on invoice.salesorder = deliveryordermaster.DONo
+where jobfolders.deleted = 0 and jobfolders.folderstatus in ('LOGGED','COMMITED') and jobfolders.branch='SA'
+order by jobfolders.origid, jobfolders.folderstatus;
+
+
+jobfolders.folderstatus in ('" + FOLDERCOMMITED + "','" + FOLDERLOGGED + "') and " +
+
+*/
+void FolderDOInvoiceSearch(Datebox startd, Datebox endd, Textbox icustomer_tb)
+{
+	sdate = getDateFromDatebox(startd);
+    edate = getDateFromDatebox(endd);
+	cnm = icustomer_tb.getValue();
+
+	if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	// 29/3/2010: check branch
+	branch_str = "";
+
+	/*
+	ibranch = useraccessobj.branch;
+	if(!ibranch.equals("ALL")) // if admin login, should be able to see all folders else filter according to branch
+	{
+		branch_str = "and branch='" + ibranch + "' ";
+	}
+	*/
+
+	dubra = branch_drd.getSelectedItem().getLabel();
+
+	if(!dubra.equals("ALL")) branch_str = "and branch='" + dubra + "' ";
+
+	// search by customer-name too
+	customername_str = "";
+	if(!cnm.equals("")) customername_str = "and deliveryordermaster.name like '%" + cnm + "%' ";
+
+	// 1/6/2010: added new field JobFolders.coadate
+
+	sqlstatem = "select top 200 jobfolders.origid,jobfolders.folderno_str, jobfolders.deleted, jobfolders.folderstatus, jobfolders.ar_code as fold_arcode, jobfolders.branch, " + 
+		"jobfolders.datecreated as fold_datecreated, jobfolders.coadate as fold_coadate," +
+		"deliveryordermaster.DONo, deliveryordermaster.name as customername, " +
+		"deliveryordermaster.entrydate as DOEntryDate, deliveryordermaster.GrossAmount as DOGross, deliveryordermaster.CurCode as DOCurCode, " +
+		"invoice.salesorder, invoice.InvoiceNo, invoice.entrydate as InvEntryDate, invoice.invoicedate as InvDate, invoice.duedate as InvDueDate, " +
+		"convert(VARCHAR,invoice.Total,1) as InvTotal, convert(VARCHAR,invoice.Discount,1) as InvDiscount, " +
+		"convert(VARCHAR,invoice.GrossTotal,1) as InvGross, invoice.CurCode as InvCurCode, invoice.Printed " +
+		"from jobfolders " +
+		"left join deliveryordermaster " +
+		"on deliveryordermaster.DONo = jobfolders.folderno_str " +
+		"left join invoice " +
+		"on invoice.salesorder = deliveryordermaster.DONo " +
+		"where jobfolders.deleted = 0 " +
+		branch_str +
+		customername_str +
+		"and jobfolders.datecreated between '" + sdate + "' and '" + edate + "' " + 
+		"order by jobfolders.origid";
+
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+
+    // found some records but must be within limit else the browser will crash
+	reccount = tlist.size();
+	Listbox newlb = makeVWListboxWithFooter(folders_searchdiv, foldersdoinvoice_lb_headers, "folderjobs_lb", 10, reccount.toString() + " folders");
+	// newlb.addEventListener("onSelect", new folderjobslb_Listener());
+	if(reccount == 0) return;
+
+	String[] strarray = new String[12];
+	total_numsamples = 0;
+
+	for(ilist : tlist)
+	{
+		ifolderno = ilist.get("origid");
+
+		folderbranch = ilist.get("branch");
+		folderprefix = folderPrefixByBranch(folderbranch);
+
+		strarray[0] = ifolderno.toString();
+
+		strarray[1] = folderprefix + padZeros5(ifolderno);
+
+		custname = ilist.get("customername");
+		if(custname == null)
+		{
+			iar_code = ilist.get("fold_arcode");
+			
+			if(!iar_code.equals(""))
+				custname = getCompanyName(iar_code);
+			else
+				custname = "-UnD-";
+		}
+		
+		tmp_coadate = ilist.get("fold_coadate").toString().substring(0,10);
+		if(tmp_coadate.equals("1900-01-01")) tmp_coadate = "-----";
+		
+		strarray[2] = custname;
+		
+		tmp_dono = ilist.get("DONo");
+		tmp_dono = (tmp_dono == null) ? "NO" : "UP";
+
+		tmp_dogross = ilist.get("DOGross");
+		tmp_dogross = (tmp_dogross == null) ? "---" : tmp_dogross;
+		
+		tmp_docurcode = ilist.get("DOCurCode");
+		tmp_docurcode = (tmp_docurcode == null) ? "" : tmp_docurcode;
+		
+		tmp_doentrydate = ilist.get("DOEntryDate");
+		tmp_doentrydate = (tmp_doentrydate == null) ? "---" : tmp_doentrydate.toString().substring(0,10);
+		
+		tmp_inventrydate = ilist.get("InvEntryDate");
+		tmp_inventrydate = (tmp_inventrydate == null) ? "---" : tmp_inventrydate.toString().substring(0,10);;
+		
+		tmp_invdate = ilist.get("InvDate");
+		tmp_invdate = (tmp_invdate == null) ? "---" : tmp_invdate.toString().substring(0,10);;
+		
+		tmp_invduedate = ilist.get("InvDueDate");
+		tmp_invduedate = (tmp_invduedate == null) ? "---" : tmp_invduedate.toString().substring(0,10);;
+		
+		tmp_invgross = ilist.get("InvGross");
+		tmp_invgross = (tmp_invgross == null) ? "---" : tmp_invgross;
+		
+		tmp_invcurcode = ilist.get("InvCurCode");
+		tmp_invcurcode = (tmp_invcurcode == null) ? "" : tmp_invcurcode;
+		
+		tmp_invtotal = ilist.get("InvTotal");
+		tmp_invtotal = (tmp_invtotal == null) ? "---" : tmp_invtotal;
+		
+		tmp_invdiscount = ilist.get("InvDiscount");
+		tmp_invdiscount = (tmp_invdiscount == null) ? "---" : tmp_invdiscount;
+		
+		/*
+		tmp_printed = ilist.get("Printed");
+		tmp_printedstr = (tmp_printed == true) ? "Yes" : "No";
+		*/
+
+		strarray[3] = ilist.get("fold_datecreated").toString().substring(0,10);
+		strarray[4] = ilist.get("folderstatus");
+		
+		strarray[5] = tmp_coadate;
+		
+		strarray[6] = tmp_doentrydate;
+		strarray[7] = tmp_docurcode + " " + tmp_dogross.toString();
+		
+		strarray[8] = tmp_invdate;
+		strarray[9] = tmp_invcurcode + " " + tmp_invgross;
+		strarray[10] = tmp_invdiscount;
+		strarray[11] = tmp_invcurcode + " " + tmp_invtotal;
+		
+		//strarray[10] = tmp_printedstr;
+		
+			// 27/2/2010: get number of samples for this folder
+/*
+			numsamples = getNumberOfSamples_InFolder(ifolderno);
+			strarray[4] = numsamples.toString();
+
+			total_numsamples = total_numsamples + numsamples;
+
+			// get customer name from ar_code - will be slow if alot, scan 1 by 1
+			iar_code = ilist.get("ar_code");
+			icompanyname = "Undefined";
+
+			if(!iar_code.equals(""))
+				icompanyname = getCompanyName(iar_code);
+*/
+
+            insertListItems(newlb,strarray,"false");
+	}
+
+} // end of FolderDOInvoiceSearch()
+
+void doViewDoculinkPopup()
+{
+	if(!check_ListboxExist_SelectItem(folders_searchdiv,"folderjobs_lb")) return;
+	lstitem = folderjobs_lb.getSelectedItem();
+	foldern = getListcellItemLabel(lstitem,1);
+	documentLinkProp.global_eq_origid = foldern;
+	documentLinkProp.refreshListbox.populateDocumentLinks(documentLinkProp.global_eq_origid, documentLinkProp.document_idprefix);
+	// show CRUD buttons for admin
+	if(useraccessobj.accesslevel == 9)
+	{
+		documentLinkProp.refreshListbox.showCrudButtons();
+		documentLinkProp.refreshListbox.showAdminButtons();
+	}
+	doculink_popup.open(viewdoculinks_btn);
+}
+
+
+]]>
+</zscript>
+
+<popup id="doculink_popup">
+<groupbox width="400px">
+<include id="linkingdoc_include" src="alsglobal/doculink.zul"/>
+<separator height="5px" />
+<hbox>
+	<button label="Close" onClick="doculink_popup.close()" style="font-size:9px" />
+</hbox>
+</groupbox>
+</popup>
+<!-- end of document management popup -->
+
+<div width="1200px">
+<panel id="billingtat_monitoring_panel" title="Invoice/COA TAT Monitoring" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<groupbox mold="3d" width="100%" style="padding:3px">
+<caption label="Search parameters" />
+<hbox>
+	<label value="Start date" style="font-size:9px" />
+	<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+	<separator width="10px"/>
+	<label value="End date" style="font-size:9px" />
+	<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+	<separator width="5px" />
+	<label value="Customer" style="font-size:9px" />
+	<textbox id="customer_tb" width="200px" style="font-size:9px" />
+	<label value="Branch" style="font-size:9px" />
+	<listbox id="branch_drd" mold="select" style="font-size:9px" />
+	<separator width="5px" />
+	<button label="Search/Refresh" style="font-size:9px" onClick="FolderDOInvoiceSearch(startdate,enddate,customer_tb)" />
+	<button label="Generate/Export report" style="font-size:9px" onClick="playGenerateReport()" />
+</hbox>
+<separator height="3px" />
+<hbox>
+	<separator width="5px" />
+	<button label="Folder details" style="font-size:9px" onClick="localPlayDriller()" />
+	<button id="viewdoculinks_btn" label="COC/PO/Documents" style="font-size:9px" onClick="doViewDoculinkPopup()" />
+	<label style="font-size:9px" value="(Max. 200 recs per click)" />
+</hbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%" style="padding:3px">
+<caption label="Search results" />
+<div id="folders_searchdiv" />
+</groupbox>
+<zscript>
+<![CDATA[
+
+setTodayDatebox(startdate);
+setTodayDatebox(enddate);
+setTodayDatebox(hiddendatebox);
+
+populateDropdownListbox(branch_drd, dd_branches);
+
+documentLinkProp.document_idprefix = "DOCS";
+setDocumentLink_DynamicProperty(linkingdoc_include, documentLinkProp, useraccessobj);
+
+// startFolderJobsSearch(startdate,enddate,customer_tb);
+
+]]>
+</zscript>
+
+</panelchildren>
+</panel>
+</div>
+</zk>
+

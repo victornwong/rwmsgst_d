@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="internaltasks_mod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/internaltasksf_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "MY TASKS";
+MYVERSION = "v0.1";
+MY_ID = "intjtaskid";
+/*
+Written by	: Victor Wong
+Dated		: 04/12/2013
+NOTES:
+*/
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+void loadEmTasks(int itype)
+{
+	sdate = kiboo.getDateFromDatebox( (itype == 2) ? tskdate : asstskdate );
+	odiv = (itype == 2) ? tasksforyou_holder : tasksfromyou_holder;
+	olbid = (itype == 2) ? "yourtasks_lb" : "asstasks_lb";
+	showInternalTasksList(itype, useraccessobj.username, "", sdate, odiv, olbid );
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+
+<window id="${MY_ID}" width="880px" title="${MYTITLE} ${MYVERSION}" position="top,center" mode="overlapped" border="normal" closable="true">
+
+<div sclass="shadowbox" style="background:#2e3436;">
+
+	<label sclass="subhead1" style="color:#ffffff" value="Tasks for you starting from" />
+	<datebox id="tskdate" format="yyyy-MM-dd" />
+	<button label="Load 'em" onClick="loadEmTasks(2)" />
+	<separator height="3px" />
+
+	<separator height="3px" />
+	<div id="tasksforyou_holder" />
+	<separator height="3px" />
+	<grid>
+		<columns>
+			<column width="80px" />
+			<column />
+		</columns>
+		<rows>
+			<row spans="2">
+				<label id="intmytaskno_lbl" style="font-size:11px;font-weight:bold" />
+				
+			</row>
+			<row>
+				<label value="Your action" />
+				<textbox id="inttask_action" style="font-size:9px" multiline="true" width="99%" height="70px" />
+			</row>
+			<row spans="2">
+				<hbox>
+					<button id="saveaction_b" label="Post action" onClick="internalTasksDo(self)" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+
+</div>
+
+<separator height="5px" />
+
+<div sclass="shadowbox" style="background:#2e3436;" id="taskassigner_workarea" visible="false">
+
+	<label sclass="subhead1" style="color:#ffffff" value="Tasks Assigner : from date " />
+	<datebox id="asstskdate" format="yyyy-MM-dd" />
+	<button label="Load 'em" onClick="loadEmTasks(1)" />
+
+	<separator height="3px" />
+	<div id="tasksfromyou_holder" />
+	<separator height="2px" />
+	<button id="settaskdone_b" label="Task toggler" onClick="internalTasksDo(self)" />
+	<separator height="3px" />
+	<grid width="600px">
+		<rows>
+			<row>
+				<label value="Assign to" />
+				<listbox id="intassignto_lb" mold="select" />
+				<label value="Priority" />
+				<listbox id="inttaskprio_lb" mold="select" />
+			</row>
+			<row spans="4">
+				<label value="Task to do" />
+			</row>
+			<row spans="4">
+				<textbox id="assignto_task" style="font-size:9px" multiline="true" width="99%" height="70px" />
+			</row>
+			<row spans="4">
+				<hbox>
+					<button id="saveinttask_b" label="Assign it" onClick="internalTasksDo(self)" />
+					<button id="delinttask_b" label="Remove" onClick="internalTasksDo(self)" />
+					<button id="clearinttask_b" label="Clear" onClick="internalTasksDo(self)" />
+				</hbox>
+			</row>
+		</rows>
+	</grid>
+
+</div>
+
+<zscript>
+<![CDATA[
+
+java.util.Calendar calcdate = java.util.Calendar.getInstance();
+calcdate.add(calcdate.DAY_OF_MONTH, -7);
+tskdate.setValue(calcdate.getTime());
+asstskdate.setValue(calcdate.getTime());
+sdate = kiboo.getDateFromDatebox(tskdate);
+
+if(useraccessobj.accesslevel < 9)
+	showInternalTasksList(2, useraccessobj.username, "", sdate, tasksforyou_holder, "yourtasks_lb" );
+
+populateUsernames(intassignto_lb,"");
+luhand.populateListbox_ByLookup(inttaskprio_lb,"PRIORITY_LISTS",2);
+showInternalTasksList(1, useraccessobj.username, "", "", tasksfromyou_holder, "asstasks_lb");
+taskassigner_workarea.setVisible(true);
+loadEmTasks(2);
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

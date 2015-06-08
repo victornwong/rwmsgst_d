@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="alsacct_quotation"?>
+<!--
+
+Version				:
+Coding began date	:
+Developers			: Victor
+
+-->
+
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript>
+<![CDATA[
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+void closeAcctQuotationPanel()
+{
+	// refering back to main page, hardcoded for now.
+	Vbox contdiv = Path.getComponent("//als_portal_main/workbox");
+	Include thiswin = contdiv.getFellow(myincludeid);
+
+	// just set the include source to empty, should remove this window
+	thiswin.setSrc("");
+}
+
+]]>
+</zscript>
+
+<zscript>
+<![CDATA[
+
+// Populate quotation status from table SOPHeader, distinct select
+void populateQuotationStatus(Listbox wlistbox)
+{
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    // Bizarre setup, using Address_5 field as status for quotation. Not a proper lookup in Mysoft
+	sqlstatem = "select distinct(address_5) from SOPHeader";
+	tlist = sql.rows(sqlstatem);
+
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[1];
+
+        // Put first selection in listbox to ALL, to search for everything in db
+        strarray[0] = "ALL";
+        insertListItems(wlistbox,strarray);
+        wlistbox.setSelectedIndex(0);
+
+		for(ilist : tlist)
+		{
+            strarray[0] = ilist.get("address_5");
+
+            if(strarray[0] == "")
+            {
+                strarray[0] = "**NO STATUS**";
+            }
+
+            insertListItems(wlistbox,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+
+	sql.close();
+
+} // end of populateQuotationStatus()
+
+// Populate taken-by from table SOPHeader, distinct select
+void populateTakenBy(Listbox wlistbox)
+{
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    // Bizarre setup, using Address_5 field as status for quotation. Not a proper lookup in Mysoft
+	sqlstatem = "select distinct(Taken_By) from SOPHeader";
+	tlist = sql.rows(sqlstatem);
+
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[1];
+
+        // Put first selection in listbox to ALL, to search for everything in db
+        strarray[0] = "ALL";
+        insertListItems(wlistbox,strarray);
+        wlistbox.setSelectedIndex(0);
+
+		for(ilist : tlist)
+		{
+            strarray[0] = ilist.get("Taken_By");
+
+            if(strarray[0] == "0")
+            {
+                strarray[0] = "**NOBODY**";
+            }
+
+            insertListItems(wlistbox,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+
+	sql.close();
+
+} // end of populateTakenBy()
+
+
+Listbox makeQuotationListbox(Div mDiv, Integer totalrecs)
+{
+    Listbox newlb = new Listbox();
+
+    newlb.setId("testsdrillbit");
+    newlb.setContext("quoteContext");
+    newlb.setVflex(true);
+    // newlb.setPopup("testmypop");
+
+    newlb.setParent(mDiv);
+
+    Listhead newhead = new Listhead();
+    newhead.setSizable(true);
+    newhead.setParent(newlb);
+
+    Listheader hd1 = new Listheader();
+    hd1.setLabel("QuoteNo");
+    hd1.setSort("auto");
+    hd1.setParent(newhead);
+
+    Listheader hd2 = new Listheader();
+    hd2.setLabel("DateCreated");
+    hd2.setSort("auto");
+    hd2.setParent(newhead);
+
+    Listheader hd3 = new Listheader();
+    hd3.setLabel("Client");
+    hd3.setSort("auto");
+    hd3.setParent(newhead);
+
+    Listheader hd4 = new Listheader();
+    hd4.setLabel("Contact");
+    hd4.setSort("auto");
+    hd4.setParent(newhead);
+
+    Listheader hd5 = new Listheader();
+    hd5.setLabel("Tel No.");
+    hd5.setSort("auto");
+    hd5.setParent(newhead);
+
+    Listheader hd6 = new Listheader();
+    hd6.setLabel("Taken by");
+    hd6.setSort("auto");
+    hd6.setParent(newhead);
+
+    Listheader hd7 = new Listheader();
+    hd7.setLabel("Amount");
+    hd7.setSort("auto");
+    hd7.setParent(newhead);
+
+    Listheader hd8 = new Listheader();
+    hd8.setLabel("Status");
+    hd8.setSort("auto");
+    hd8.setParent(newhead);
+
+    Listfoot newfooter = new Listfoot();
+    newfooter.setParent(newlb);
+
+    Listfooter fd1 = new Listfooter();
+    fd1.setLabel("Found:");
+    fd1.setParent(newfooter);
+
+    Listfooter fd2 = new Listfooter();
+    fd2.setLabel(totalrecs.toString());
+    fd2.setParent(newfooter);
+
+    newlb.setRows(20);
+
+    return newlb;
+
+} // end of makeQuotationListbox()
+
+// Do the search and populate listbox
+void startQuotationSearch(Datebox startd, Datebox endd, Listbox quotestat, Listbox takenby)
+{
+    qstat = quotestat.getSelectedItem().getLabel();
+    tbstat = takenby.getSelectedItem().getLabel();
+    sdate = getDateFromDatebox(startd);
+    edate = getDateFromDatebox(endd);
+
+    sql = als_mysoftsql();
+
+    if(sql == NULL)
+    {
+        showMessage("Cannot connect to Mysoft database");
+        return;
+    }
+
+    if(sdate == null || edate == null)
+    {
+        showMessageBox("Please specify start and end date for search");
+        return;
+    }
+
+    // quote status where check
+    statstr = (qstat == "ALL") ? "" : "and Address_5 = '" + qstat + "' ";
+
+    takenbystr = (tbstat == "ALL") ? "" : "and Taken_By = '" + tbstat + "' ";
+
+sqlstatem = "select Order_Number,convert(char(10),Date_Created,103) as DateCreated, convert(char(10),Last_Modify,103) as LastModify, Name, Contact_Name, " +
+    "Cust_Tel_Number, Taken_By, Order_Net, Address_5, CurCode from sopheader " +
+    "where date_created between '" + sdate + "' and '" + edate + "' " +
+    statstr +
+    takenbystr +
+    "and NewVersion=1 order by order_number";
+
+    tlist = sql.rows(sqlstatem);
+
+    // found some records
+	if(tlist.size() > 0)
+	{
+		String[] strarray = new String[8];
+
+        // showMessageBox(tlist.get(0).get("Date_Created").toString());
+
+        // if there's previously a listbox, remove before adding a new one.
+        Listbox oldlb = searchdiv.getFellowIfAny("testsdrillbit");
+        if(oldlb != null)
+            oldlb.setParent(null);
+
+        // create a new listbox and attach to searchdiv
+        Listbox newlb = makeQuotationListbox(searchdiv, tlist.size());
+
+    	for(ilist : tlist)
+		{
+        
+            strarray[0] = ilist.get("Order_Number");
+            strarray[1] = ilist.get("DateCreated");
+            strarray[2] = ilist.get("Name");
+            strarray[3] = ilist.get("Contact_Name");
+            strarray[4] = ilist.get("Cust_Tel_Number");
+            strarray[5] = ilist.get("Taken_By");
+            strarray[6] = ilist.get("CurCode") + " " + ilist.get("Order_Net").toString();
+            strarray[7] = ilist.get("Address_5");
+
+            insertListItems(newlb,strarray);
+		}
+
+		// hardcoded for testing only
+		//sources_num_recs.setValue("no. records: " + tlist.size());
+	}
+    else
+    {
+        showMessageBox("No records found..");
+    }
+
+    sql.close();
+
+} // end of startQuotationSearch()
+
+void tryNotes()
+{
+    msele = testsdrillbit.getSelectedItem().getLabel();
+
+    alert("selected this: " + msele);
+
+}
+
+]]>
+</zscript>
+
+<popup id="testmypop">
+<vbox>
+<label value="i'm poped..." />
+</vbox>
+</popup>
+
+<menupopup id="quoteContext">
+
+<menu label="Follow-ups">
+<menupopup>
+    <menuitem label="Notes" onClick="tryNotes()" />
+</menupopup>
+</menu>
+
+<menuitem label="Quote details" />
+<menuitem label="Create task" />
+<menuitem label="Hide popup" />
+</menupopup>
+
+<div width="100%">
+<panel id="acctquotation" title="Quotations"
+		border="normal"
+		collapsible="true" closable="true"
+>
+<panelchildren>
+
+<vbox width="100%">
+
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<vbox>
+
+<hbox>
+	<hbox>
+		<label value="Start date" />
+		<datebox id="startdate" format="yyyy-MM-dd" />
+	</hbox>
+	<separator width="10px"/>
+	<hbox>
+		<label value="End date" />
+		<datebox id="enddate" format="yyyy-MM-dd" />
+	</hbox>
+
+    <separator width="10px"/>
+    <hbox>
+        <label value="Quotation status" />
+
+        <!-- populate quotation status from mysoft SOPHeader table -->
+        <listbox mold="select" rows="1" id="quotestatus" />
+
+        <zscript>
+            populateQuotationStatus(quotestatus);
+        </zscript>
+    </hbox>
+</hbox>
+
+<hbox>
+    <hbox>
+        <label value="Taken by" />
+        <listbox mold="select" rows="1" id="takenby" />
+        <zscript>
+            populateTakenBy(takenby);
+        </zscript>
+
+    </hbox>
+
+</hbox>
+
+<button label="Start search" onClick="startQuotationSearch(startdate,enddate,quotestatus,takenby)" />
+
+</vbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Search results" />
+
+<vbox>
+
+<div id="searchdiv" />
+
+</vbox>
+
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+/*
+Calendar kkk = Calendar.getInstance();
+kkk.set(2008,0,1);
+*/
+
+/*
+startdd = patientRecsDateStart();
+Calendar myend = Calendar.getInstance();
+myend.setTime(startdd);
+myend.add(myend.DAY_OF_MONTH,6);
+startgraphdate.setValue(startdd);
+endgraphdate.setValue(myend.getTime());
+*/
+
+// Set search startdate and enddate to today's date
+Calendar kkk = Calendar.getInstance();
+startdate.setValue(kkk.getTime());
+enddate.setValue(kkk.getTime());
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+
+</div>
+
+</zk>
+

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<project name="elb" basedir="." default="build">
+	<property name="web.dir" value=".." />
+    <property name="src.dir" value="${web.dir}/src"/>
+    <property name="build.dir" value="${web.dir}/classes"/>
+    <property name="name" value="elb"/>
+
+    <path id="master-classpath">
+        <fileset dir="${web.dir}/lib">
+            <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${build.dir}"/>
+    </path>
+
+    <target name="build" description="Compile source java files">
+        <javac destdir="${build.dir}">
+            <src path="${src.dir}"/>
+            <classpath refid="master-classpath"/>
+        </javac>
+    </target>
+ 
+</project>
+

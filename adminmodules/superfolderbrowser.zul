@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="superfolderbrowser_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Version		: 1.0
+Title		: Super folder browser
+Written by	: Victor Wong
+
+Revisions:
+
+12/10/2011: started
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+
+/*
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+boolean can_access = check_UsergroupAccess(useraccessobj.origid,SAMPREG_USERGROUP,SAMPREG_ACCESSLEVEL);
+if(!can_access)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+*/
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="superfolderbrowser_panel" title="Super Folder Browser v.1" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<hbox>
+<grid width="400px">
+	<rows>
+		<row>
+			<label value="Start date" style="font-size:9px" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" />
+			<label value="End date" style="font-size:9px" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" />
+			<button label="By date" style="font-size:9px" />
+		</row>
+		<row spans=",3,">
+			<label value="Customer" style="font-size:9px" />
+			<textbox id="searchtext" style="font-size:9px" width="99%" />
+			<button label="Search" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Branch" style="font-size:9px" />
+			<listbox id="branch_drd" mold="select" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+
+<vbox>
+
+<hbox>
+<grid width="300px">
+	<rows>
+		<row>
+			<label value="By folder" style="font-size:9px" />
+			<textbox id="byfolder_tb" style="font-size:9px" />
+			<button label="Dig" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="By sample.ID" style="font-size:9px" />
+			<textbox id="bysampleid_tb" style="font-size:9px" />
+			<button label="Dig" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+</hbox>
+
+<hbox>
+	<button label="Draft" style="font-size:9px" />
+	<button label="Logged" style="font-size:9px" />
+	<button label="Commited" style="font-size:9px" />
+	<button label="Un/delete" style="font-size:9px" />
+	<button label="Hard delete" style="font-size:9px" />
+</hbox>
+
+</hbox>
+
+</vbox>
+
+</vbox>
+
+</hbox>
+<zscript>
+<![CDATA[
+
+setTodayDatebox(hiddendatebox);
+setTodayDatebox(startdate);
+setTodayDatebox(enddate)
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

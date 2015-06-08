@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="chkpartswin"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Check Parts Inventory";
+MYVERSION = "v0.2";
+MY_ID = "chkpartswnq";
+/*
+Written by	: Victor Wong
+Dated		: 14/03/2014
+NOTES:
+Modif to load directly from FC6 inventory table
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+Object[] asshds = 
+{
+	new listboxHeaderWidthObj("AssetTag",true,""),
+	new listboxHeaderWidthObj("S/Num",true,""),
+	new listboxHeaderWidthObj("Model",true,""),
+	new listboxHeaderWidthObj("Grd",true,"30px"),
+	new listboxHeaderWidthObj("Pallet",true,""),
+	new listboxHeaderWidthObj("Qty",true,"30px"),
+	new listboxHeaderWidthObj("Comment",true,""),
+};
+
+void drillAssets()
+{
+	st = kiboo.replaceSingleQuotes(stkcode_t.getValue().trim());
+
+	sqlstm = "select assettag,serial,pallet,qty,grade,model,comment from partsall_1 " +
+	"where assettag like '%" + st + "%' or serial like '%" + st +
+	"%' or pallet like '%" + st + "%' or model like '%" + st + "%' or comment like '%" + st + "%' order by assettag";
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(digass_holder, asshds, "digdig_lb", 22);
+	newlb.setMold("paging");
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "assettag", "serial", "model", "grade", "pallet", "qty", "comment" };
+	for(d : trs)
+	{
+		popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+]]>
+</zscript>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" width="680px" position="top,center" mode="overlapped" border="normal" closable="true">
+
+<div>
+	<hbox>
+		<label value="AssetTag/Model/etc" />
+		<separator width="5px" />
+		<textbox id="stkcode_t" width="200px" style="font-weight:bold" />
+		<separator width="5px" />
+		<div style="background:#2e3436;padding:3px;" onClick="drillAssets()" >
+			<label style="font-weight:bold;color:#ffffff">Check</label>
+		</div>
+	</hbox>
+	<separator height="3px" />
+	<div id="digass_holder" />
+
+<!--
+<div id="form_holder" visible="false">
+<div style="background:#2e3436;padding:2px">
+<label id="stockheader" style="color:#ffffff" />
+</div>
+</div>
+-->
+
+</div>
+<zscript>
+<![CDATA[
+//value="11S42T1122Z1ZF6L0136XX"
+
+//glob_formmaker = dynamicForm(form_holder, "partmetaform", "1"); // in rwsqlfuncs.zs, need to move somewhere..
+
+class tbonOK implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		drillAssets();
+	}
+}
+stkcode_t.addEventListener("onOK",new tbonOK());
+
+
+]]>
+</zscript>
+
+</window>
+</zk>
+

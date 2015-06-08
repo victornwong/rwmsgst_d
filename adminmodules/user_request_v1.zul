@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="userrequest_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+Version		: 1.0
+Title		: User requests - for system development and enhancements
+Written by	: Victor Wong
+
+Revisions:
+
+21/02/2012: started
+
+*/
+/*
+import java.util.*;
+import java.text.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+gridhand = new GridHandler();
+
+FOLDERPICK_COLOR = "background:#AAAAAA";
+OVERDUE_ROWCOLOR = "background:#F74623";
+RELEASED_ROWCOLOR = "background:#AEF520";
+
+lastRequest_searchtype = 0;
+lastForum_searchtype = 0;
+
+Object prevSelectedFolder = null;
+String prevSelectedFolder_style = "";
+
+Object forumprevSelectedFolder = null;
+String forumprevSelectedFolder_style = "";
+
+global_selected_req = "";
+global_selected_forumid = "";
+
+String[] reqStatusString = {"DRAFT", "PLANNING", "WIP", "DONE"};
+String[] reqPriorityString = {"NORMAL", "URGENT", "CRITICAL"};
+
+void showRequestMetadata(String iorigid)
+{
+	sqlstm = "select * from elb_userrequest where origid=" + iorigid;
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	trec = sql.firstRow(sqlstm);
+	sql.close();
+	if(trec == null) return;
+
+	tusername = trec.get("username");
+
+	req_created.setValue(trec.get("req_created").toString().substring(0,10));
+	req_origid.setValue(trec.get("origid").toString());
+	req_username.setValue(tusername);
+	req_title.setValue(checkNullString(trec.get("req_title")));
+	req_longass.setValue(checkNullString(trec.get("req_longass")));
+	lbhand.matchListboxItems(req_status,trec.get("status"));
+	lbhand.matchListboxItems(req_priority,trec.get("priority"));
+	
+	/*
+	if(trec.get("workstart") != null) req_workstart.setValue(trec.get("workstart"));
+	if(trec.get("workend") != null) req_workend.setValue(trec.get("workend"));
+	*/
+
+	updatereq_butt.setDisabled(true);
+
+	// owner and admin can update the request
+	if(tusername.equals(useraccessobj.username) || useraccessobj.accesslevel == 9) updatereq_butt.setDisabled(false);
+	loadForumList(1,iorigid); // show forum postings
+}
+
+// onSelect event for request_lb
+class requestOnSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selrow = event.getTarget();
+
+		if(prevSelectedFolder != null)
+		{
+			if(prevSelectedFolder != selrow)
+			{
+				if(prevSelectedFolder_style.equals(""))
+					prevSelectedFolder.setStyle(null);
+				else
+					prevSelectedFolder.setStyle(prevSelectedFolder_style);
+			}
+			else
+				return; // selected same as previous, return - don't waste cpu
+		}
+
+		prevSelectedFolder_style = (selrow.getStyle() == null) ? "" : selrow.getStyle();
+		prevSelectedFolder = selrow;
+		selrow.setStyle(FOLDERPICK_COLOR);
+
+		global_selected_req = selrow.getId();
+
+		showRequestMetadata(global_selected_req);
+	}
+}
+
+// remember to include ,"LastPost" - link to elb_userrequest_forum to see last posting
+String[] reqListHeaders = {"ID","Dated","Request","Username","Status","Priority"};
+
+// requests_holder = div to hold requests list
+void loadRequestsList(int itype)
+{
+	lastRequest_searchtype = itype;
+	global_selected_req = "";
+
+	sqlstm = "select top 100 origid,req_created,req_title,username,status,priority from elb_userrequest order by origid";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	therecs = sql.rows(sqlstm);
+	sql.close();
+	//if(therecs.size() == 0) return;
+
+	// remove previous grid
+	if(requests_holder.getFellowIfAny("requests_lb") != null) requests_lb.setParent(null);
+
+	thegrid = new Grid();
+	thegrid.setId("requests_lb");
+
+	gridrows = gridhand.gridMakeRows("","",thegrid);
+	gridhand.makeGridHeaderColumns(reqListHeaders, thegrid);
+
+	labelstyle = "font-size:9px";
+
+	for(dpi : therecs)
+	{
+		iorigid = dpi.get("origid").toString();
+		req_row = gridhand.gridMakeRow(iorigid,"","",gridrows);
+		req_row.addEventListener("onClick", new requestOnSelect());
+
+		gridhand.makeLabelToParent(iorigid,labelstyle,req_row);
+		gridhand.makeLabelToParent(dpi.get("req_created").toString().substring(0,10),labelstyle,req_row);
+		gridhand.makeLabelToParent((dpi.get("req_title") == null) ? "" : lbhand.trimListitemLabel(dpi.get("req_title"),50),labelstyle,req_row);
+		gridhand.makeLabelToParent(checkNullString(dpi.get("username")),labelstyle,req_row);
+		gridhand.makeLabelToParent(checkNullString(dpi.get("status")),labelstyle,req_row);
+		gridhand.makeLabelToParent(checkNullString(dpi.get("priority")),labelstyle,req_row);
+	}
+	thegrid.setParent(requests_holder);
+}
+
+// onSelect event for forum_lb
+class forumOnSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selrow = event.getTarget();
+
+		if(forumprevSelectedFolder != null)
+		{
+			if(forumprevSelectedFolder != selrow)
+			{
+				if(forumprevSelectedFolder_style.equals(""))
+					forumprevSelectedFolder.setStyle(null);
+				else
+					forumprevSelectedFolder.setStyle(forumprevSelectedFolder_style);
+			}
+			else
+				return; // selected same as previous, return - don't waste cpu
+		}
+
+		forumprevSelectedFolder_style = (selrow.getStyle() == null) ? "" : selrow.getStyle();
+		forumprevSelectedFolder = selrow;
+		selrow.setStyle(FOLDERPICK_COLOR);
+
+		selid = selrow.getId();
+		selid = selid.substring(2,selid.length());
+
+		global_selected_forumid = selid;
+	}
+}
+
+String[] forumListHeaders = {"Dated","Username","Post"};
+
+// requests_holder = div to hold requests list
+void loadForumList(int itype, String ireqorigid)
+{
+	lastForum_searchtype = itype;
+	global_selected_forumid = "";
+	
+	sqlstm = "select top 100 origid,datecreated,username,longass from elb_userrequest_forum where parent_id=" + ireqorigid + " order by origid";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	therecs = sql.rows(sqlstm);
+	sql.close();
+	//if(therecs.size() == 0) return;
+
+	// remove previous grid
+	if(reqforum_holder.getFellowIfAny("forum_lb") != null) forum_lb.setParent(null);
+
+	thegrid = new Grid();
+	thegrid.setId("forum_lb");
+
+	gridrows = gridhand.gridMakeRows("","",thegrid);
+	gridhand.makeGridHeaderColumns(forumListHeaders, thegrid);
+
+	labelstyle = "font-size:9px";
+
+	for(dpi : therecs)
+	{
+		postid = "PS" + dpi.get("origid");
+		forum_row = gridhand.gridMakeRow(postid,"","",gridrows);
+		forum_row.addEventListener("onClick", new forumOnSelect());
+
+		gridhand.makeLabelToParent(dpi.get("datecreated").toString().substring(0,10),labelstyle,forum_row);
+		gridhand.makeLabelToParent(dpi.get("username"),labelstyle,forum_row);
+		gridhand.makeLabelMultilineToParent(checkNullString(dpi.get("longass")), labelstyle, forum_row);
+	}
+
+	thegrid.setParent(reqforum_holder);
+}
+
+// User create new request
+void createNewRequest()
+{
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+
+	sqlstm = "insert into elb_userrequest (req_created,username,status,priority) values ('" + 
+	todate + "','" + useraccessobj.username + "','DRAFT','NORMAL')";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	loadRequestsList(lastRequest_searchtype); // refresh
+}
+
+void updateRequest()
+{
+	if(global_selected_req.equals("")) return;
+
+//	wstart = kiboo.getDateFromDatebox(req_workstart);
+//	wend = kiboo.getDateFromDatebox(req_workend);
+
+	rtitle = kiboo.replaceSingleQuotes(req_title.getValue());
+	rlongass = kiboo.replaceSingleQuotes(req_longass.getValue());
+	rstatus = req_status.getSelectedItem().getLabel();
+	rpriority = req_priority.getSelectedItem().getLabel();
+
+	sqlstm = "update elb_userrequest set req_title='" + rtitle + "', req_longass='" + rlongass + 
+	"', status='" + rstatus + "',priority='" + rpriority + "' where origid=" + global_selected_req;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	loadRequestsList(lastRequest_searchtype); // refresh
+
+	// reset and hide workarea
+	global_selected_req = "";
+	//workarea.setVisible(false);
+}
+
+void postForum()
+{
+	if(global_selected_req.equals("")) return;
+
+	ptitle = kiboo.replaceSingleQuotes(post_title.getValue());
+	plongass = kiboo.replaceSingleQuotes(post_longass.getValue());
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+
+	if(ptitle.equals("") && plongass.equals("")) return;
+
+	sqlstm = "insert into elb_userrequest_forum (parent_id,username,post_title,longass,datecreated) values " +
+	"(" + global_selected_req + ",'" + useraccessobj.username + "','" + ptitle + "','" + plongass + "','" + todate +"')";
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	loadForumList(1,global_selected_req); // refresh postings
+	clearForumFields();
+}
+
+void clearForumFields()
+{
+	post_title.setValue("");
+	post_longass.setValue("");
+}
+
+void deleteForumPosting()
+{
+	if(global_selected_forumid.equals("")) return;
+
+	if (Messagebox.show("Really hard-delete this post??", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	sqlstm = "delete from elb_userrequest_forum where origid=" + global_selected_forumid;
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sql.execute(sqlstm);
+	sql.close();
+
+	loadForumList(1,global_selected_req); // refresh postings
+}
+
+]]>
+</zscript>
+
+<div width="1200px">
+<panel id="userreq_panel" title="User Requests v1.0" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+
+<hbox>
+
+<div width="500px">
+	<div width="100%" style="background:#EBBA1A;padding:2px">
+		<hbox>
+		<button label="load" style="font-size:9px" onClick="loadRequestsList(1)" />
+		<button label="create" style="font-size:9px" onClick="createNewRequest()" />
+		<div id="adminbutts" style="background:#EB1A3D;padding:2px" width="100%" visible="false">
+			<button label="Delete" style="font-size:9px" />
+		</div>
+		</hbox>
+	</div>
+
+	<separator height="2px" />
+	<div id="requests_holder" width="100%" height="550px" style="border:1px solid gray;overflow:auto;padding:2px;" />
+</div>
+
+<div id="workarea" style="padding:2px">
+
+	<hbox>
+	<grid width="450px">
+		<rows>
+			<row>
+				<label value="Request ID#" style="font-size:9px" />
+				<label id="req_origid" style="font-size:9px" />
+				<label value="Created" style="font-size:9px" />
+				<label id="req_created" style="font-size:9px" />
+			</row>
+			<row spans=",3">
+				<label value="Requestor" style="font-size:9px" />
+				<label id="req_username" style="font-size:9px" />
+			</row>
+			<row spans=",3">
+				<label value="Request" style="font-size:9px" />
+				<textbox id="req_title" style="font-size:9px" width="99%" />
+			</row>
+			<row spans=",3">
+				<label value="Indepth" style="font-size:9px" />
+				<textbox id="req_longass" style="font-size:9px" multiline="true" width="99%" height="80px" />
+			</row>
+		</rows>
+	</grid>
+	
+	<grid>
+		<rows>
+			<!--
+			<row>
+				<label value="W.Start" style="font-size:9px" />
+				<datebox id="req_workstart" format="yyyy-MM-dd" style="font-size:9px" />
+				<label value="W.End" style="font-size:9px" />
+				<datebox id="req_workend" format="yyyy-MM-dd" style="font-size:9px" />
+			</row>
+			-->
+
+			<row>
+				<label value="Status" style="font-size:9px" />
+				<listbox id="req_status" style="font-size:9px" mold="select" disabled="true" />
+				<label value="Priority" style="font-size:9px" />
+				<listbox id="req_priority" style="font-size:9px" mold="select" />
+			</row>
+			<row spans=",3">
+				<label value="Done" style="font-size:9px" />
+				<label id="req_donedate" style="font-size:9px" />
+			</row>
+			<row spans="4">
+				<hbox>
+					<button id="updatereq_butt" label="Update" style="font-size:9px" onClick="updateRequest()" disabled="true" />
+				</hbox>
+			</row>		
+		</rows>
+	</grid>
+
+	</hbox>
+
+	<separator height="2px" />
+	<div id="reqforum_holder" width="680px" height="300px" style="border:1px solid gray;overflow:auto;padding:2px;" />
+	
+	<separator height="2px" />
+	
+	<hbox>
+		<grid width="400px">
+			<rows>
+				<row>
+					<label value="Post title" style="font-size:9px" />
+					<textbox id="post_title" style="font-size:9px" width="99%" />
+				</row>
+				<row>
+					<label value="Post" style="font-size:9px" />
+					<textbox id="post_longass" style="font-size:9px" multiline="true" width="99%" height="90px" />
+				</row>
+			</rows>
+		</grid>
+		
+		<vbox>
+			<button id="postit_butt" label="Post it" onClick="postForum()" style="font-size:14px" />
+			<button label="Clear fields" style="font-size:9px" onClick="clearForumFields()" />
+			<button id="deletepost_butt" label="Delete" style="font-size:9px" visible="false" onClick="deleteForumPosting()" />
+		</vbox>
+
+	</hbox>
+
+</div> <!-- end of workarea -->
+
+</hbox>
+
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(hiddendatebox);
+lbhand.populateDropdownListbox(req_status,reqStatusString);
+lbhand.populateDropdownListbox(req_priority,reqPriorityString);
+
+if(useraccessobj.accesslevel == 9)
+{
+	req_status.setDisabled(false);
+	adminbutts.setVisible(true);
+	deletepost_butt.setVisible(true);
+}
+
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

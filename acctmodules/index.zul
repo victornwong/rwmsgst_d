@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="main"?>
+<?page title="ALS Technichem Malaysia - Accounts Department Utilities"?>
+<!--
+Accounts Department Utilities
+
+Version				: 0.01a
+Coding began date	: 10/08/2009
+Developer			: Victor Wong
+
+(c)2009 ALS Technichem Malaysia Sdn Bhd
+-->
+
+<zk>
+
+<zscript src="alsacctglobal.zs" />
+<zscript src="alsacctfuncs.zs" />
+
+<zscript>
+import groovy.sql.Sql;
+
+// KeyEvent listener for main-window. Can implement hot-keys and such.
+class mainWindowCtrlKey implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+        switch(event.getKeyCode())
+        {
+            case 49: // 1
+                // runexternal("addform");
+                break;
+
+            case 48: // 0
+                // runexternal("setup");
+                break;
+
+            default:
+                //alert("keypressed: " + event.getKeyCode());
+                break;
+        }
+	}
+}
+
+</zscript>
+
+<!-- intercept Alt-1 to Alt-0 for hotkey thinggy -->
+<window id="mainWindow" ctrlKeys="@1@2@3@4@5@6@7@8@9@0" width="993px" height="1000px"
+	position="center">
+
+<zscript>
+    mainWindow.addEventListener("onCtrlKey", new mainWindowCtrlKey());
+</zscript>
+
+<borderlayout>
+
+<north border="none">
+<div width="100%">
+</div>
+</north>
+
+<!-- westside, for title and so on.. -->
+<west border="none">
+
+	<div>
+	<vbox>
+
+    <hbox>
+        <vbox>
+        <label value="ALS Technichem Malaysia" style="font-size:18px;font-weight:bold; font-family:Arial;" />
+        <label value="Accounts Department" style="font-size:16px;font-weight:bold;" />
+        </vbox>
+
+        <image src="../alsimg/alstechnichem_logo_smaller.jpg" style="padding:10px;" />
+    </hbox>
+
+	<fisheyebar id="mainmenu" attachEdge="center" labelEdge="center" orient="vertical"
+		style="margin-top:100px; margin-left:30px">
+
+		<fisheye image="/mirisimg/addform.png" label="Process"
+			onClick='runexternal("addform")' />
+
+		<fisheye image="/mirisimg/browse.png" label="Browse"
+			onClick='runexternal("browse")' />
+
+		<fisheye image="/mirisimg/manincident.png" label="Others"
+			onClick='runexternal("incidentmanager")' />
+
+<!--
+		<fisheye image="/mirisimg/setup.png" label="Setup"
+			onClick='runexternal("setup")' />
+
+		<fisheye image="/mirisimg/user.png" label="Users"
+			onClick='runexternal("users")' />
+
+		<fisheye image="/mirisimg/logoff.png" label="Logoff"
+			onClick='runexternal("logoff")' />
+
+-->
+
+	</fisheyebar>
+
+	</vbox>
+
+	</div>
+
+</west>
+
+<!-- this is the content part, everything will play here. -->
+<center border="none">
+
+ <div id="thecontent">
+   <vbox>
+   </vbox>
+ </div>
+</center>
+
+<south border="none">
+
+	<div>
+
+	<include id="addnewincident" />
+	<include id="browseincident" />
+	<include id="systemsetup" />
+	<include id="usermanagement" />
+
+	<!-- placeholder for Incident Manager window -->
+	<include id="incidentmanager" />
+	</div>
+
+</south>
+
+</borderlayout>
+
+</window>
+
+ <zscript><![CDATA[
+
+    // Check to see module is opened. return true if opened
+    boolean checkOpened(Include whichone)
+    {
+        boolean retval = false;
+
+        if(whichone.getSrc() != null)
+            retval = true;
+
+        return retval;
+    }
+
+	void activateModule(Include theinclude, String modulefn)
+	{
+		if(!checkOpened(theinclude))
+		{
+			// pass useraccessobject to other module
+			theinclude.setDynamicProperty("uao",useraccessobj);
+			theinclude.setSrc(MAINPROCPATH + "/" + modulefn);
+		}
+	}
+
+	boolean allModuleClosed()
+	{
+		boolean retval = true;
+
+		if(checkOpened(addnewincident) ||
+			checkOpened(systemsetup) ||
+			checkOpened(usermanagement) ||
+			checkOpened(incidentmanager))
+			retval = false;
+
+		return retval;
+	}
+
+    // Run other modules.
+	void runexternal(String whichone)
+	{
+		if(!allModuleClosed()) return;
+
+		switch(whichone)
+		{
+			case "addform":
+				// activateModule(addnewincident,"addnew.zul?dowhat=addnew");
+
+                connectore = als_mysoftsql();
+                showMessageBox("connection status: " + connectore);
+                connectore.close();
+
+                break;
+
+			case "browse":
+				break;
+
+			case "setup":
+				activateModule(systemsetup,"systemsetup.zul");
+				break;
+
+			case "users":
+				activateModule(usermanagement,"usermanager.zul");
+				break;
+
+			case "incidentmanager":
+				activateModule(incidentmanager,"incidentmanager.zul");
+				break;
+
+            case "logoff":
+				Window loginwindow = Path.getComponent("//mirislogin/loginwin");
+				loginwindow.setVisible(true);
+
+				Include logininc = Path.getComponent("//mirislogin/mainproc");
+				logininc.setSrc("");
+
+				useraccessobj.clearAll();
+
+                break;
+
+		}
+	}
+
+]]>
+</zscript>
+
+</zk>

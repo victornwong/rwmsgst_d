@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="mrnitemsrelocatormod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "MRN Checklist/Stock Relocator";
+MYVERSION = "v0.1";
+MYPANEL = "mrnitemsrelocateorpan";
+/*
+Title : MRN items pallet relocator thinggy
+Written by : Victor Wong
+Dated : 25/06/2014
+
+Revisions:
+03/07/2014: added MRN status col and make color
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler(); guihand = new GuiFuncs();
+luhand = new LookupFuncs(); gridhand = new GridHandler();
+NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = new RWMS_sql();
+
+lastlisttype = 0;
+glob_sel_mrn = glob_sel_extrahdd = "";
+
+String JN_linkcode()
+{
+	if(glob_sel_mrn.equals("")) return "";
+	return MRN_PREFIX+glob_sel_mrn;
+}
+
+Object[] mrnitemshds =
+{
+	new listboxHeaderWidthObj("No.",true,"70px"),
+	new listboxHeaderWidthObj("Item",true,""),
+	new listboxHeaderWidthObj("AssetTag",true,"100px"),
+	new listboxHeaderWidthObj("Qty",true,"50px"),
+	new listboxHeaderWidthObj("Pallet",true,"80px"),
+};
+
+void showMRN_items(String imrn)
+{
+	sqlstm = "select s.name as item_name, s.code2, iy.qty2, " +
+	"(select top 1 pallet from partsall_0 where assettag=s.code2) as pallet " +
+	"from data d " +
+	"left join mr001 s on s.masterid = d.productcode " +
+	"left join indta iy on iy.salesid = d.salesoff " +
+	"where d.vouchertype=1280 and d.voucherno='" + imrn + "' " +
+	"order by d.bodyid";
+
+	Listbox newlb = lbhand.makeVWListbox_Width(mrnitems_holder, mrnitemshds, "mrnitems_lb", 5);
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setRows(21);
+	newlb.setCheckmark(true);
+	newlb.setMultiple(true);
+	newlb.setMold("paging");
+	//newlb.addEventListener("onSelect", mrnlciker);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "item_name", "code2", "qty2", "pallet" };
+	lnc = 1;
+	for(d : trs)
+	{
+		kabom.add(lnc.toString() + ".");
+		ngfun.popuListitems_Data(kabom, fl, d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+		lnc++;
+	}
+}
+
+class mrncliko implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitm = event.getReference();
+		glob_sel_mrn = lbhand.getListcellItemLabel(selitm,0);
+		glob_sel_extrahdd = lbhand.getListcellItemLabel(selitm,EXTHDOFF_IDX); // use to update u0015.lastlocator and lastlocatedate
+		showMRN_items(glob_sel_mrn);
+		kk = "MRN " + glob_sel_mrn + " > " + lbhand.getListcellItemLabel(selitm,3);
+		mrntitle_lbl.setValue(kk);
+		workarea.setVisible(true);
+	}
+}
+mrnlciker = new mrncliko();
+
+Object[] mrnshds =
+{
+	new listboxHeaderWidthObj("MRN",true,"60px"),
+	new listboxHeaderWidthObj("Stat",true,"60px"),
+	new listboxHeaderWidthObj("T.GRN",true,"60px"),
+	new listboxHeaderWidthObj("Dated",true,"70px"),
+	new listboxHeaderWidthObj("PartyAcct",true,""),
+	new listboxHeaderWidthObj("Narration",true,""),
+	new listboxHeaderWidthObj("VendorRef",true,"80px"),
+	new listboxHeaderWidthObj("Recv.Type",true,"80px"),
+	new listboxHeaderWidthObj("Recv.By",true,"80px"),
+	new listboxHeaderWidthObj("OurRef",true,"80px"),
+	new listboxHeaderWidthObj("RelocBy",true,"80px"), // 10
+	new listboxHeaderWidthObj("RelocDt",true,"80px"),
+	new listboxHeaderWidthObj("extraheaderoff",false,""),
+	new listboxHeaderWidthObj("flag2",false,""),
+};
+EXTHDOFF_IDX = 12;
+
+// itype: 1=by date, 2=search-text, 3=by mrn-no
+void showMRNS(int itype)
+{
+	lastlisttype = itype;
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+	bmrn = kiboo.replaceSingleQuotes(bymrn_tb.getValue().trim());
+	otherwhere = "";
+	datewhere = "and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' ";
+
+	switch(itype)
+	{
+		case 1:
+			otherwhere = datewhere;
+			break;
+		case 2:
+			if(st.equals("")) return;
+			otherwhere = datewhere + "and (ac.name like '%" + st + "%' or li.narrationyh like '%" + st + "%' or li.vendorrefyh like '%" + st + "%' or li.ponoyh like '%" + st + "%')";
+			break;
+		case 3:
+			if(bmrn.equals("")) return;
+			otherwhere = "and d.voucherno='" + bmrn + "'";
+			break;
+	}
+//and hh.flags=0x0025 
+//"case hh.flags when 0x00a0 then 'SUSPENDED' when 0x0025 then 'APPROVED' when 0x0005 then 'PENDING' else 'DUNNO' end as mrnstat, " +
+	sqlstm = "select distinct top 400 d.voucherno, d.bookno, ac.name as partyacct, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, " +
+	"hh.flags2," +
+	"case hh.flags2 when 12481 then 'SUSPENDED' when 725 then 'APPROVED' when 12480 then 'PENDING' else 'DUNNO' end as mrnstat, " +
+	"(select voucherno from v_link4 where vouchertype=1281 and sortlinkid=(select top 1 links1 from data where vouchertype=1280 and voucherno=d.voucherno)) as tgrn," +
+	"li.narrationyh, li.receipttypeyh, li.vendorrefyh, li.receivedbyyh, li.ponoyh, li.lastlocator, li.lastlocadate, d.extraheaderoff from data d " +
+	"left join mr000 ac on ac.masterid = d.bookno " +
+	"left join u0000 aci on aci.extraid=ac.masterid " +
+	"left join u0015 li on li.extraid = d.extraheaderoff " +
+	"left join header hh on hh.headerid = d.headeroff " +
+	"where d.vouchertype=1280 " + otherwhere;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(mrnsholder, mrnshds, "mrns_lb", 5);
+
+	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trs.size() == 0) return;
+	newlb.setRows(21);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", mrnlciker);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "voucherno", "mrnstat", "tgrn", "vdate", "partyacct", "narrationyh", "vendorrefyh", "receipttypeyh", "receivedbyyh", 
+	"ponoyh", "lastlocator", "lastlocadate", "extraheaderoff", "flags2" };
+	for(d : trs)
+	{
+		ngfun.popuListitems_Data(kabom, fl, d);
+		sty = "";
+		if(d.get("mrnstat").equals("SUSPENDED")) sty = "background:#F5112C;font-size:9px;font-weight:bold";
+		if(d.get("mrnstat").equals("PENDING")) sty = "background:#F5C638;font-size:9px;font-weight:bold";
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",sty);
+		kabom.clear();
+	}
+}
+
+// knockoff from equipRequest_tracker_v1.zul -- with modi
+void massUpdatePalletLoca(String ipallet)
+{
+	if(!lbhand.check_ListboxExist_SelectItem(mrnitems_holder,"mrnitems_lb")) return; // if no mrn-items selected
+	ipallet = kiboo.replaceSingleQuotes(ipallet.trim());
+	sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+	pmid = r.get("masterid").toString();
+
+	if(Messagebox.show("Please make sure you put these items to the proper loca/pallet", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+	ags = "";
+	si = mrnitems_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],2).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	if(!glob_sel_extrahdd.equals("")) // update u0015.lastlocator and lastlocatedate
+	{
+		sqlstm += "update u0015 set lastlocator='" + useraccessobj.username + "', lastlocadate='" + kiboo.todayISODateTimeString() + "' where extraid=" + glob_sel_extrahdd;
+	}
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	showMRN_items(glob_sel_mrn); // refresh
+	showMRNS(lastlisttype);
+
+	wo = ags.replaceAll("'","").replaceAll(",",", ");
+	add_RWAuditLog(JN_linkcode(), "", "Updt pallet to " + ipallet + " for " + wo, useraccessobj.username);
+}
+
+void loadViewAuditlogs()
+{
+	showSystemAudit(auditlogs_holder,JN_linkcode(),"");
+	auditlogs_pop.open(viewadut_b);
+}
+
+void adminFunc(String itype)
+{
+	adminpop.close();
+	refresh = refreshi = false;
+	sqlstm = "";
+
+	if(itype.equals("adm_clrlocator_b"))
+	{
+		if(glob_sel_extrahdd.equals("")) return;
+		sqlstm += "update u0015 set lastlocator=null,lastlocadate=null where extraid=" + glob_sel_extrahdd;
+		refresh = true;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.rws_gpSqlExecuter(sqlstm);
+	if(refresh) showMRNS(lastlisttype);
+	if(refreshi) showMRN_items(glob_sel_mrn);
+}
+
+void exportToExcel()
+{
+	exportExcelFromListbox(mrns_lb, kasiexport, mrnshds, "MRNTGRN.xls","Habuk");
+}
+
+]]>
+</zscript>
+
+<popup id="auditlogs_pop">
+<div sclass="shadowbox" style="background:#ef2929;" width="500px" >
+	<label style="font-size:14px;font-weight:bold;">Audit Logs</label>
+	<separator height="3px" />
+	<div id="auditlogs_holder" />
+	<separator height="3px" />
+	<button label="Ok" class="k9" onClick="auditlogs_pop.close()" />
+</div>
+</popup>
+
+<popup id="adminpop">
+<div sclass="shadowbox" style="background:#ef2929;">
+	<button id="adm_clrlocator_b" label="Clear lastlocator/date" sclass="k9" onClick="adminFunc(self.getId())" />
+</div>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#ea7724;" >
+
+<div sclass="shadowbox" style="background:#2e3436;">
+	<hbox>
+		<label value="Start" class="k9b" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<label value="End" class="k9b" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<button label="Load by date" sclass="k9mo" onClick="showMRNS(1)" />
+		<textbox id="searhtxt_tb" sclass="k9" />
+		<button label="Search" sclass="k9mo" onClick="showMRNS(2)" />
+		<textbox id="bymrn_tb" sclass="k9" width="60px" />
+		<button label="by MRN" sclass="k9mo" onClick="showMRNS(3)" />
+		<separator width="10px" />
+		<button id="expexcel_b" label="Export EXCEL" sclass="k9mo" onClick="exportToExcel()" />
+		<button id="viewadut_b" label="View audit-logs" sclass="k9mo" onClick="loadViewAuditlogs()" />
+		<separator width="10px" />
+		<button id="adminbut" label="ADMIN" style="font-size:9px;color:#ff0000;font-weight:bold" visible="false" onClick="adminpop.open(self)" />
+	</hbox>
+</div>
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#3A4566">
+	<!-- <label sclass="subhead1" value="(SHOW APPROVED MRNs ONLY)" /> -->
+	<div id="mrnsholder" />
+</div>
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#3A4566" id="workarea" visible="false" >
+	<label id="mrntitle_lbl" sclass="subhead1" />
+	<separator height="5px" />
+
+	<hbox>
+		<div id="mrnitems_holder" width="600px" />
+
+		<div sclass="shadowbox" style="background:#F5ED16">
+			<label value="Pallet/Loca" />
+			<textbox id="palletloca_tb" width="60px" />
+			<button label="Change" onClick="massUpdatePalletLoca(palletloca_tb.getValue())" />
+		</div>
+
+	</hbox>
+</div>
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+showMRNS(1);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminbut.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

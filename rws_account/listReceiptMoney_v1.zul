@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="lstrecpmoymod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "List-out FC6 Receipts";
+MYVERSION = "v0.3";
+MYPANEL = "lstrecpdpan";
+/*
+Title		: List-out FC6 receipts
+Written by	: Victor Wong
+Dated		: 04/10/2013
+
+Revisions:
+06/03/2014: Mira req dig by amount
+03/07/2014: smooth UI, export to excel from listbox, dig receipt knockoff which RWI/SI
+07/08/2014: Mahesh request to dig by receipt-no.
+
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+
+DecimalFormat nf3 = new DecimalFormat("#####0.00");
+DecimalFormat nf4 = new DecimalFormat("###,##0.00");
+
+lastlisttype = 0;
+glob_sel_receipt = "";
+
+Object[] recpihds =
+{
+	new listboxHeaderWidthObj("Due.date",true,"80px"),
+	new listboxHeaderWidthObj("RWI/SI",true,"80px"),
+	new listboxHeaderWidthObj("Amount",true,"80px"),
+};
+
+void knockDownSum()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(recpitems_holder,"recpitems_lb")) return;
+	jks = recpitems_lb.getSelectedItems().toArray();
+	ksum = 0;
+	for(i=0;i<jks.length;i++)
+	{
+		jj = lbhand.getListcellItemLabel(jks[i],2);
+		try { ksum += Float.parseFloat(jj); } catch (Exception e) {}
+	}
+	knksum_lbl.setValue("Quick sum: " + nf2.format(ksum));
+}
+
+void showReceiptKnockBreakdown(String ibwof)
+{
+	sqlstm = "select distinct aj.voucherno, rf.amount, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as invdate, " +
+	"aj.voucherno as aj_vn, aj.dueadjdate " +
+	"from refrn rf left join vw_adjustrefs aj on aj.newref = rf.ref " +
+	"left join data d on d.voucherno = aj.voucherno " +
+	"where rf.refid=" + ibwof + " and d.vouchertype in (4096,3840,3329,3328) order by aj.voucherno";
+
+	Listbox newlb = lbhand.makeVWListbox_Width(recpitems_holder, recpihds, "recpitems_lb", 20);
+	trecs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trecs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.setMultiple(true);
+	ArrayList kabom = new ArrayList();
+	kktot = 0;
+	for(d : trecs)
+	{
+		try {
+		kabom.add( dtf2.format(d.get("dueadjdate")) );
+		kabom.add( kiboo.checkNullString(d.get("voucherno")) );
+		kabom.add( nf2.format(d.get("amount")) );
+		kktot += d.get("amount");
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		} catch (Exception e) {}
+		kabom.clear();
+	}
+	recptotal_lbl.setValue("Knockoff total: " + nf2.format(kktot));
+}
+
+Object[] chqrechds =
+{
+	new listboxHeaderWidthObj("bwoff",false,""),
+	new listboxHeaderWidthObj("Dated",true,"70px"),
+	new listboxHeaderWidthObj("Receipt",true,"70px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("ChqNo/Tfx",true,"120px"),
+	new listboxHeaderWidthObj("Amount",true,"100px"),
+	new listboxHeaderWidthObj("Cust.Type",true,"100px"),
+	new listboxHeaderWidthObj("Narration",true,""),
+	new listboxHeaderWidthObj("Remarks",true,""),
+};
+
+class replblciker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitm = event.getReference();
+		glob_sel_bwoffset = lbhand.getListcellItemLabel(selitm,0); 
+		glob_sel_receipt = lbhand.getListcellItemLabel(selitm,2);
+		showReceiptKnockBreakdown(glob_sel_bwoffset);
+		recptitle_lbl.setValue("Receipt: " + glob_sel_receipt + " (" + lbhand.getListcellItemLabel(selitm,3) + ")");
+	}
+}
+receipcliker = new replblciker();
+
+// itype: 1=by date and search-text, 2=by amount, 3=by receipt-no
+void loadfc6Receipts(int itype)
+{
+	lastlisttype = itype;
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	sct = kiboo.replaceSingleQuotes( schtextb.getValue().trim() );
+	amt = kiboo.replaceSingleQuotes( amt_tb.getValue().trim() );
+	byr = kiboo.replaceSingleQuotes( byno_tb.getValue().trim() );
+	dtsql = "and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' ";
+
+	try { k = Float.parseFloat(amt); } catch (Exception e) { amt = "0"; }
+
+	sqlnm = "";
+	if(!sct.equals(""))
+		sqlnm += dtsql + "and ac.name like '%" + sct + "%' ";
+	else
+		sqlnm += dtsql;
+
+	if(!amt.equals("") && itype == 2) sqlnm += "and d.originalamount=" + amt + " ";
+	if(!byr.equals("") && itype == 3) sqlnm += "and d.voucherno like '%" + byr + "%' ";
+
+	sqlstm = "select d.billwiseoff, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as voucherdate, " +
+	"d.voucherno, d.originalamount, r.chequenoyh, r.narrationyh, r.remarksyh, ac.name as customer_name, " +
+	"case ac.type when 195 then 'RENTAL' " +
+	"when 211 then 'RENTAL' " +
+	"when 163 then 'REMARKETING' " +
+	"when 179 then 'SUNDRY' else 'UNKNOWN' " +
+	"end as act_type " +
+	"from data d left join u0010 r on r.extraid = d.extraheaderoff "+
+	"left join refrn f on d.BillWiseOff=f.RefId " +
+	"left join mr000 ac on f.code = ac.masterid " +
+	"where d.vouchertype=4608 " +
+	"and ac.name is not null " + sqlnm +
+	"group by d.billwiseoff, d.voucherno,d.date_,d.amount1, d.amount2, d.originalamount, r.chequenoyh, ac.name, ac.type, " +
+	"r.narrationyh, r.remarksyh " +
+	"order by d.voucherno;";
+
+	Listbox newlb = lbhand.makeVWListbox_Width(cheqsrec_holder, chqrechds, "cheqrecv_lb", 23);
+
+	trecs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trecs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", receipcliker);
+
+	amtdone = amtpend = amtrental = amtremark = amtsundry = amtunkw = amttokyo = 0.0;
+	ArrayList kabom = new ArrayList();
+	for(d : trecs)
+	{
+		kabom.add(d.get("billwiseoff").toString());
+		kabom.add( dtf2.format(d.get("voucherdate")) );
+		kabom.add( kiboo.checkNullString(d.get("voucherno")) );
+		custn = kiboo.checkNullString(d.get("customer_name")).trim().toUpperCase();
+		kabom.add(custn);
+		kabom.add( kiboo.checkNullString(d.get("chequenoyh")) );
+		kabom.add( (d.get("originalamount") == null) ? "" : nf3.format(d.get("originalamount")) );
+		kk = kiboo.checkNullString(d.get("act_type"));
+		kabom.add(kk);
+
+		styl = "";
+
+		try {
+		dmt = d.get("originalamount");
+		if(kk.equals("RENTAL")) amtrental += dmt;
+		if(kk.equals("REMARKETING") && custn.indexOf("TOKYO") == -1) amtremark += dmt;
+		if(kk.equals("SUNDRY")) amtsundry += dmt;
+		if(kk.equals("UNKNOWN")) amtunkw += dmt;
+		if(custn.indexOf("TOKYO") != -1) { amttokyo += dmt; styl="font-size:9px;background:#56815e"; }
+		} catch (Exception e) {}
+
+		kabom.add( kiboo.checkNullString(d.get("narrationyh")) );
+		kabom.add( kiboo.checkNullString(d.get("remarksyh")) );
+
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",styl);
+		kabom.clear();
+	}
+
+	//amtdone_lbl.setValue( nf4.format(amtdone) );
+	//amtpend_lbl.setValue( nf4.format(amtpend) );
+	amtgtotal_lbl.setValue( nf4.format(amtrental + amtremark + amtsundry + amtunkw ) );
+
+	amt_amtrental_lbl.setValue( nf4.format(amtrental) );
+	amt_amtremark_lbl.setValue( nf4.format(amtremark) );
+	amt_amtsundry_lbl.setValue( nf4.format(amtsundry) );
+	amt_amtunkw_lbl.setValue( nf4.format(amtunkw) );
+	amtctctotal_lbl.setValue( nf4.format(amttokyo) );
+
+}
+
+void exportReceiptRecs()
+{
+	sdate = kiboo.getDateFromDatebox(exp_startdate);
+	edate = kiboo.getDateFromDatebox(exp_enddate);
+	sct = kiboo.replaceSingleQuotes( schtextb.getValue().trim() );
+
+	sqlnm = "";
+	if(!sct.equals("")) sqlnm = "and ac.name like '%" + sct + "%' ";
+
+	sqlstm = "select convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as voucherdate, " +
+	"d.voucherno, d.originalamount, r.chequenoyh, r.narrationyh, r.remarksyh, ac.name as customer_name, " +
+	"case ac.type when 195 then 'RENTAL' " +
+	"when 211 then 'RENTAL' " +
+	"when 163 then 'REMARKETING' " +
+	"when 179 then 'SUNDRY' else 'UNKNOWN' " +
+	"end as act_type " +
+	"from data d left join u0010 r on r.extraid = d.extraheaderoff "+
+	"left join refrn f on d.BillWiseOff=f.RefId " +
+	"left join mr000 ac on f.code = ac.masterid " +
+	"where d.vouchertype=4608 and " +
+	"convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' " +
+	"and ac.name is not null " + sqlnm +
+	"group by d.voucherno,d.date_,d.amount1, d.amount2, d.originalamount, r.chequenoyh, ac.name, ac.type, " +
+	"r.narrationyh, r.remarksyh " +
+	"order by d.voucherno;";
+
+	trecs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(trecs.size() == 0) { guihand.showMessageBox("Nothing to export.."); return; }
+
+ 	startadder = 1;
+	rowcount = 0;
+
+	Workbook wb = new HSSFWorkbook();
+	Sheet sheet = wb.createSheet("RECEIVALS");
+	Font wfont = wb.createFont();
+	wfont.setFontHeightInPoints((short)8);
+	wfont.setFontName("Arial");
+
+	String[] rhds = { "Date","ReceiptNo","Customer","Chq/Tfx","Amount","Type","Narration","Remarks" };
+	for(i=0;i<rhds.length;i++)
+	{
+		POI_CellSetAllBorders(wb,excelInsertString(sheet,rowcount,i,rhds[i]),wfont,true,"");
+	}
+
+	rowcount++;
+
+	for(d : trecs)
+	{
+		excelInsertString(sheet,rowcount,0, dtf2.format(d.get("voucherdate")) );
+		excelInsertString(sheet,rowcount,1, kiboo.checkNullString(d.get("voucherno")) );
+		excelInsertString(sheet,rowcount,2, kiboo.checkNullString(d.get("customer_name")) );
+		excelInsertString(sheet,rowcount,3, kiboo.checkNullString(d.get("chequenoyh")) );
+		excelInsertNumber(sheet,rowcount,4, (d.get("originalamount") == null) ? "0" : nf3.format(d.get("originalamount")) );
+		excelInsertString(sheet,rowcount,5, kiboo.checkNullString(d.get("act_type")) );
+		excelInsertString(sheet,rowcount,6, kiboo.checkNullString(d.get("narrationyh")) );
+		excelInsertString(sheet,rowcount,7, kiboo.checkNullString(d.get("remarksyh")) );
+		rowcount++;
+	}
+
+	jjfn = "cheqbankrecvList_r.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + jjfn);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wb.write(fileOut); // Write Excel-file
+	fileOut.close();
+
+	downloadFile(kasiexport,jjfn,outfn);
+	expchqr_pop.close();
+}
+
+void exportReceiptToExcel()
+{
+	exportExcelFromListbox(cheqrecv_lb, kasiexport, chqrechds, "FC6receipts.xls","Money");
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+<popup id="expchqr_pop">
+<div sclass="shadowbox" style="background:#628821;">
+<label sclass="subhead1" value="Export cheque/payment receival list" />
+<separator height="10px" />
+<grid>
+	<rows>
+		<row>
+			<label value="Start date" />
+			<datebox id="exp_startdate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" />
+			<datebox id="exp_enddate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
+		</row>
+		<row spans="4">
+			<hbox>
+				<button id="expundelv_b" label="Export cheque/bank-in list" onClick="exportReceiptRecs()" />
+			</hbox>
+		</row>
+	</rows>
+</grid>
+</div>
+</popup>
+
+<popup id="knkdn_sumpop">
+<div sclass="shadowbox" style="background:#2e3436;">
+	<label id="knksum_lbl" style="font-weight:bold;color:#ffffff" />
+</div>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div sclass="shadowbox" style="background:#2e3436;">
+	<hbox>
+		<label value="Start date" sclass="k9b" />
+		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<label value="End date" sclass="k9b" />
+		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<button label="Load receipts" sclass="k9mo" onClick="loadfc6Receipts(1)" />
+		<label value="Search" sclass="k9b" />
+		<textbox id="schtextb" sclass="k9" />
+		<label value="Amount" sclass="k9b" />
+		<textbox id="amt_tb" sclass="k9" width="60px" />
+		<button label="Dig amount" sclass="k9mo" onClick="loadfc6Receipts(2)" />
+		<textbox id="byno_tb" sclass="k9" width="60px" />
+		<button label="by receipt" sclass="k9mo" onClick="loadfc6Receipts(3)" />
+		<button label="Export receival list" sclass="k9mo" onClick="exportReceiptToExcel()" />
+	</hbox>
+</div>
+<separator height="5px" />
+
+<div sclass="shadowbox" style="background:#2e3436;">
+	<hbox>
+		<div id="cheqsrec_holder" width="1000px" />
+
+		<vbox>
+		<!--
+			<label sclass="subhead1" value="DONE Total:" />
+			<label sclass="subhead2" id="amtdone_lbl" />
+			<separator height="2px" />
+			<label sclass="subhead1" style="color:#ff0000" value="PENDING Total:" />
+			<label sclass="subhead2" style="color:#ff0000" id="amtpend_lbl" />
+			<separator height="2px" />
+		-->
+			<label sclass="subhead1" style="color:#9db91d" value="Total CTC:" />
+			<label sclass="subhead2" style="color:#9db91d" id="amtctctotal_lbl" />
+			<separator height="5px" />
+			<separator height="3px" bar="true" />
+			<separator height="5px" />
+
+			<label sclass="subhead1" value="Rental:" />
+			<label sclass="subhead1" id="amt_amtrental_lbl" />
+			<separator height="2px" />
+			
+			<label sclass="subhead1" value="Remarketing:" />
+			<label sclass="subhead1" id="amt_amtremark_lbl" />
+			<separator height="2px" />
+
+			<label sclass="subhead1" value="Sundry:" />
+			<label sclass="subhead1" id="amt_amtsundry_lbl" />
+			<separator height="2px" />
+
+			<label sclass="subhead1" value="UNKNOWN:" />
+			<label sclass="subhead1" id="amt_amtunkw_lbl" />
+			<separator height="5px" />
+
+			<label sclass="subhead1" style="color:#f57900" value="Total All:" />
+			<label sclass="subhead2" style="color:#f57900" id="amtgtotal_lbl" />
+
+			<label id="debugbox" multiline="true" />
+		</vbox>
+	</hbox>
+</div>
+<separator height="2px" />
+
+<div sclass="shadowbox" style="background:#2e3436;">
+	<label id="recptitle_lbl" style="color:#ffffff;font-weight:bold" />
+	<separator height="2px" />
+	<hbox>
+		<div id="recpitems_holder" width="350px" />
+		<button label="Sum" sclass="k9" onClick="knockDownSum(); knkdn_sumpop.open(self)" />
+	</hbox>
+	<separator height="2px" />
+	<label id="recptotal_lbl" style="color:#ffffff;font-weight:bold" />
+</div>
+
+<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

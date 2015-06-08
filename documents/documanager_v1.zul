@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="document_manager_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript>
+<![CDATA[
+MYVERSION="v0.61";
+/*
+Title: Document Manager
+Written by: Victor Wong
+Date started: 24/08/2010
+
+**NOTES**
+
+try {
+	wodi = Integer.parseInt(qtnum);
+} catch (NumberFormatException e)
+{
+	return;
+}
+
+20/09/2012: some optimization
+
+*/
+
+import java.util.*;
+import java.text.*;
+import java.math.BigDecimal;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+dmshand = new DMSFuncs();
+
+selected_directory_folderid = "";
+selected_directory = "";
+selected_subdirectory = "";
+selected_file_id = "";
+
+void showOtherBoxes(boolean iwhat)
+{
+	document_groupbox.setVisible(iwhat);
+	subdir_groupbox.setVisible(iwhat);
+}
+
+void subdirectoryOnSelect(Tree wTree)
+{
+	selitem = wTree.getSelectedItem();
+	selected_subdirectory = guihand.getTreecellItemLabel(selitem,2);
+
+	foldid = guihand.getTreecellItemLabel(selitem,0);
+	subdir_label.setValue("Sub-dir: " + foldid);
+
+	fillDirectoryMetadata(2);
+	fillDocumentsList(selected_subdirectory);
+	document_groupbox.setVisible(true);
+
+} // end of subdirectoryOnSelect()
+
+void clearDirectoryMetadataFields()
+{
+	fs_folderid.setValue("");
+	fs_minlevelaccess.setValue("1");
+	fs_folder_desc.setValue("");
+	fs_search_keywords.setValue("");
+
+	showOtherBoxes(false);
+}
+
+// itype: 1=main dir popup, 2=sub-dir popup
+void fillDirectoryMetadata(int itype)
+{
+	theid = selected_directory;
+	if(itype == 2) theid = selected_subdirectory;
+
+	if(theid.equals("")) return;
+
+	therec = dmshand.getDirectoryRec(theid);
+	if(therec == null) return;
+
+	if(itype == 1)
+	{
+		fs_folderid.setValue(therec.get("folderid"));
+		fs_minlevelaccess.setValue(therec.get("minlevelaccess").toString());
+		fs_folder_desc.setValue(therec.get("folder_desc"));
+		fs_search_keywords.setValue(therec.get("search_keywords"));
+	}
+	else
+	{
+		subfs_folderid.setValue(therec.get("folderid"));
+		subfs_minlevelaccess.setValue(therec.get("minlevelaccess").toString());
+		subfs_folder_desc.setValue(therec.get("folder_desc"));
+		subfs_search_keywords.setValue(therec.get("search_keywords"));
+	}
+}
+
+// onSelect for findDirectory()
+class directory_lb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = directory_lb.getSelectedItem();
+		selected_directory = lbhand.getListcellItemLabel(selitem,0);
+
+		orec = dmshand.getDirectoryRec(selected_directory);
+
+		subdir_caption.setLabel(orec.get("folderid"));
+
+		fillDirectoryMetadata(1);
+		dmshand.showSubdirectoryTree(selected_directory, subdirectory_tree);
+
+		showOtherBoxes(true);
+
+		// hide and reset selected sub-dir var
+		document_groupbox.setVisible(false);
+		selected_file_id = "";
+		selected_subdirectory = "";
+	}
+}
+
+// Load 'em directories ..
+void findDirectory(int itype)
+{
+Object[] directory_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Directory",true),
+	new listboxHeaderObj("Description",true),
+	new listboxHeaderObj("Crt.Date",true),
+	new listboxHeaderObj("User",true),
+};
+
+	// global vars reset
+	selected_directory = "";
+	selected_subdirectory = "";
+
+	clearDirectoryMetadataFields();
+
+	searcht = kiboo.replaceSingleQuotes(searchtext_tb.getValue());
+	Listbox newlb = lbhand.makeVWListbox(directory_holder, directory_lb_headers, "directory_lb", 5);
+
+	sql = sqlhand.DMS_Sql();
+	if(sql == null) { guihand.showMessageBox("ERROR! Cannot open documents database"); return; }
+
+	// default sql-select if no search-text specf
+	sqlstm = "select origid,folderid,folder_desc,datecreated,username from folderstructure " + 
+	"where folderparent=0 order by origid desc";
+
+	if(!searcht.equals(""))
+		sqlstm = "select origid,folderid,folder_desc,datecreated,username from folderstructure " + 
+		"where folderparent=0 and " + 
+		"(folderid like '%" + searcht + "%' or folder_desc like '%" + searcht + "%' or search_keywords like '%" + searcht + "%') " + 
+		"order by origid desc";
+
+	therecs = sql.rows(sqlstm);
+	sql.close();
+
+	if(therecs.size() == 0) return;
+	if(therecs.size() > 5) newlb.setRows(15);
+	newlb.addEventListener("onSelect", new directory_lb_onSelect());
+
+	for(dpi : therecs)
+	{
+		ArrayList kabom = new ArrayList();
+
+		kabom.add(dpi.get("origid").toString());
+		kabom.add(lbhand.trimListitemLabel(dpi.get("folderid"),30));
+		kabom.add(lbhand.trimListitemLabel(dpi.get("folder_desc"),30));
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("username"));
+
+		//customername = checkEmptyString(lbhand.trimListitemLabel(dpi.get("customer_name"),30));
+
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhand.insertListItems(newlb,strarray,"false","");
+	}
+}
+
+void makeNewDirectory()
+{
+	tdate = kiboo.getDateFromDatebox(hiddendatebox);
+	if(!dmshand.insertNewDirectory("NEW","0",tdate,useraccessobj)) { guihand.showMessageBox("ERROR: Cannot create new directory!"); }
+	findDirectory(1); // refresh
+}
+
+// itype: 1=main directory popup, 2=sub-dir popup
+void updateDirectoryMetadata(int itype)
+{
+	if(selected_directory.equals("")) return;
+
+	theid = selected_directory;
+
+	fid = kiboo.replaceSingleQuotes(fs_folderid.getValue());
+	fminl = kiboo.replaceSingleQuotes(fs_minlevelaccess.getValue());
+	fdesc = kiboo.replaceSingleQuotes(fs_folder_desc.getValue());
+	fskeys = kiboo.replaceSingleQuotes(fs_search_keywords.getValue());
+
+	if(itype == 2)
+	{
+		fid = kiboo.replaceSingleQuotes(subfs_folderid.getValue());
+		fminl = kiboo.replaceSingleQuotes(subfs_minlevelaccess.getValue());
+		fdesc = kiboo.replaceSingleQuotes(subfs_folder_desc.getValue());
+		fskeys = kiboo.replaceSingleQuotes(subfs_search_keywords.getValue());
+
+		theid = selected_subdirectory;
+	}
+
+	sqlstm = "update folderstructure set folderid='" + fid + 
+	"', folder_desc='" + fdesc + "', search_keywords='" + fskeys + "', minlevelaccess=" + fminl +
+	" where origid=" + theid;
+
+	dmshand.dmsgpSqlExecuter(sqlstm);
+
+	// refresh	
+	if(itype == 1)
+	{
+		findDirectory(1);
+		dirmeta_popup.close();
+	}
+	else
+	{
+		dmshand.showSubdirectoryTree(selected_directory, subdirectory_tree);
+		document_groupbox.setVisible(false);
+		subdirmeta_popup.close();
+	}
+}
+
+// itype: 1=main branch, 2=sub-branch
+void insertSubdirectory(int itype)
+{
+	if(selected_directory.equals("")) return;
+	tdate = kiboo.getDateFromDatebox(hiddendatebox);
+
+	if(itype == 1)
+		dmshand.insertNewDirectory("NEWBRANCH",selected_directory,tdate,useraccessobj);
+	else
+	{
+		if(selected_subdirectory.equals("")) return;
+		dmshand.insertNewDirectory("SUBBRANCH",selected_subdirectory,tdate,useraccessobj);
+	}
+	dmshand.showSubdirectoryTree(selected_directory, subdirectory_tree); // refrsh
+}
+
+// itype: 1=main dir, 2=sub-dir popup
+void showUpdateDirMetadata_popup(int itype)
+{
+	if(itype == 1)
+	{
+		if(selected_directory.equals("")) return;
+		dirmeta_popup.open(updatedirmeta_btn);
+	}
+	else
+	{
+		if(selected_subdirectory.equals("")) return;
+		subdirmeta_popup.open(subdirmeta_btn);
+	}
+}
+
+// itype: 1=main dir, 2=sub-dir
+// will traverse the tree to make sure no left-over branches
+void deleteDirectory(int itype)
+{
+	if(itype == 1 && selected_directory.equals("")) return;
+	if(itype == 2 && selected_subdirectory.equals("")) return;
+
+	chkid = (itype == 1) ? selected_directory : selected_subdirectory;
+
+	// check for sub-branch
+	if(dmshand.existBranch(chkid))
+	{
+		guihand.showMessageBox("Please delete sub-branches first..");
+		return;
+	}
+
+	// check for files link to sub-dir
+	if(dmshand.directoryExistFiles(chkid))
+	{
+		guihand.showMessageBox("Files attached to sub-dir, delete them first..");
+		return;
+	}
+
+	if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+
+	sqlstm = "delete from folderstructure where origid=" + chkid;
+	dmshand.dmsgpSqlExecuter(sqlstm);
+	dmshand.showSubdirectoryTree(selected_directory, subdirectory_tree); // refrsh
+	document_groupbox.setVisible(false);
+	if(itype == 1)
+	{
+		findDirectory(1); // refresh
+		showOtherBoxes(false); // hide sub-dir and files boxes
+	}
+}
+
+//---- File uploading funcs
+
+// onSelect for filleDocumentsList()
+class doculinks_lb_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		selitem = doculinks_lb.getSelectedItem();
+		selected_file_id = lbhand.getListcellItemLabel(selitem,0);
+
+		updatefiledesc_label.setLabel(lbhand.getListcellItemLabel(selitem,1));
+		update_file_description.setValue(lbhand.getListcellItemLabel(selitem,2));
+	}
+}
+
+void fillDocumentsList(String iorigid)
+{
+	Object[] documentLinks_lb_headers = {
+	new dblb_HeaderObj("origid",false,"origid",2),
+	new dblb_HeaderObj("File",true,"file_title",1),
+	new dblb_HeaderObj("Description",true,"file_description",1),
+	new dblb_HeaderObj("D.Created",true,"datecreated",3),
+	new dblb_HeaderObj("Owner",true,"username",1),
+	};
+
+	selected_file_id = ""; // reset
+	duclink = "FS" + iorigid;
+
+	ds_sql = sqlhand.DMS_Sql();
+	if(ds_sql == null) return;
+	sqlstm = "select origid,file_title,datecreated,username,file_description from DocumentTable " +
+	"where docu_link='" + duclink + "' and deleted=0";
+
+	if(useraccessobj.accesslevel == 9) // admin can see everything..
+	{
+		sqlstm = "select origid,file_title,file_description,datecreated,username from DocumentTable " +
+		"where docu_link='" + duclink + "' ";
+	}
+
+	Listbox newlb = lbhand.makeVWListbox_onDB(documents_holder,documentLinks_lb_headers,"doculinks_lb",10,ds_sql,sqlstm);
+	//newlb.setMultiple(true);
+	newlb.addEventListener("onSelect", new doculinks_lb_onSelect());
+	ds_sql.close();
+
+	//if(newlb.getItemCount() > 5) newlb.setRows(10);
+}
+
+void uploadFile()
+{
+	if(selected_subdirectory.equals("")) return;
+	doculink_str = "FS" + selected_subdirectory;
+	docustatus_str = "ACTIVE";
+
+	ftitle = kiboo.replaceSingleQuotes(fileupl_file_title.getValue());
+	fdesc = kiboo.replaceSingleQuotes(fileupl_file_description.getValue());
+
+	if(ftitle.equals(""))
+	{
+		guihand.showMessageBox("Please enter a filename..");
+		return;
+	}
+
+	// dmsfuncs.zs
+	dmshand.uploadFile(useraccessobj.username, useraccessobj.branch, kiboo.getDateFromDatebox(hiddendatebox),doculink_str,docustatus_str,ftitle,fdesc);
+	fillDocumentsList(selected_subdirectory);
+	uploadfile_popup.close();
+}
+
+
+// 20/09/2012: consolidate scattered funcs
+// itype: 1=view file, 2=del file, 3=update file description, 4=show upload-file popup
+void generalFunc(int itype)
+{
+	switch(itype)
+	{
+		case 1: // view file
+		if(selected_file_id.equals("")) return;
+		theparam = "docid=" + selected_file_id;
+		uniqid = kiboo.makeRandomId("vf");
+		guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/viewfile.zul", uniqid, theparam, useraccessobj);
+		break;
+
+		case 2: // delete file
+		if(selected_file_id.equals("")) return;
+		if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.NO) return;
+		sqlstm = "delete from DocumentTable where origid=" + selected_file_id;
+		dmshand.dmsgpSqlExecuter(sqlstm);
+		fillDocumentsList(selected_subdirectory); // refresh
+		break;
+
+		case 3: // update file description - call-by popup
+		fdesc = kiboo.replaceSingleQuotes(update_file_description.getValue());
+		sqlstm = "update DocumentTable set file_description='" + fdesc + "' where origid=" + selected_file_id;
+		dmshand.dmsgpSqlExecuter(sqlstm);
+		fillDocumentsList(selected_subdirectory); // refresh
+		updatefiledesc_popup.close();
+		break;
+
+		case 4: // show upload-file popup
+		if(selected_subdirectory.equals("")) return;
+		uploadfile_popup.open(uploaddoc_btn);
+		break;
+	}
+}
+
+]]>
+</zscript>
+
+<!-- update file description popup -->
+<popup id="updatefiledesc_popup">
+<groupbox width="400px">
+	<caption id="updatefiledesc_label" />
+	<label value="Description" style="font-size:9px" />
+	<textbox id="update_file_description" multiline="true" height="70px" width="99%" style="font-size:9px" />
+	<separator height="3px" />
+	<hbox>
+		<button label="Update" style="font-size:9px" onClick="generalFunc(3)" />
+		<button label="Close" style="font-size:9px" onClick="updatefiledesc_popup.close()" />
+	</hbox>
+</groupbox>
+
+</popup>
+
+<!-- upload a file popup -->
+<popup id="uploadfile_popup">
+<groupbox>
+<caption label="Upload a file" />
+	<grid>
+		<rows>
+			<row>
+				<label value="Filename" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadFile()"  style="font-size:9px" />
+	<button label="Close" onClick="uploadfile_popup.close()"  style="font-size:9px" />
+</hbox>
+
+</popup>
+
+<!-- popup to edit directory metadata -->
+<popup id="dirmeta_popup">
+<groupbox mold="3d" width="600px">
+<grid>
+<rows>
+	<row>
+		<label value="Directory name" style="font-size:9px" />
+		<textbox id="fs_folderid" style="font-size:9px" width="98%" />
+	</row>
+	<row>
+		<label value="Level to access" style="font-size:9px" />
+		<textbox id="fs_minlevelaccess" value="1" style="font-size:9px" />
+	</row>
+	<row>
+		<label value="Description" style="font-size:9px" />
+		<textbox id="fs_folder_desc" multiline="true" width="98%" height="40px" style="font-size:9px" />
+	</row>
+	<row>
+		<label value="Search keywords" style="font-size:9px" />
+		<textbox id="fs_search_keywords" multiline="true" width="98%" height="40px" style="font-size:9px" />
+	</row>
+</rows>
+</grid>
+<separator height="3px" />
+<hbox>
+	<button label="Update" style="font-size:9px" onClick="updateDirectoryMetadata(1)" />
+	<button label="Close" style="font-size:9px" onClick="dirmeta_popup.close()" />
+</hbox>
+</groupbox>
+</popup>
+<!-- endof popup to edit directory metadata -->
+
+<!-- popup to edit sub-directory metadata -->
+<popup id="subdirmeta_popup">
+<groupbox mold="3d" width="600px">
+<grid>
+<rows>
+	<row>
+		<label value="Sub-directory name" style="font-size:9px" />
+		<textbox id="subfs_folderid" style="font-size:9px" width="98%" />
+	</row>
+	<row>
+		<label value="Level to access" style="font-size:9px" />
+		<textbox id="subfs_minlevelaccess" value="1" style="font-size:9px" />
+	</row>
+	<row>
+		<label value="Description" style="font-size:9px" />
+		<textbox id="subfs_folder_desc" multiline="true" width="98%" height="40px" style="font-size:9px" />
+	</row>
+	<row>
+		<label value="Search keywords" style="font-size:9px" />
+		<textbox id="subfs_search_keywords" multiline="true" width="98%" height="40px" style="font-size:9px" />
+	</row>
+</rows>
+</grid>
+<separator height="3px" />
+<hbox>
+	<button label="Update" style="font-size:9px" onClick="updateDirectoryMetadata(2)" />
+	<button label="Close" style="font-size:9px" onClick="subdirmeta_popup.close()" />
+</hbox>
+</groupbox>
+</popup>
+<!-- endof popup to edit sub-directory metadata -->
+
+<div width="1200px">
+<panel id="documan_panel" title="Documents Manager ${MYVERSION}" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<separator height="3px" />
+
+<hbox>
+<div width="580px">
+	<groupbox mold="3d">
+	<hbox>
+		<label value="Search text" style="font-size:9px" />
+		<textbox id="searchtext_tb" style="font-size:9px" width="260px" />
+		<button label="Search" style="font-size:9px" onClick="findDirectory(1)" />
+	</hbox>
+	<separator height="3px" />
+	<div id="directory_holder" />
+
+	<separator height="3px" />
+	<hbox>
+		<button label="New directory" style="font-size:9px" onClick="makeNewDirectory()" />
+		<button id="updatedirmeta_btn" label="Update metadata" style="font-size:9px" onClick="showUpdateDirMetadata_popup(1)" />
+		<button id="deletedir_btn" label="Delete" style="font-size:9px" onClick="deleteDirectory(1)" />
+	</hbox>
+	</groupbox>
+	
+	<separator height="3px" />
+
+	<groupbox id="subdir_groupbox" mold="3d" visible="false">
+	<caption id="subdir_caption" label="::" />
+	<tree id="subdirectory_tree" zclass="z-dottree" rows="5" onSelect="subdirectoryOnSelect(subdirectory_tree)" >
+	<treecols>
+		<treecol label="Sub-directory" />
+		<treecol label="Description" />
+	</treecols>
+	</tree>
+	<separator height="3px" />
+	<hbox>
+		<button label="Insert branch" style="font-size:9px" onClick="insertSubdirectory(1)" />
+		<button label="Insert sub-branch" style="font-size:9px" onClick="insertSubdirectory(2)" />
+		<button id="subdirmeta_btn" label="Rename" style="font-size:9px" onClick="showUpdateDirMetadata_popup(2)" />
+		<button id="deletesubdir_btn" label="Delete" style="font-size:9px" onClick="deleteDirectory(2)" />
+	</hbox>
+	</groupbox>
+</div>
+
+<groupbox id="document_groupbox" mold="3d" visible="false">
+<div style="background:#99AA88">
+<label id="subdir_label" style="font-weight:bold;padding:3px" />
+</div>
+<separator height="3px" />
+<div id="documents_holder" />
+<separator height="3px" />
+<hbox>
+	<button id="uploaddoc_btn" label="Upload file" style="font-size:9px" onClick="generalFunc(4)" />
+	<button id="viewdoc_btn" label="View file" style="font-size:9px" onClick="generalFunc(1)" />
+	<button id="editdoc_btn" label="Update" style="font-size:9px" onClick="updatefiledesc_popup.open(editdoc_btn)" />
+	<button id="deletedoc_btn" label="Delete" style="font-size:9px" onClick="generalFunc(2)" />
+</hbox>
+</groupbox>
+
+</hbox>
+
+</panelchildren>
+</panel>
+</div>
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(hiddendatebox);
+
+// Admin only stuff to show else hidden
+if(useraccessobj.accesslevel > 8)
+{
+//	deletedir_btn.setVisible(true);
+//	deletesubdir_btn.setVisible(true);
+}
+
+]]>
+</zscript>
+</zk>

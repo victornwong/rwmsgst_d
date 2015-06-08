@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="partnerstkmod"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Outsource Partner Stock-Consignment Tracking";
+MYVERSION = "v0.1";
+MYPANEL = "outospespan";
+/*
+Written by	: Victor Wong
+Dated		: 27/11/2013
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_sel_warehouse = glob_sel_itemname = glob_sel_branchpreqs = "";
+
+Object getPartnerPartsRequest_rec(String ireq)
+{
+	sqlstm = "select * from rw_partner_partsreq where origid=" + ireq;
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
+class stkmovclk implements org.zkoss.zk.ui.event.EventListener
+{ // show consigned-stocks replace to what -- as entered by outsource-partner or branch
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		kr = isel.getChildren().toArray();
+
+		rqk = getPartnerPartsRequest_rec(kr[0].getValue());
+		csvn = kr[3].getValue();
+		if(rqk ==  null) return;
+
+		if(ptsreq_holder.getFellowIfAny("p_partsreq_grid") != null) p_partsreq_grid.setParent(null);
+
+		kg = new Grid(); kg.setParent(ptsreq_holder); kg.setId("p_partsreq_grid");
+		rws = new org.zkoss.zul.Rows(); rws.setId("prqrws"); rws.setParent(kg);
+
+		if(!csvn.equals("")) // show helpticket customer
+		{
+			sqlstm = "select cust_name from rw_helptickets where origid=" + csvn;
+			cnm = sqlhand.gpSqlFirstRow(sqlstm);
+			jn = (cnm == null) ? "UNKNOWN" : cnm.get("cust_name");
+			
+				nrw = new org.zkoss.zul.Row();
+				nrw.setParent(prqrws);
+				nrw.setSpans("1,3");
+				nrw.setStyle("background:#2e3436");
+				ngfun.gpMakeLabel(nrw, "", "CSV: " + csvn , "color:#ffffff").setSclass("subhead1");
+				ngfun.gpMakeLabel(nrw, "", jn, "color:#ffffff").setSclass("subhead1");
+		}
+
+		String[] hds = { "Parts","Desc","Qty","ToReplace" };
+		nrw = new org.zkoss.zul.Row();
+		nrw.setStyle("background:#2e3436");
+		nrw.setParent(prqrws);
+		for(i=0; i<hds.length; i++)
+		{
+			ngfun.gpMakeLabel(nrw, "", hds[i], "color:#ffffff;font-weight:bold;text-shadow: 1px 1px #000000;");
+		}
+
+		ri = kiboo.checkNullString(rqk.get("req_items")).split("~");
+		if(ri.length >= 1)
+		{
+			rq = kiboo.checkNullString(rqk.get("req_qty")).split("~");
+			rds = kiboo.checkNullString(rqk.get("req_desc")).split("~");
+			tr = kiboo.checkNullString(rqk.get("toreplace")).split("~");
+
+			for(i=0; i<ri.length; i++) // show them parts
+			{
+				pn = "";
+				try { pn = ri[i]; } catch (Exception e) {}
+
+				if(!pn.equals(""))
+				{
+					nrw = new org.zkoss.zul.Row();
+					nrw.setParent(prqrws);
+
+					ngfun.gpMakeLabel(nrw, "", pn, "");
+
+					pds = "";
+					try { pds = rds[i]; } catch (Exception e) {}
+					ngfun.gpMakeLabel(nrw, "", pds, "");
+
+					qty = "";
+					try { qty = rq[i]; } catch (Exception e) {}
+					ngfun.gpMakeLabel(nrw,"",qty,"");
+
+					torp = "";
+					try { torp = tr[i]; } catch (Exception e) {}
+					ngfun.gpMakeLabel(nrw,"",torp,"");
+				}
+			}
+		}
+		stkrequest_pop.open(isel);
+	}
+}
+
+stockmovement_clicker = new stkmovclk();
+
+void showStockMovement(String iwarehouse, String itmname)
+{
+	if( stockmovement_holder.getFellowIfAny("stockmovement_grid") != null ) stockmovement_grid.setParent(null);
+	stockitemname_lbl.setValue(itmname);
+
+	sqlstm = "select origid,datecreated,username,csv_no,post_date from rw_partner_partsreq where req_desc like '%" + itmname + "%' " +
+	"and warehouse='" + iwarehouse + "' and status='POST'";
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+
+	kg = new Grid(); kg.setParent(stockmovement_holder); kg.setId("stockmovement_grid");
+	rws = new org.zkoss.zul.Rows(); rws.setId("stkmvrws"); rws.setParent(kg);
+	
+	String[] ohd = { "ReqId","Date","Requestor","CSV#","Post" };
+	nrw = new org.zkoss.zul.Row();
+	nrw.setParent(stkmvrws);
+	for(i=0; i<ohd.length; i++)
+	{
+		gpMakeLabel(nrw, "", ohd[i], "font-weight:bold");
+	}
+
+	for(d : rcs)
+	{ 
+		nrw = new org.zkoss.zul.Row();
+		nrw.setParent(stkmvrws);
+		nrw.setStyle("background:#f9b12d");
+		nrw.addEventListener("onClick", stockmovement_clicker);
+		ngfun.gpMakeLabel(nrw, "", d.get("origid").toString(),"" );
+		ngfun.gpMakeLabel(nrw, "", dtf2.format( d.get("datecreated") ), "");
+		ngfun.gpMakeLabel(nrw, "", d.get("username"), "");
+		ngfun.gpMakeLabel(nrw, "", d.get("csv_no"), "");
+		ngfun.gpMakeLabel(nrw, "", dtf2.format( d.get("post_date") ), "");
+	}
+}
+
+Object[] brnchstk_hds =
+{
+	new listboxHeaderWidthObj("Item",true,""),
+	new listboxHeaderWidthObj("Category",true,""),
+	new listboxHeaderWidthObj("L.Restk",true,""),
+	new listboxHeaderWidthObj("Ini.Qty",true,"70px"),
+	new listboxHeaderWidthObj("Cur.Qty",true,"70px"),
+};
+
+class brchclk implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_itemname = lbhand.getListcellItemLabel(isel,0);
+		showStockMovement(glob_sel_warehouse,glob_sel_itemname);
+	}
+}
+brhclierker = new brchclk();
+
+void showStockByBranch(String ibranch)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(branchstocks_holder, brnchstk_hds, "branchstocks_lb", 22);
+
+	sqlstm = "select distinct(item_name), category, last_restock, sum(start_qty) as startqty, " + 
+	"sum(qty) as movqty from rw_partner_stockitems where warehouse='" + ibranch + "' " +
+	"group by item_name,category,last_restock,start_qty";
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+	//newlb.setMultiple(true);
+	//newlb.setCheckmark(true);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", brhclierker);
+	ArrayList kabom = new ArrayList();
+	for(d : rcs)
+	{
+		kabom.add( kiboo.checkNullString(d.get("item_name")) );
+		kabom.add( kiboo.checkNullString(d.get("category")) );
+		kabom.add( dtf2.format(d.get("last_restock")) );
+		kabom.add( (d.get("startqty") == null) ? "" : d.get("startqty").toString() );
+		kabom.add( (d.get("movqty") == null) ? "" : d.get("movqty").toString() );
+		styl = (d.get("startqty") != d.get("movqty")) ? "background:#e95252;font-size:9px" : "";
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",styl);
+		kabom.clear();
+	}
+
+	sqlstm = "select distinct(category), sum(qty) as stkleft, sum(start_qty) as startstk from rw_partner_stockitems " +
+	"where warehouse='" + ibranch + "' group by category";
+
+	smy = sqlhand.gpSqlGetRows(sqlstm);
+
+	if(smy != null)
+	{
+		if(stocksummary_holder.getFellowIfAny("stksummarygrid") != null) stksummarygrid.setParent(null);
+		kg = new Grid();
+		kg.setWidth("500px"); kg.setParent(stocksummary_holder); kg.setId("stksummarygrid");
+		rws = new org.zkoss.zul.Rows();
+		rws.setId("sumrws"); rws.setParent(kg);
+
+		nrw = new org.zkoss.zul.Row();
+		nrw.setParent(sumrws);
+		ngfun.gpMakeLabel(nrw, "", "Category", "font-weight:bold");
+		ngfun.gpMakeLabel(nrw, "", "Stock.Start", "font-weight:bold");
+		ngfun.gpMakeLabel(nrw, "", "Stock.Left", "font-weight:bold");
+
+		for(d : smy)
+		{
+			nrw = new org.zkoss.zul.Row();
+			nrw.setParent(sumrws);
+			ngfun.gpMakeLabel(nrw, "", d.get("category"), "");
+			ngfun.gpMakeLabel(nrw, "", d.get("startstk").toString(), "");
+			ngfun.gpMakeLabel(nrw, "", d.get("stkleft").toString(), "");
+		}
+	}
+
+	branch_lbl.setValue(ibranch);
+	glob_sel_warehouse = ibranch; // save for later
+	workbox.setVisible(true);
+}
+
+Object[] preqts_hds =
+{
+	new listboxHeaderWidthObj("ReqId",true,"60px"),
+	new listboxHeaderWidthObj("Date",true,"60px"),
+	new listboxHeaderWidthObj("CSV#",true,"80px"),
+	new listboxHeaderWidthObj("Post.Date",true,"80px"),
+	new listboxHeaderWidthObj("GCN",true,"30px"),
+};
+
+class prtsreqclki implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_branchpreqs = lbhand.getListcellItemLabel(isel,0);
+	}
+}
+prtsreqbrnbch = new prtsreqclki();
+
+void showBranchPartsRequests(Object iwhat, String ibranch)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(manageptsreq_holder, preqts_hds, "partsreq_lb", 12);
+	glob_sel_branchpreqs = ""; // reset each time popup
+
+	sqlstm = "select origid,datecreated,csv_no,post_date,gcn_id from rw_partner_partsreq " + 
+	"where warehouse='" + ibranch + "' and status='POST'";
+
+	rcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(rcs.size() == 0) return;
+	//newlb.setMultiple(true);
+	//newlb.setCheckmark(true);
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", prtsreqbrnbch);
+	ArrayList kabom = new ArrayList();
+	for(d : rcs)
+	{
+		kabom.add( d.get("origid").toString() );
+		kabom.add( dtf2.format(d.get("datecreated")) );
+		kabom.add( kiboo.checkNullString(d.get("csv_no")) );
+		pdt = (d.get("post_date") == null) ? "" : dtf2.format(d.get("datecreated"));
+		kabom.add(pdt);
+		kabom.add( (d.get("gcn_id") == null) ? "" : d.get("gcn_id").toString() );
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	glob_sel_warehouse = ibranch; // save for later
+	mpartsreq_lbl.setValue("Parts requests : " + ibranch);
+	manpartsreq_pop.open(iwhat);
+}
+
+EIS_HARDCODED_FC6 = "2324";
+
+void partsReqFunc(Object iwhat)
+{
+	itype = iwhat.getId();
+
+	if(itype.equals("savegcntrans_b")) // save parts-request to GCN-transient
+	{
+		if(glob_sel_branchpreqs.equals("")) return;
+		savePartsReqToGCNTrans(glob_sel_branchpreqs,EIS_HARDCODED_FC6);
+	}
+
+	if(itype.equals("setpartsreqnew_b")) // revert posted parts-rquest to NEW, add-back deducted qty
+	{
+	}
+}
+
+// Save branch-parts-req/replace thing to transient-GCN
+void savePartsReqToGCNTrans(String ibpreq, String ifc6)
+{
+	prs = getPartnerPartsRequest_rec(ibpreq);
+	if(prs == null) { guihand.showMessageBox("ERR: Cannot access parts-request-replace database.."); return; }
+	if(prs.get("gcn_id") != null) { guihand.showMessageBox("ERR: Partner parts-request already submitted to GCN"); return; }
+
+	msgt = "Submit items to GCN - Remember to pickup the items in the GCN module\n\n";
+	sqlstm = "";
+
+	rd = kiboo.checkNullString(prs.get("req_desc")).split("~");
+	tr = kiboo.checkNullString(prs.get("toreplace")).split("~");
+
+	for(i=0; i<tr.length; i++)
+	{
+		trd = "";
+		try { trd = rd[i]; } catch (Exception e) {}
+		torp = "";
+		try { torp = tr[i]; } catch (Exception e) {}
+
+		if(!torp.equals(""))
+		{
+			msgt += (i+1).toString() + ". " + torp + "\n";
+
+			sqlstm += "insert into rw_gcn_transient (asset_tag,item_desc,fc6_custid,partner_pr) values " +
+			"('" + kiboo.replaceSingleQuotes(torp) + "','" + trd + "','" + ifc6 + "'," + ibpreq + ");";
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+
+	gcntrans_lbl.setValue(msgt);
+}
+
+]]>
+</zscript>
+
+<popup id="stkrequest_pop">
+	<div sclass="shadowbox" style="background:#add8e6;" width="500px" >
+		<div id="ptsreq_holder" />
+	</div>
+</popup>
+
+<popup id="manpartsreq_pop">
+	<div sclass="shadowbox" style="background:#e58512" width="400px" >
+		<label id="mpartsreq_lbl" sclass="subhead1" />
+		<separator height="3px" />
+		<div id="manageptsreq_holder" />
+		<separator height="2px" />
+		<hbox>
+			<button id="savegcntrans_b" label="Submit for GCN" onClick="partsReqFunc(self)" />
+			<button id="setpartsreqnew_b" label="Set NEW - roll-back stock" visible="false" onClick="partsReqFunc(self)" />
+		</hbox>
+		<separator height="5px" />
+		<label id="gcntrans_lbl" multiline="true" style="font-weight:bold;color:#ffffff;text-shadow: 1px 1px #000000;" />
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+
+<div sclass="shadowbox" style="background:#add8e6;" >
+	<hbox>
+		<label value="Branch / Outsource partner" />
+		<listbox id="os_selector" mold="select" rows="1" />
+		<button id="loadosusers_b" label="Load consigned stocks" 
+			onClick="showStockByBranch(os_selector.getSelectedItem().getLabel())" />
+		<button id="loadosreqs_b" label="Parts request" style="color:#ff0000;font-weight:bold"
+			onClick="showBranchPartsRequests(self,os_selector.getSelectedItem().getLabel())" />
+	</hbox>
+</div>
+<separator height="3px" />
+
+<div sclass="shadowbox" style="background:#2e3436" id="workbox" visible="false" >
+	<hbox>
+		<vbox>
+			<label id="branch_lbl" sclass="subhead2" />
+			<separator height="2px" bar="true" />
+			<div id="branchstocks_holder" width="600px" />
+		</vbox>
+		<vbox>
+			<label id="stockitemname_lbl" sclass="subhead2" />
+			<separator height="2px" bar="true" />
+			<div id="stockmovement_holder" />
+		</vbox>
+	</hbox>
+	<separator height="3px" />
+	<label sclass="subhead1" value="Summary" />
+	<div id="stocksummary_holder" />
+</div>
+
+<zscript>
+<![CDATA[
+
+ngfun.fillListbox_uniqField("rw_partner_stockitems", "warehouse", os_selector);
+
+//luhand.populateListbox_ByLookup(os_selector, "dd_branches", 2);
+//os_selector.setSelectedIndex(3);
+
+if(useraccessobj.accesslevel == 9)
+{
+	setpartsreqnew_b.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

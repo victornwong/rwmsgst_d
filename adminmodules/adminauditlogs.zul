@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="admin_auditlogs_mod"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+<zscript>
+<![CDATA[
+/*
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+
+Function			: Go through audit-logs - admin login only
+Coding began date	: 17/9/2010
+Developers			: Victor Wong
+*/
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+if(useraccessobj.accesslevel != 9)
+{
+	showAccessDenied_Box(useraccessobj);
+	globalClosePanel(myincludeid);
+}
+
+kiboo = new Generals();
+lbhandler = new ListboxHandler();
+sqlhand = new SqlFuncs();
+
+void searchAuditTrails(int itype)
+{
+	Object[] auditlogs_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Link.Code",true),
+	new listboxHeaderObj("Client",true),
+	new listboxHeaderObj("Date.Log",true),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Audit.Notes",true),
+	};
+
+	Listbox newlb = lbhandler.makeVWListbox(auditlogs_holder, auditlogs_lb_headers, "auditlogs_lb", 5);
+
+	sdate = kiboo.getDateFromDatebox(startdate);
+    edate = kiboo.getDateFromDatebox(enddate);
+
+	sqlstm = "select origid,linking_code,audit_notes,username,datecreated from elb_systemaudit where datecreated between '" + 
+		sdate + "' and '" + edate + "' order by datecreated,origid";
+
+	if(itype == 2)
+	{
+		mytext = searchtext.getValue(); // hardcoded textbox below
+		sqlstm = "select origid,linking_code,audit_notes,username,datecreated from elb_systemaudit " + 
+		"where (linking_code like '%" + mytext + "%' or username like '%" + mytext + "%' or audit_notes like '%" + mytext + "%') and " + 
+		"datecreated between '" + sdate + "' and '" + edate + "' order by datecreated,origid";
+	}
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	tlist = sql.rows(sqlstm);
+
+	if(tlist.size() == 0)
+	{
+		sql.close();
+		return;
+	}
+
+	newlb.setRows(20);
+
+	for(dpi : tlist)
+	{
+		ArrayList kabom = new ArrayList();
+		kabom.add(dpi.get("origid").toString());
+
+		lnkcode = dpi.get("linking_code");
+		checkfold = lnkcode.substring(0,2);
+		kabom.add(lnkcode);
+
+		compname = "------";
+		if(checkfold.equals("AL"))
+		{
+			sqlstm = "select customer.customer_name from customer " + 
+			"left join jobfolders on jobfolders.ar_code=customer.ar_code where jobfolders.folderno_str='" + lnkcode + "'";
+			ffrec = sql.firstRow(sqlstm);
+			if(ffrec != null) compname = ffrec.get("customer_name");
+		}
+
+		kabom.add(compname);
+
+		kabom.add(dpi.get("datecreated").toString().substring(0,10));
+		kabom.add(dpi.get("username"));
+		kabom.add(dpi.get("audit_notes"));
+		strarray = kiboo.convertArrayListToStringArray(kabom);
+		lbhandler.insertListItems(newlb,strarray,"false","");
+	}
+	sql.close();
+}
+
+void showFolderDetails_Samples()
+{
+	if(!lbhandler.check_ListboxExist_SelectItem(auditlogs_holder,"auditlogs_lb")) return;
+
+	selitem = auditlogs_lb.getSelectedItem();
+	ifolderno = lbhandler.getListcellItemLabel(selitem,1);
+	checkfold = ifolderno.substring(0,2);
+	if(checkfold.equals("AL")) // only pop-up window if really is folder-num
+	{
+		theparam = "folderno=" + ifolderno;
+		uniqwindowid = kiboo.makeRandomId("dxfoldxd");
+		globalActivateWindow("miscwindows","samplereg/folderjobs_driller.zul", uniqwindowid, theparam, useraccessobj);
+	}
+}
+
+// 3/11/2010: to show who commit the most folders - and also other statistics from elb_systemaudits
+void topCommitFolders_clicker(int stattype)
+{
+	Object[] topcommiters_lb_headers = {
+	new dblb_HeaderObj("Username",true,"username",1),
+	new dblb_HeaderObj("Count",true,"topcount",2),
+	};
+
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+
+	sqlstm = "select username,count(username) as topcount from elb_systemaudit where audit_notes like '%commit%' " +
+		"group by username,audit_notes order by topcount desc";
+
+	thelabel = "Top Folder Committers";
+
+	if(stattype == 2)
+	{
+		sqlstm = "select username,count(username) as topcount from elb_systemaudit where audit_notes='Successfully login to the system' " +
+		"group by username,audit_notes order by topcount desc";
+
+		thelabel = "Top Logins";
+	}
+
+	topcommit_lbl.setLabel(thelabel);
+
+	Listbox newlb = lbhandler.makeVWListbox_onDB(topcommitters_holder,topcommiters_lb_headers,"topcommiters_lb",10,sql,sqlstm);
+	if(newlb.getItemCount() > 10) newlb.setRows(20);
+	sql.close();
+	topcommitfolders_popup.open(topcomit_btn);
+}
+
+]]>
+</zscript>
+
+<popup id="topcommitfolders_popup">
+<groupbox mold="3d" style="padding:2px" width="400px">
+	<caption id="topcommit_lbl" label="Top Commit Folders Users" />
+	<div id="topcommitters_holder" />
+</groupbox>
+<button label="Close" style="font-size:9px" onClick="topcommitfolders_popup.close()" />
+</popup>
+
+<div width="1200px">
+<panel id="admin_auditlogs_panel" title="Audit Logs - Manager" border="normal" collapsible="true" closable="true">
+<panelchildren>
+<vbox>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<groupbox mold="3d" width="100%">
+<caption label="Search parameters" />
+<hbox>
+	<label value="Start date" style="font-size:9px" />
+	<datebox id="startdate" format="yyyy-MM-dd" onCreate="self.value = new Date()" />
+	<separator width="10px"/>
+	<label value="End date" style="font-size:9px" />
+	<datebox id="enddate" format="yyyy-MM-dd" onCreate="self.value = new Date()" />
+	<button label="Search/Refresh" style="font-size:9px" onClick="searchAuditTrails(1)" />
+
+	<label value="Search.Text" style="font-size:9px" />
+	<textbox id="searchtext" style="font-size:9px" />
+	<button label="Dig it" style="font-size:9px" onClick="searchAuditTrails(2)" />
+	<button label="View folder details" style="font-size:9px" onClick="showFolderDetails_Samples()" />
+</hbox>
+<separator height="3px" />
+<hbox>
+	<button id="topcomit_btn" label="Top commit-folders" style="font-size:9px" onClick="topCommitFolders_clicker(1)" />
+	<button label="Top logins" style="font-size:9px" onClick="topCommitFolders_clicker(2)" />
+</hbox>
+</groupbox>
+
+<!-- search results box -->
+<groupbox mold="3d" width="100%">
+<caption label="Found logs" />
+<vbox>
+<div id="auditlogs_holder" />
+</vbox>
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+
+</vbox>
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="document_linking_mod"?>
+<zk>
+
+<zscript src="alsglobaldefs.zs" />
+<zscript src="alsglobalfuncs.zs" />
+<zscript src="alsglobal_guifuncs.zs" />
+<zscript src="alsglobal_sqlfuncs.zs" />
+<zscript src="securityfuncs.zs" />
+
+<zscript src="doculink_funcs.zs" />
+
+<zscript>
+<![CDATA[
+/*
+Document Linking Module
+Written by : Victor Wong
+
+NOTES-- crappy codes, need optimization and reorganization of funcs
+Allow simple "include" into any module - must setup these stuff
+
+documentLinkObj = def in doculink_funcs.zs
+documentLinkObj.global_doculink_origid = docu-link origid pass-around var - refering to the table's origid
+documentLinkObj.global_eq_origid = setup initially for equipment id, but can refer to any table's origid in other modules
+documentLinkObj.document_idprefix = document linking prefix, used to differentiate between type of documents belonging to which module , eg. equipment = 'E'
+documentLinkObj.refreshListbox = listbox refresh/loading and crud-buttons funcs, cannot pass functions as parameters, so got to encapsulate them into an object
+	the functions inside the object will use whatever global vars def in this module
+	
+to activate and run the module, requires
+
+documentLinkObj documentLinkProp = new documentLinkObj();
+documentLinkProp.document_idprefix = EQID_PREFIX; // def in alsglobaldef.zs
+setDocumentLink_DynamicProperty(linkingdoc_include, documentLinkProp, useraccessobj);
+	linkingdoc_include = the 'include' id
+	
+<bandbox id="bd">
+	<bandpopup>
+		<vbox>
+			<listbox width="200px"
+				onSelect="bd.value=self.selectedItem.label; bd.closeDropdown();">
+				<listhead>
+					<listheader label="Name" />
+					<listheader label="Description" />
+				</listhead>
+				<listitem>
+					<listcell label="John" />
+					<listcell label="CEO" />
+				</listitem>
+				<listitem>
+					<listcell label="Joe" />
+					<listcell label="Engineer" />
+				</listitem>
+				<listitem>
+					<listcell label="Mary" />
+					<listcell label="Supervisor" />
+				</listitem>
+			</listbox>
+		</vbox>
+	</bandpopup>
+</bandbox>			
+
+*/
+
+// Get access obj set by login-page
+useraccessobj = getUserAccessObject();
+// no access obj, redirect back to login page
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+doculink_prop = getDocumentLink_DynamicProperty();
+
+class documentLinksListbox_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		lbitem = event.getReference();
+		eorigid = getListcellItemLabel(lbitem, 0);
+
+		doculink_prop.global_doculink_origid = eorigid; // save to global so everyone can play
+
+		docrec = getLinkingDocumentRec(eorigid);
+		update_file_title.setValue(docrec.get("file_title"));
+		update_file_description.setValue(docrec.get("file_description"));
+
+		matchListboxItems(update_docu_status, docrec.get("docu_status"));
+
+		// check owner of this document link - if not owner, disable "Update details" button
+		cusername = useraccessobj.username;
+
+		updatedetails_linkingdoc_btn.setDisabled(true);
+
+		if(cusername.equals(docrec.get("username")))
+			updatedetails_linkingdoc_btn.setDisabled(false);
+
+		if(useraccessobj.accesslevel == 9 || cusername.equals("toymaker"))
+			updatedetails_linkingdoc_btn.setDisabled(false);
+
+	}
+}
+
+Object[] documentLinks_lb_headers = {
+	new listboxHeaderObj("origid",false),
+	new listboxHeaderObj("Title",true),
+	new listboxHeaderObj("Status",true),
+	new listboxHeaderObj("D.Created",true),
+	new listboxHeaderObj("Username",true)
+};
+
+// encapsulate this function in an object to pass around.. haha
+public class doculink_refreshListbox
+{
+
+	public Div thediv;
+	public Object[] crud_buttons;
+	public Component harddelete_btn;
+	public Component remove_doclink_btn;
+	
+	void hideCrudButtons()
+	{
+		for(i=0; i<crud_buttons.length; i++)
+		{
+			crud_buttons[i].setVisible(false);
+		}
+	}
+	
+	void showCrudButtons()
+	{
+		for(i=0; i<crud_buttons.length; i++)
+		{
+			crud_buttons[i].setVisible(true);
+		}
+	}
+
+	void showAdminButtons()
+	{
+		remove_doclink_btn.setVisible(true);
+		harddelete_btn.setVisible(true);
+	}
+	
+	void hideAdminButtons()
+	{
+		remove_doclink_btn.setVisible(false);
+		harddelete_btn.setVisible(false);
+	}
+	
+// populate the linking documents listbox
+public void populateDocumentLinks(String ieqid, String iprefix)
+{
+	//Listbox newlb = makeDocumentLinks_Listbox(linkingdocs_div); // div def in UI
+
+	Listbox newlb = makeVWListbox(thediv, documentLinks_lb_headers, "doculinks_lb", 5);
+
+	ds_sql = als_DocumentStorage();
+	if(ds_sql == null) return;
+
+	doculink_str = iprefix + ieqid;
+
+	deleted_str = " and deleted=0";
+	branch_str = " and branch='" + useraccessobj.branch + "'";
+
+	// check if admin login - able to view deleted-flag items and all documents
+	if(useraccessobj.accesslevel == 9)
+	{
+		deleted_str = "";
+		branch_str = "";
+	}
+
+	if(useraccessobj.branch.equals("ALL"))
+		branch_str = "";
+
+	sqlst2 = "select origid,file_title,deleted,docu_status,datecreated,username from DocumentTable where docu_link='" + doculink_str + "'" + branch_str + deleted_str;
+	doctab_recs = ds_sql.rows(sqlst2);
+
+	ds_sql.close();
+
+	if(doctab_recs == null || doctab_recs.size() == 0) return;
+
+	newlb.addEventListener("onSelect", new documentLinksListbox_Listener()); // onSelect drill-in
+	newlb.setRows(10);
+	String[] strarray = new String[5];
+
+	for(doc1rec : doctab_recs)
+	{
+		strarray[0] = doc1rec.get("origid").toString();
+		filetitle = doc1rec.get("file_title");
+		if(doc1rec.get("deleted") == 1)
+			filetitle = filetitle + " [del]";
+
+		strarray[1] = filetitle;
+		strarray[2] = doc1rec.get("docu_status");
+		strarray[3] = doc1rec.get("datecreated").toString().substring(0,10);
+		strarray[4] = doc1rec.get("username");
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+} // end of public class doculink_refreshListbox
+
+// clear pop-up input boxes
+void clearUploadDetails_Input()
+{
+	fileupl_file_title.setValue("");
+	fileupl_file_description.setValue("");
+	fileupl_docu_status.setSelectedIndex(0);
+	uploadFileDetails_Popup.open(upload_linkingdoc_btn);
+}
+
+// button onClick wrapper
+void uploadLinkingDocument_clicker()
+{
+	doculink_str = doculink_prop.document_idprefix + doculink_prop.global_eq_origid;
+	docustatus_str = fileupl_docu_status.getSelectedItem().getLabel();
+
+	ftitle = replaceSingleQuotes(fileupl_file_title.getValue());
+	fdesc = replaceSingleQuotes(fileupl_file_description.getValue());
+
+	if(ftitle.equals(""))
+	{
+		showMessageBox("Please enter a title for this attachment..");
+		return;
+	}
+
+	uploadLinkingDocument(useraccessobj.username, useraccessobj.branch,getDateFromDatebox(hiddendatebox),doculink_str,docustatus_str,ftitle,fdesc);
+
+	doculink_prop.refreshListbox.populateDocumentLinks(doculink_prop.global_eq_origid, doculink_prop.document_idprefix); // refresh linking-documents listbox
+}
+
+void updateLinkingDocDetails()
+{
+	// if(doculinks_lb.getSelectedIndex() == -1 ) return;
+	if(doculink_prop.global_doculink_origid.equals("")) return;
+
+	filetitle = update_file_title.getValue();
+	filedesc = update_file_description.getValue();
+	docustat = update_docu_status.getSelectedItem().getLabel();
+
+	updateDocument_Rec(doculink_prop.global_doculink_origid, filetitle, filedesc, docustat);
+	doculink_prop.refreshListbox.populateDocumentLinks(doculink_prop.global_eq_origid, doculink_prop.document_idprefix); // refresh linking-documents listbox
+
+	updateFileDetails_Popup.close();
+}
+
+// show the popup
+void updateFileDetails()
+{
+	updateFileDetails_Popup.open(updatedetails_linkingdoc_btn);
+}
+
+void viewLinkingDocument()
+{
+	if(doculinks_lb.getSelectedIndex() == -1 ) return;
+	eorigid = doculinks_lb.getSelectedItem().getLabel();
+	theparam = "docid=" + eorigid;
+	uniqid = makeRandomId("vdoc");
+	globalActivateWindow("miscwindows","qc/viewlinkingdocument.zul", uniqid, theparam, useraccessobj);
+}
+
+// soft-delete , toggle Deleted flag
+void toggleDeletedFlag_LinkingDocument()
+{
+	if(doculinks_lb.getSelectedIndex() == -1 ) return;
+	eorigid = doculinks_lb.getSelectedItem().getLabel();
+	toggleDocument_DeleteFlag(eorigid);
+	doculink_prop.refreshListbox.populateDocumentLinks(doculink_prop.global_eq_origid, doculink_prop.document_idprefix); // refresh linking-documents listbox
+}
+
+// hard delete
+void hardDelete_LinkingDocument()
+{
+	if(doculinks_lb.getSelectedIndex() == -1 ) return;
+	eorigid = doculinks_lb.getSelectedItem().getLabel();
+
+	/*
+	if(useraccesobj.accesslevel < 9)
+	{
+		alert("Need higher security to hard-delete attachment");
+		return;
+	}
+	*/
+
+	if (Messagebox.show("Hard delete this document..", "Are you sure?", 
+	Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) ==  Messagebox.YES)
+	{
+		deleteDocument_Rec(eorigid);
+		doculink_prop.refreshListbox.populateDocumentLinks(doculink_prop.global_eq_origid, doculink_prop.document_idprefix); // refresh linking-documents listbox
+	}
+}
+
+]]>
+</zscript>
+
+<!-- to show input boxes to get details for uploaded file popup -->
+<popup id="uploadFileDetails_Popup">
+<groupbox>
+<caption label="Upload linking document" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="Title" style="font-size:9px" />
+				<textbox id="fileupl_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />	
+			</row>
+			<row>
+				<label value="Status" style="font-size:9px" />
+				<listbox id="fileupl_docu_status" mold="select" rows="1" style="font-size:9px" />	
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Select file" onClick="uploadLinkingDocument_clicker()"  style="font-size:9px" />
+	<button label="Close" onClick="uploadFileDetails_Popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+<!-- end of popup -->
+
+<!-- to show input boxes to update details for linking-document popup -->
+<popup id="updateFileDetails_Popup">
+<groupbox>
+<caption label="File details" />
+	<grid>
+		<columns>
+			<column label="" />
+			<column label="" />
+		</columns>
+		<rows>
+			<row>
+				<label value="Title" style="font-size:9px" />
+				<textbox id="update_file_title" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Description" style="font-size:9px" />
+				<textbox id="update_file_description" multiline="true" height="60px" width="200px" style="font-size:9px" />
+			</row>
+			<row>
+				<label value="Status" style="font-size:9px" />
+				<listbox id="update_docu_status" mold="select" rows="1" style="font-size:9px" />
+			</row>
+		</rows>
+	</grid>
+</groupbox>
+<separator height="3px" />
+<hbox>
+	<button label="Update" onClick="updateLinkingDocDetails()"  style="font-size:9px" />
+	<button label="Close" onClick="updateFileDetails_Popup.close()"  style="font-size:9px" />
+</hbox>
+</popup>
+<!-- end of popup -->
+
+<div>
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" />
+<groupbox>
+	<caption label="Linking documents" />
+	<div id="linkingdocs_div" />
+</groupbox>
+<hbox>
+	<button id="upload_linkingdoc_btn" label="Upload document" onClick="clearUploadDetails_Input()" style="font-size:9px" />
+	<button id="updatedetails_linkingdoc_btn" label="Update details" onClick="updateFileDetails()" style="font-size:9px" />
+	<button id="view_linkingdoc_btn" label="View document" onClick="viewLinkingDocument()" style="font-size:9px" />
+</hbox>
+<hbox>
+	<button id="remove_linkingdoc_btn" label="Un/delete" onClick="toggleDeletedFlag_LinkingDocument()" visible="false" style="font-size:9px" />
+	<button id="harddelete_linkingdoc_btn" label="Hard delete" onClick="hardDelete_LinkingDocument()" visible="false" style="font-size:9px" />
+</hbox>
+
+<zscript>
+setTodayDatebox(hiddendatebox);
+populateDropdownListbox(fileupl_docu_status, doculink_status);
+populateDropdownListbox(update_docu_status, doculink_status);
+
+// setup refresh listbox func = populateDocumentLinks(String ieqid) encapsulated in doculink_refreshListbox object - will be callable by parent
+doculink_prop.refreshListbox = new doculink_refreshListbox();
+doculink_prop.refreshListbox.thediv = linkingdocs_div; // where to put the document-linking listbox
+
+Object[] mebutt = { upload_linkingdoc_btn, updatedetails_linkingdoc_btn, view_linkingdoc_btn };
+doculink_prop.refreshListbox.crud_buttons = mebutt;
+
+doculink_prop.refreshListbox.harddelete_btn = harddelete_linkingdoc_btn;
+doculink_prop.refreshListbox.remove_doclink_btn = remove_linkingdoc_btn;
+
+</zscript>
+</div>
+</zk>

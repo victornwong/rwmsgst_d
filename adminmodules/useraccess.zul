@@ -1,0 +1,456 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="userAccessWind2"?>
+<zk>
+
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/alsglobalfuncs.zs" />
+
+<zscript src="../alsglobal/alsglobal_guifuncs.zs" />
+<zscript src="../alsglobal/alsglobal_sqlfuncs.zs" />
+<zscript src="../alsglobal/securityfuncs.zs" />
+
+<zscript src="../alsglobal/als_lookuptree.zs" />
+
+<zscript>
+<![CDATA[
+
+// Some security checking codes here
+// useraccessobj = getUserAccessObject();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+String origid_username = "";
+
+/*
+Listbox makeAccessthing_Listbox(Div mDiv)
+{
+	// if there's previously a listbox, remove before adding a new one.
+	Listbox oldlb = mDiv.getFellowIfAny("accessthing_lb");
+	if(oldlb != null) oldlb.setParent(null);
+
+    Listbox newlb = new Listbox();
+
+    newlb.setId("accessthing_lb");
+	newlb.setVflex(true);
+
+	newlb.addEventListener("onSelect", new usergroupaccesslb_Listener());
+	
+	newlb.setDroppable("treedrop"); // def in als_lookuptree.zs
+	newlb.addEventListener("onDrop", new Accessthing_droplistener());
+
+    newlb.setParent(mDiv);
+
+    Listhead newhead = new Listhead();
+    newhead.setSizable(true);
+    newhead.setParent(newlb);
+
+    Listheader hd2 = new Listheader();
+    hd2.setLabel("Usergroup");
+    hd2.setSort("auto");
+    hd2.setParent(newhead);
+
+    Listheader hd4 = new Listheader();
+    hd4.setLabel("Level");
+    hd4.setSort("auto");
+    hd4.setParent(newhead);
+	
+	newlb.setRows(15);
+
+    return newlb;
+
+} // end of makeAccessthing_Listbox(Div mDiv)
+
+*/
+
+Object[] accessthing_lb_headers = {
+
+	new listboxHeaderObj("Usergroup",true),
+	new listboxHeaderObj("Lvl",true),
+};
+
+// access thing listbox onSelect event routine
+// uses usergroup(textbox) and accesslevel(listbox) in UI section
+class usergroupaccesslb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		iusergroup = accessthing_lb.getSelectedItem().getLabel();
+		
+		usergroup.setValue(iusergroup);
+
+		chils = accessthing_lb.getSelectedItem().getChildren();
+		tacl = chils.get(1).getLabel();
+
+		if(tacl.equals("9")) tacl = "God-like";
+
+		matchListboxItems(accesslevel, tacl);
+
+	}
+}
+
+void populateAccessthing_LB(Div mDiv, String un_origid)
+{
+	// create a new listbox and attach to searchdiv
+	// Listbox newlb = makeAccessthing_Listbox(mDiv);
+	
+	Listbox newlb = makeVWListbox(mDiv, accessthing_lb_headers, "accessthing_lb", 15);
+	
+	newlb.addEventListener("onSelect", new usergroupaccesslb_Listener());
+	newlb.setDroppable("treedrop"); // def in als_lookuptree.zs
+	newlb.addEventListener("onDrop", new Accessthing_droplistener());
+
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	sqlstatem = "select * from " + TABLE_PORTALGROUPACCESS + " where user_origid=" + un_origid;
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+	
+	if(tlist == null) return;
+	
+    // found some records but must be within limit else the browser will crash
+	reccount = tlist.size();
+	
+	String[] strarray = new String[2];
+
+	for(ilist : tlist)
+	{
+		strarray[0] = ilist.get("usergroup_code");
+		strarray[1] = ilist.get("accesslevel").toString();
+		insertListItems(newlb,strarray,"false");
+	}
+}
+
+
+/*
+// Hand-coded listbox creation
+Listbox makeUsername_Listbox(Div mDiv)
+{
+	// if there's previously a listbox, remove before adding a new one.
+	Listbox oldlb = mDiv.getFellowIfAny("username_lb");
+	if(oldlb != null) oldlb.setParent(null);
+
+    Listbox newlb = new Listbox();
+
+    newlb.setId("username_lb");
+	newlb.setVflex(true);
+
+	newlb.addEventListener("onSelect", new usernamelb_Listener());
+
+    newlb.setParent(mDiv);
+
+    Listhead newhead = new Listhead();
+    newhead.setSizable(true);
+    newhead.setParent(newlb);
+	
+    Listheader hd1 = new Listheader();
+    hd1.setLabel("No.");
+    hd1.setSort("auto");
+    hd1.setParent(newhead);
+
+    Listheader hd2 = new Listheader();
+    hd2.setLabel("Username");
+    hd2.setSort("auto");
+    hd2.setParent(newhead);
+
+    Listheader hd4 = new Listheader();
+    hd4.setLabel("Fullname");
+    hd4.setSort("auto");
+    hd4.setParent(newhead);
+	
+	newlb.setRows(15);
+
+    return newlb;
+
+} // end of makeUsername_Listbox(Div mDiv)
+*/
+
+Object[] username_lb_headers = {
+
+	new listboxHeaderObj("No.",true),
+	new listboxHeaderObj("Username",true),
+	new listboxHeaderObj("Fullname",true),
+};
+
+// username listbox onSelect event routine
+class usernamelb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		iorigid = username_lb.getSelectedItem().getLabel();
+		
+		origid_username = iorigid; // save for later use
+		
+		therec = getUsername_Rec(iorigid);
+		accessthing.getCaption().setLabel("Access thing : " + therec.get("username"));
+		
+		populateAccessthing_LB(accessthing_div,iorigid);
+	}
+}
+	
+// Do the search and populate listbox
+void startUsername_Search(Div mDiv)
+{
+	// create a new listbox and attach to searchdiv
+	//Listbox newlb = makeUsername_Listbox(mDiv);
+	
+	Listbox newlb = makeVWListbox(mDiv, username_lb_headers, "username_lb", 15);
+	newlb.addEventListener("onSelect", new usernamelb_Listener());
+	
+    sql = als_mysoftsql();
+    if(sql == NULL) return;
+
+	sqlstatem = "select * from " + TABLE_PORTALUSER + " where deleted=0";
+	tlist = sql.rows(sqlstatem);
+	sql.close();
+	
+	if(tlist == null) return;
+	
+    // found some records but must be within limit else the browser will crash
+	reccount = tlist.size();
+	
+	String[] strarray = new String[3];
+
+	for(ilist : tlist)
+	{
+		strarray[0] = ilist.get("origid").toString();
+		
+		usname = ilist.get("username");
+		if(usname.equals("")) usname = "-undefined-";
+			
+		strarray[1] = usname;
+		
+		funame = ilist.get("fullname");
+		if(funame.equals("")) funame = "-undefined-";
+		
+		strarray[2] = funame;
+		
+		/*
+		istatus = ilist.get("locked");
+		icompstr = (istatus == 1) ? "Locked" : "Access";
+		strarray[3] = icompstr;
+		*/
+
+		insertListItems(newlb,strarray,"false");
+	}
+
+} // end of startUsername_Search()
+
+// make sure no dups in accessthing_lb when something dropped there
+boolean checkUsergroup_InListbox(String iwhich)
+{
+	retval = false;
+	
+	lbitemc = accessthing_lb.getItemCount();
+	
+	if(lbitemc > 0)
+	{
+		for(i=0; i<lbitemc; i++)
+		{
+			iusg = accessthing_lb.getItemAtIndex(i).getLabel();
+			
+			if(iwhich.equals(iusg))
+			{
+				retval = true;
+				break;
+			}
+		}
+	}
+	
+	return retval;
+}
+	
+class Accessthing_droplistener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		Component dragged = event.dragged;
+		
+		// no username selected.. don't capture drop..
+		if(origid_username.equals("")) return;
+		
+		iusergroup = dragged.getLabel();
+		
+		// check if usergroup already in the listbox
+		if(checkUsergroup_InListbox(iusergroup)) return;
+		
+		// alert(iusergroup);
+
+		String[] strarray = new String[2];
+		
+		strarray[0] = iusergroup;
+		strarray[1] = "0";
+		
+		insertListItems(accessthing_lb,strarray,"false");
+	}
+}
+
+// Access level dropdown onSelect event listener - use to update access level for user on usergroup
+class accesslevel_lb_Listener implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		if(usergroup.getValue().equals("")) return;
+		
+		iacclvl = accesslevel.getSelectedItem().getLabel();
+		
+		chils = accessthing_lb.getSelectedItem().getChildren();
+		
+		if(iacclvl.equals("God-like")) iacclvl = "9";
+
+		chils.get(1).setLabel(iacclvl);
+
+	}
+}
+
+// Remove usergroup assigned to user
+void removeUsergroup()
+{
+	torem = usergroup.getValue();
+	if(torem.equals("")) return;
+	
+	lbitemc = accessthing_lb.getItemCount();
+	
+	if(lbitemc > 0)
+	{
+		for(i=0; i<lbitemc; i++)
+		{
+			iusg = accessthing_lb.getItemAtIndex(i).getLabel();
+			
+			if(torem.equals(iusg))
+			{
+				accessthing_lb.removeItemAt(i);
+				
+				// reset the input box and 
+				usergroup.setValue("");
+				accesslevel.setSelectedIndex(0);
+				
+				break;
+			}
+		}
+	}
+	
+} // end of removeUsergroup()
+	
+void removeACLFromDatabase(String un_origid)
+{
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	
+	sqlstatem = "delete from " + TABLE_PORTALGROUPACCESS + "  where user_origid=" + un_origid;
+	sql.execute(sqlstatem);
+	
+	//alert(sqlstatem);
+	
+	sql.close();
+
+}
+
+// Save ACL (accessthing listbox) to database table portalGroupAccess
+void saveACL()
+{
+	if(origid_username.equals("")) return;
+	
+	// if nothing in the accessthing_lb, no need to proceed
+	lbitemc = accessthing_lb.getItemCount();
+	if(lbitemc == 0) return;
+	
+	// remove all ACL from table for the user
+	removeACLFromDatabase(origid_username);
+	
+	// loop through what's in the listbox and save
+	
+	sql = als_mysoftsql();
+	if(sql == NULL) return;
+	
+	for(i=0; i<lbitemc; i++)
+	{
+		chils = accessthing_lb.getItemAtIndex(i).getChildren();
+		usergp = chils.get(0).getLabel();
+		iaclvl = chils.get(1).getLabel();
+		
+		sqlstatem = "insert into " + TABLE_PORTALGROUPACCESS + " (user_origid,usergroup_code,accesslevel) values (" + origid_username + ",'" + usergp + "'," + iaclvl + ")";
+		
+		// alert(sqlstatem);
+		
+		sql.execute(sqlstatem);
+		
+	}
+	
+	sql.close();
+}
+
+]]>
+</zscript>
+
+<window id="user_accesswin2" title="Access Setup" width="800px" height="400px" position="center" mode="overlapped" border="normal" closable="true"
+ onCancel="globalCloseWindow(myincludeid)" onClose="globalCloseWindow(myincludeid)">
+
+<div>
+
+<hbox>
+
+<vbox>
+	<groupbox mold="3d">
+		<caption label="Users" />
+		<div id="usernamelb_div" />
+	</groupbox>
+
+	<button label="Close window" onClick="globalCloseWindow(myincludeid)" />
+</vbox>
+
+<groupbox id="accessthing" mold="3d" width="200px">
+<caption label="Access thing" />
+	<div id="accessthing_div" />
+	<separator height="3px" />
+	<hbox>
+		<label value="Usergroup" />
+		<textbox id="usergroup" disabled="true" width="80px" />
+	</hbox>
+	<hbox>
+		<label value="Level" />
+		<separator width="29px" />
+		<listbox id="accesslevel" mold="select" />
+	</hbox>
+	<separator height="5px" />
+	<vbox>
+		<button label="Save ACL" onClick="saveACL()" />
+		<button label="Remove usergroup" onClick="removeUsergroup()" />
+	</vbox>
+</groupbox>
+
+<vbox>
+	<groupbox mold="3d">
+		<caption label="Usergroup Tree" />
+		<tree id="depart_tree" zclass="z-dottree" rows="15" >
+			<treecols>
+				<treecol label="Usergroup" />
+				<treecol label="Description" />
+			</treecols>
+		</tree>
+	</groupbox>
+</vbox>
+
+</hbox>
+
+<separator height="5px" />
+
+</div>
+
+<zscript>
+startUsername_Search(usernamelb_div);
+
+//makeAccessthing_Listbox(accessthing_div);
+makeVWListbox(accessthing_div, accessthing_lb_headers, "accessthing_lb", 15);
+
+showLookupTree("DEPARTMENTS",depart_tree);
+
+populateDropdownListbox(accesslevel, dd_accesslevel);
+
+accesslevel.addEventListener("onSelect", new accesslevel_lb_Listener());
+
+</zscript>
+
+</window>
+
+</zk>

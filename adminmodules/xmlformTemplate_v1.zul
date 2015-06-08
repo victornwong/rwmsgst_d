@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="xmlformTemplate_v1"?>
+<zk xmlns:x="xhtml" xmlns:zk="zk">
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "VIC-XML Form Maker";
+MYVERSION = "v0.1";
+/*
+Title		: ZUL-XML Form maker/manager
+Written by	: Victor Wong
+Dated		: 01/08/2012
+
+XML form defination store in database. Can be used in other modules by calling those utility funcs. Storing form-data back to file or
+database is to be programmed individually on each module.
+
+*/
+/*
+import java.text.*;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+*/
+import java.beans.XMLDecoder;
+import java.beans.XMLEncoder;
+import java.io.*;
+import com.thoughtworks.xstream.XStream;
+import com.thoughtworks.xstream.io.xml.DomDriver;
+
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+luhand = new LookupFuncs();
+gridhand = new GridHandler();
+
+vicFormMaker wopform;
+glob_selected_form = glob_example_values = "";
+
+void showFormMetadata(String iwhat)
+{
+	sqlstm = "select * from elb_formkeeper where origid=" + iwhat;
+	frec = sqlhand.gpSqlFirstRow(sqlstm);
+
+	if(frec == null) return;
+
+	formxml = sqlhand.clobToString(frec.get("xmlformstring"));
+	thestring.setValue(formxml);
+
+	wopform.setXMLString(thestring.getValue());
+	wopform.generateForm();
+
+	egdata = sqlhand.clobToString(frec.get("exampleresult"));
+	debuginfo.setValue("");
+	if(!egdata.equals(""))
+	{
+		wopform.populateFormValues(egdata);
+		glob_example_values = egdata;
+		debuginfo.setValue("Frozen example:\n" + egdata);
+	}
+
+	formorigid.setValue(frec.get("origid").toString());
+	form_name.setValue(frec.get("form_name"));
+	version.setValue(frec.get("version"));
+	// radiobutts, yes=pos 0, no=pos 1
+	form_locked.setSelectedIndex( (frec.get("locked") == null) ? 1 : ( frec.get("locked") == 1) ? 0 : 1 );
+}
+
+// onSelect event for loadSubcons_List()
+class formslist_onSelect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = forms_lb.getSelectedItem();
+		// previous form .. just save it
+		if(!glob_selected_form.equals("")) doFunc(2);
+		glob_selected_form = lbhand.getListcellItemLabel(isel,0);
+		showFormMetadata(glob_selected_form);
+	}
+}
+fmlisclik = new formslist_onSelect();
+
+void populateFormsList()
+{
+Object[] formslist_headers = 
+{
+	new listboxHeaderWidthObj("###",true,"20px"),
+	new listboxHeaderWidthObj("Form",true,""),
+	new listboxHeaderWidthObj("User",true,""),
+};
+	Listbox newlb = lbhand.makeVWListbox_Width(formlist_holder, formslist_headers, "forms_lb", 20);
+	sqlstm = "select origid,form_name,created_by from elb_formkeeper order by origid desc";
+	screcs = sqlhand.gpSqlGetRows(sqlstm);
+	if(screcs.size() == 0) return;
+	newlb.setMold("paging");
+	newlb.addEventListener("onSelect", fmlisclik );
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid","form_name","created_by" };
+	for(d : screcs)
+	{
+		popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+// itype: 1=new form, 2=save form, 3=same as func #5, 4=preview form, 5=do freeze,
+// 6=do sql select and fill-form-data, 7=do sql select and show values in debuginfo
+void doFunc(int itype)
+{
+	todate = kiboo.getDateFromDatebox(hiddendatebox);
+	refresh = false;
+	sqlstm = "";
+	switch(itype)
+	{
+		case 1: // new form
+			sqlstm = "insert into elb_formkeeper (form_name,created_by,datecreated,lastedit,version,xmlformstring,exampleresult,locked) values " +
+			"('NEW FORM','" + useraccessobj.username + "','" + todate + "','" + todate + "','1','','',0)";
+			refresh = true;
+			break;
+
+		case 2: // update form
+			if(glob_selected_form.equals("")) break;
+
+			frmname = form_name.getValue();
+			verst = version.getValue();
+			ilock = String.valueOf( (form_locked.getSelectedIndex() == 0) ? 1 : 0);
+
+			towritestr = thestring.getValue();
+			sqlstm = "update elb_formkeeper set form_name='" + frmname + "', version='" + verst + "', " + 
+			"locked=" + ilock + ", xmlformstring='" + towritestr + "' where origid=" + glob_selected_form;
+			refresh = true;
+			break;
+
+		case 4: // preview
+			wopform.setXMLString(thestring.getValue());
+			wopform.generateForm();
+			wopform.populateFormValues(glob_example_values);
+			break;
+
+		case 5: // freeze inputs as example-fill-values
+			if(glob_selected_form.equals("")) break;
+			freezv = wopform.freezeFormValues();
+			sqlstm = "update elb_formkeeper set exampleresult='" + freezv + "' where origid=" + glob_selected_form;
+			debuginfo.setValue("Frooze inputs:\n" + freezv);
+			break;
+
+		case 6: // sql select fill inputs
+		case 7: // sql select show rec in debuginfo
+			sqlstr = selectstring.getValue();
+			retobj = null;
+			try { retobj = sqlhand.gpSqlFirstRow(sqlstr); } catch (SQLException e) { guihand.showMessageBox("Error in select statement"); }
+
+			if(retobj != null && itype == 6) wopform.populateFormValues(retobj);
+			if(retobj != null && itype == 7) debuginfo.setValue(retobj);
+			break;
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(refresh) populateFormsList();
+}
+
+void testme() throws Exception
+{
+/*
+	ByteArrayOutputStream outst = new ByteArrayOutputStream();
+	XMLEncoder encoder = new XMLEncoder(outst);
+	vicFormMaker tyu = wopform;
+	encoder.writeObject(tyu);
+	encoder.close();
+	alert(outst.toString());
+	*/
+	XStream xstream = new XStream(new DomDriver());
+	String xml = xstream.toXML(wopform);
+	alert(xml);
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="xmlformTemplate_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren>
+<!-- <button label="testme" onClick="testme()" /> -->
+<datebox id="hiddendatebox" format="yyyy-MM-dd" visible="false" onCreate="self.value = new Date()" />
+<hbox>
+	<vbox>
+		<div id="formlist_holder" />
+		<div style="background:#ffa550;padding:2px">
+		<hbox>
+			<button label="New" sclass="k9" onClick="doFunc(1)" />
+			<button label="Update" sclass="k9" onClick="doFunc(2)" />
+			<button label="Preview" sclass="k9" onClick="doFunc(4)" />
+			<button label="Freeze" sclass="k9" onClick="doFunc(5)" />
+		</hbox>
+		</div>
+		<textbox id="debuginfo" multiline="true" width="340px" height="150px" />
+	</vbox>
+
+	<vbox>
+		<grid width="500px">
+			<rows>
+				<row>
+					<label value="Form#" sclass="k9" />
+					<label id="formorigid" sclass="k9" />
+					<label value="Form name" sclass="k9" />
+					<textbox id="form_name" sclass="k9" width="99%" />
+				</row>
+				<row>
+					<label value="Version" sclass="k9" />
+					<textbox id="version" sclass="k9" width="30px" />
+					<label value="Locked" sclass="k9" />
+					<radiogroup id="form_locked">
+						<radio label="Yes" sclass="k9" />
+						<radio label="No" sclass="k9" selected="true" />
+					</radiogroup>
+				</row>
+			</rows>
+		</grid>
+		<textbox id="thestring" multiline="true" width="850px" height="300px" />
+
+		<div style="background:#ffa500;padding:2px">
+		<hbox>
+			<label value="SQL select" sclass="k9" />
+			<textbox id="selectstring" sclass="k9" width="500px" />
+			<button label="Fill values" sclass="k9" onClick="doFunc(6)" />
+			<button label="See them" sclass="k9" onClick="doFunc(7)" />
+		</hbox>
+		</div>
+	</vbox>
+</hbox>
+
+<separator height="3px" />
+<groupbox>
+<caption label="FORM PREVIEW" />
+<div id="form_holder" />
+</groupbox>
+
+<zscript>
+<![CDATA[
+
+populateFormsList();
+wopform = new vicFormMaker(form_holder,"wellaform","");
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="invoice_docs_wind"?>
+<zk>
+<zscript src="../alsglobal/alsglobaldefs.zs" />
+<zscript src="../alsglobal/trackingnumbers.zs" />
+<zscript>
+<![CDATA[
+// 28/03/2012: port byte-compiled funcs
+// 28/01/2011: insert rec into elb_codestracker_items
+// NEED TO REVAMP THIS PIECE OF SHIT - BUNDLE IT INTO BILLINGDOCSMAN.ZUL
+
+import java.util.*;
+import java.text.*;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.victor.*;
+
+sechand = new SecurityFuncs();
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+// hardcoded html-post parameter name: invoiceno (set in billingdocsman.zul -> playDocsDeliveryDetails()
+the_invoicenum = Executions.getCurrent().getParameter("invoiceno");
+
+kiboo = new Generals();
+sqlhand = new SqlFuncs();
+lbhand = new ListboxHandler();
+guihand = new GuiFuncs();
+//samphand = new SampleReg();
+//luhand = new LookupFuncs();
+
+/*
+Field2 = Date sent = date invoice/documents is sent to client
+Field3 = Consignment no. = courier or whatever tracking number
+Field4 = Delivery method = courier/by-hand/registered-post/normal-post
+Field5 = Recipient = whom the invoice/docs addressed to
+Field6 = document type = invoice only, invoice+coa, coa only, others
+Field7 = date received by client (added 05/05/2011)
+
+Printed = document printed or sent-out (going to use this one 11/01/2010)
+*/
+
+String[] lu_DeliveryMethod = { "By hand", "ISIS", "PosLaju", "CitiLink", "FedEx", "DHL", "Registered Post", "Normal Post","Pigeon","Victor" };
+String[] lu_DocumentType = { "Invoice only", "Invoice/COA", "COA only", "Debit Note", "Credit Note", "Others" };
+
+class docDetailsInput
+{
+	public Textbox f5_recipientname;
+	public Textbox f3_consignmentnumber;
+	public Listbox f4_deliverymethod;
+	public Datebox f2_datesent;
+	public Listbox f6_documenttype;
+	public Datebox f7_datereceived;
+
+	public docDetailsInput(Textbox irecname, Textbox iconnum, Listbox idelmethod, Datebox idatesent, Listbox idocutype)
+	{
+		f5_recipientname = irecname;
+		f3_consignmentnumber = iconnum;
+		f4_deliverymethod = idelmethod;
+		f2_datesent = idatesent;
+		f6_documenttype = idocutype;
+	}
+	
+	/*
+	void setDeliveryMethod(String wstr)
+	{
+		for(i=0; i < lu_DeliveryMethod.length; i++)
+		{
+			if(wstr.equals(lu_DeliveryMethod[i]))
+			{
+				f4_deliverymethod.setSelectedIndex(i);
+				break;
+			}
+		}
+	}
+	
+	void setDocumentType(String wstr)
+	{
+		for(i=0; i < lu_DocumentType.length; i++)
+		{
+			if(wstr.equals(lu_DocumentType[i]))
+			{
+				f6_documenttype.setSelectedIndex(i);
+				break;
+			}
+		}
+	}
+	*/
+	
+	void showDetails()
+	{
+		// read rec from table invoice
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+
+		sqlstatem = "select NewField2,NewField5,NewField3,NewField4,NewField6,Attention from Invoice where InvoiceNo='" + the_invoicenum + "'";		
+		therec = sql.firstRow(sqlstatem);
+		sql.close();
+
+		// no record
+		if(therec == null)
+		{
+			guihand.showMessageBox("Sorry, cannot get invoice details");
+			return;
+		}
+	
+		// put values into inputboxes
+		
+		recpname = therec.get("NewField5");
+		if(recpname != null)
+			if(recpname.equals(""))
+				recpname = therec.get("Attention");
+	
+		f5_recipientname.setValue(recpname);
+		f3_consignmentnumber.setValue(therec.get("NewField3"));
+		
+		lbhand.matchListboxItems(f4_deliverymethod,therec.get("NewField4"));
+		lbhand.matchListboxItems(f6_documenttype,therec.get("NewField6"));
+		//setDeliveryMethod(therec.get("NewField4"));
+		//setDocumentType(therec.get("NewField6"));
+
+		// during details update, always take today's date or whatever keyed(modded 16/06/2011)
+		sentdate = therec.get("NewField2");
+		if(sentdate.equals(""))
+		{
+			Calendar kkk = Calendar.getInstance();
+			f2_datesent.setValue(kkk.getTime());
+		}
+		else
+		{
+			wopcal = kiboo.stringToDate(sentdate);
+			f2_datesent.setValue(wopcal.getTime());
+		}
+		
+	} // end of showDetails()
+	
+	// Update information to table MySoft.Invoice
+	void updateDeliveryDetails()
+	{
+		sql = sqlhand.als_mysoftsql();
+		if(sql == null) return;
+
+		ival5 =	kiboo.replaceSingleQuotes(f5_recipientname.getValue());
+		ival3 = kiboo.replaceSingleQuotes(f3_consignmentnumber.getValue());
+
+		// docstat.getSelectedItem().getLabel()
+
+		ival4 = f4_deliverymethod.getSelectedItem().getLabel();
+		ival2 = kiboo.getDateFromDatebox(f2_datesent);
+		ival6 = f6_documenttype.getSelectedItem().getLabel();
+
+		sqlstatem = "update invoice set NewField5='" + ival5 + "'," +
+		"NewField3='" + ival3 + "'," +
+		"NewField4='" + ival4 + "'," +
+		"NewField2='" + ival2 + "'," +
+		"NewField6='" + ival6 + "'," +
+		"NewField8='" + useraccessobj.username + "'," +
+		"Printed=1 " +
+		"where InvoiceNo='" + the_invoicenum + "'";
+
+		sql.execute(sqlstatem);
+
+		// 28/1/2011: insert tracking-num into elb_codestracker_items as well
+		// check if consignment number exist - no dups
+		if(!existTrackingNumber(ival3))
+		{
+			// set codetracker_parent = 0 so alsmairwaybill.zul can pick and assign a CodeTracker parent
+			sqlstm = "insert into elb_codestracker_items (codetracker_parent,tracking_number,datecreated,invoice_link) " + 
+			"values ('0','" + ival3 + "','" + ival2 + "','" + the_invoicenum + "')";
+
+			sql.execute(sqlstm);
+		}
+
+		sql.close();		
+		guihand.globalCloseWindow(mainPlayground,myincludeid);
+
+	} // end of updateDeliveryDetails()
+
+} // end of class docDetailsInput
+
+// 05/05/2011: let user update received-by client date
+// Invoice.NewField7 - field to store
+void updateReceivedDate()
+{
+	recvdate = kiboo.getDateFromDatebox(datereceived);
+	sql = sqlhand.als_mysoftsql();
+	if(sql == null) return;
+	sqlstm = "update invoice set newfield7='" + recvdate + "' where invoiceno='" + the_invoicenum + "'";
+	sql.execute(sqlstm);
+	sql.close();
+	guihand.showMessageBox("Received date updated..");
+}
+
+]]>
+</zscript>
+
+<window id="invoicedocswin" title="Invoice/Documents Trackmo" width="500px" height="315px" position="center" 
+mode="overlapped" border="normal" closable="true">
+<div>
+
+<zscript>
+newtitlestr = "Invoice : " + the_invoicenum;
+invoicedocswin.setTitle(newtitlestr);
+</zscript>
+
+<groupbox mold="3d" width="100%">
+<caption label="Invoice/Documents delivery details" />
+
+<grid>
+	<rows>
+		<row>
+			<label value="Recipient name" style="font-size:9px" />
+			<textbox id="recname" style="font-size:9px" width="98%"/>
+		</row>
+		<row>
+			<label value="Document type" style="font-size:9px" />
+			<listbox mold="select" rows="1" id="docutype_dd" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Delivery method" style="font-size:9px" />
+			<listbox mold="select" rows="1" id="delmethod_dd" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Delivery date (YYYY-MM-DD)" style="font-size:9px" />
+			<datebox id="dedate" format="yyyy-MM-dd" style="font-size:9px" />
+		</row>
+		<row>
+			<label value="Tracking#" style="font-size:9px" />
+			<textbox id="consnum" width="98%" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+</groupbox>
+<hbox>
+	<button label="Save details" style="font-size:9px" onClick="tDocumentDetails.updateDeliveryDetails()" />
+	<button label="Close window" style="font-size:9px" onClick="guihand.globalCloseWindow(mainPlayground,myincludeid)" />
+</hbox>
+<separator height="5px" />
+
+<groupbox mold="3d">
+<grid>
+	<rows>
+		<row>
+			<label value="Date received by client" style="font-size:9px" />
+			<datebox id="datereceived" format="yyyy-MM-dd" style="font-size:9px" />
+		</row>
+	</rows>
+</grid>
+</groupbox>
+<hbox>
+	<button label="Update received date" style="font-size:9px" onClick="updateReceivedDate()" />
+</hbox>
+
+<label id="wopmsg" />
+
+</div>
+
+<zscript>
+<![CDATA[
+
+kiboo.setTodayDatebox(datereceived);
+
+lbhand.populateDropdownListbox(docutype_dd,lu_DocumentType);
+lbhand.populateDropdownListbox(delmethod_dd,lu_DeliveryMethod);
+
+tDocumentDetails = new docDetailsInput(recname,consnum,delmethod_dd,dedate,docutype_dd);
+tDocumentDetails.showDetails();
+
+]]>
+</zscript>
+</window>
+</zk>
