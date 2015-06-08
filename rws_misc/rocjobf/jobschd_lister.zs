@@ -107,7 +107,7 @@ void showFCROCs(int itype, int dtype)
 	//  hh.login, (select top 1 login from headerdeleted where voucherno = d.voucherno order by headerid desc) as lastrans,
 	// convert(datetime, dbo.ConvertFocusDate(li.etdyh), 112)
 	// 5635 ROC 5632 SO
-	sqlstm = "select distinct top 60 d.voucherno, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, " +
+	sqlstm = "select distinct d.voucherno, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, " +
 	"ac.name as customer_name, li.customerrefyh, " +
 	"convert(datetime, dbo.ConvertFocusDate(li.etdyh), 112) as etd, convert(datetime, dbo.ConvertFocusDate(li.etayh), 112) as eta " +
 	"from data d left join mr000 ac on ac.masterid = d.bookno " +

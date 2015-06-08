@@ -10,7 +10,7 @@ Object[] rocitmshds =
 };
 
 /**
- * Show ROC/SO items from FOCUS
+ * Show ROC/SO items from FOCUS. Changes in how quantity is stored in 0J1, see the extra notes
  * @param ivn   voucher no.
  * @param itype 1=ROC, 2=SO
  * @param idiv  DIV to hold the listbox
@@ -22,17 +22,20 @@ void showROC_items(String ivn, int itype, Div idiv, String ilbid)
 	if(kk.equals("")) return false;
 
 	vtype = "5635"; // ROC
+	qtyfield = "cast((iy.input0) as int) as unitqty,"; // 08/06/2015: 0J1 ROC qty stored in input0
+
 	if(itype == 2)
 	{
 		vtype = "5632"; // SO
+		qtyfield = "cast((iy.quantity*-1) as int) as unitqty,"; // 08/06/2015: 0J1 SO, qty still in quantity
 	}
 
 	removeSubDiv(idiv); // remove any prev div
 	kd = new Div(); kd.setParent(idiv);
 	Listbox newlb = lbhand.makeVWListbox_Width(kd, rocitmshds, ilbid, 5);
 
-	sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross,iy.stockvalue," +
-	"cast((iy.input0) as int) as unitqty, iy.rate as perunit, " +
+	sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross,iy.stockvalue," + qtyfield +
+	"iy.rate as perunit, " +
 	"iy.input1 as rentperiod, iy.output2 as mthtotal from data d " +
 	"left join mr008 ro on ro.masterid = d.tags6 left join indta iy on iy.salesid = d.salesoff " +
 	"left join u011b u on u.extraid = d.extraoff " +
