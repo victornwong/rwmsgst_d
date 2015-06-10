@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="pvmanpage"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="./purchaseVoucherMan_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Purchase Voucher Management (FOCUS)";
+MYVERSION = "v0.1";
+MYPANEL = "pvvhcmanpenal";
+/**
+ * @title Purchase voucher management, auto-insert some of the things into FOCUS
+ * @author Victor Wong
+ * @since 10/06/2015
+ * @notes
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+FOCUS_PV_VOUCHERTYPE = "768";
+
+glob_sel_pv_listitem = glob_sel_pvitem_listitem = null;
+glob_sel_pv = glob_sel_pv_item = "";
+last_list_pv = 0;
+edited_pv_values = false;
+
+/**
+ * PV item functions
+ * @param itype button-ID
+ */
+void itemFunc(String itype)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	refresh = false;
+
+	if(itype.equals("updpvitem_b")) // update per selected PV item's columns
+	{
+		for(i=0;i<uptbs.length;i++)
+		{
+			kk = kiboo.replaceSingleQuotes( uptbs[i].getValue().trim() );
+			try
+			{
+				vv = Float.parseFloat(kk);
+				lbhand.setListcellItemLabel(glob_sel_pvitem_listitem,i+2, vv.toString() );
+				edited_pv_values = true;
+			} catch (Exception e) {}
+		}
+	}
+
+	if(itype.equals("clrupditm_b")) // clear update popup textboxes
+	{
+		for(i=0;i<uptbs.length;i++)
+		{
+			uptbs[i].setValue("0");
+		}
+	}
+
+	// if got selected PV items, check if user want to do MPF update
+	if(lbhand.check_ListboxExist_SelectItem(pvitems_holder, "pvitems_lb"))
+	{
+		for(i=0; i<mpfbutts.length; i++) // scan-through MPF update butts
+		{
+			if(itype.equals(mpfbutts[i]))
+			{
+				kv = kiboo.replaceSingleQuotes( mpftextbox[i].getValue().trim() );
+				if(!kv.equals(""))
+				{
+					try
+					{
+						vv = Float.parseFloat(kv);
+						ltms = pvitems_lb.getSelectedItems().toArray();
+						for(j=0; j<ltms.length; j++)
+						{
+							lbhand.setListcellItemLabel(ltms[j], i+2, vv.toString() );
+						}
+						edited_pv_values = true;
+					} catch (Exception e) { guihand.showMessageBox("ERR: please enter numbers.."); return; }
+				}
+			}
+		}
+	}
+
+	if(itype.equals("clrmpfboxes_b")) // clear MPF boxes
+	{
+		for(i=0; i<mpftextbox.length; i++)
+		{
+			mpftextbox[i].setValue("");
+		}
+	}
+}
+
+/**
+ * Submit PV massaged items values into FOCUS. Check edited_pv_values flag to determine whether any changes to PV items values.
+ * If no changes, don't waste time uploading to FOCUS.
+ */
+void submitPV_Focus()
+{
+	if(glob_sel_pv.equals("")) return;
+	if(!edited_pv_values) { guihand.showMessageBox("No changes to PV items values, not submitting to FOCUS"); return; }
+
+	alert("ya.. going to inject pv values now..");
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
+<popup id="upditem_pop">
+	<div sclass="shadowbox" style="background:#ACD244;" width="300px" >
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#ACD244;">
+					<label value="Rate" sclass="k9" />
+					<textbox id="up_rate_tb" width="70px" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Insurance" sclass="k9" />
+					<textbox id="up_insurance_tb" width="70px" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Freight" sclass="k9" />
+					<textbox id="up_freight_tb" width="70px" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Rfb Cost" sclass="k9" />
+					<textbox id="up_rfbcost_tb" width="70px" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Accm Depr" sclass="k9" />
+					<textbox id="up_accmdepr_tb" width="70px" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<button id="updpvitem_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+		<button id="clrupditm_b" label="Clear" sclass="k9" onClick="itemFunc(self.getId())" />
+	</div>
+</popup>
+
+<popup id="mpf_pop">
+	<div sclass="shadowbox" style="background:#ACD244;" width="300px" >
+		<label value="(Will update selected PV items)" sclass="k9" />
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#ACD244;">
+					<label value="Rate" sclass="k9" />
+					<textbox id="mpf_rate_tb" width="70px" />
+					<button id="mpfupdrate_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Insurance" sclass="k9" />
+					<textbox id="mpf_insurance_tb" width="70px" />
+					<button id="mpfupdinsurance_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Freight" sclass="k9" />
+					<textbox id="mpf_freight_tb" width="70px" />
+					<button id="mpfupdfreight_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Rfb Cost" sclass="k9" />
+					<textbox id="mpf_rfbcost_tb" width="70px" />
+					<button id="mpfupdrfbcost_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+				</row>
+				<row style="background:#ACD244;">
+					<label value="Accm Depr" sclass="k9" />
+					<textbox id="mpf_accmdepr_tb" width="70px" />
+					<button id="mpfupdaccmdepr_b" label="Update" sclass="k9" onClick="itemFunc(self.getId())" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<button id="clrmpfboxes_b" label="Clear boxes" sclass="k9" onClick="itemFunc(self.getId())" />
+	</div>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#0C203E">
+	<div sclass="shadowbox" style="background:#69759D">
+		<hbox>
+			<label value="Start date" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="searhtxt_tb" sclass="k9" />
+			<button label="Load/Search" sclass="k9mo" onClick="listPurchaseVoucher(1)" />
+			<textbox id="bypv_tb" sclass="k9" width="70px" />
+			<button label="by PV" sclass="k9mo" onClick="listPurchaseVoucher(2)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="pvs_holder" />
+	</div>
+	<div sclass="shadowbox" style="background:#69759D">
+		<vbox>
+			<hbox>
+				<label id="selectedpv_lbl" sclass="subhead1" />
+				<separator width="10px" />
+				<button label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
+				<button label="Interpolate RWSIMPLE" sclass="k9mo" />
+				<button label="View PO" sclass="k9mo" />
+				<button label="View market price list" sclass="k9mo" />
+				<button label="Breakdown cost" sclass="k9mo" />
+				<button label="Submit to FOCUS" style="font-weight:bold;color:#C41212" onClick="submitPV_Focus()" />
+			</hbox>
+			<hbox>
+				<vbox>
+					<div id="pvitems_holder" width="700px" />
+				</vbox>
+				<vbox>
+				</vbox>
+			</hbox>
+		</vbox>
+	</div>
+
+<zscript>
+<![CDATA[
+
+// Update PV item popup's textboxes
+Object[] uptbs = { up_rate_tb, up_insurance_tb, up_freight_tb, up_rfbcost_tb, up_accmdepr_tb };
+
+Object[] mpfbutts = { "mpfupdrate_b", "mpfupdinsurance_b", "mpfupdfreight_b", "mpfupdrfbcost_b", "mpfupdaccmdepr_b" };
+Object[] mpftextbox = { mpf_rate_tb, mpf_insurance_tb, mpf_freight_tb, mpf_rfbcost_tb, mpf_accmdepr_tb };
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

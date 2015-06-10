@@ -59,7 +59,7 @@ void prApprovalEmailNoti(String iprid, int itype)
 	}
 
 	lnkc = PR_PREFIX + iprid;
-	topeople = reqr.get("email") + ",satish@rentwise.com"; // HARDCODED: 1 email addr
+	topeople = reqr.get("email") + "," + NOTIF_EMAILS; // HARDCODED: notif emails list defined in rwpurchaseReq_v2.zul
 	emailsubj = "RE: Your PR " + lnkc + " has been " + appst;
 	emailmsg = "The PR you've submitted earlier has been " + appst;
 	emailmsg += "\n\n(This is only a notification)";
@@ -266,7 +266,6 @@ void showPRList(int itype)
 		if(kiboo.todayISODateString().equals(spetd) && supdeld.equals("")) styl = "background:#e58512;font-size:9px";
 
 		if(prit.equals("URGENT") || prit.equals("CRITICAL") ) styl = "font-weight:bold;color:#ffffff;background:#cc0000;font-size:9px";
-ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 		if(stt.equals("APPROVE"))
 		{
 			styl = "font-weight:bold;background:#73d216;font-size:9px";
@@ -363,7 +362,7 @@ void removePRItems(Object irows)
 void sendNoti_newPR(String iwhat,String iwho)
 {
 	lnkc = PR_PREFIX + iwhat;
-	topeople = "satish@rentwise.com,sangeetha@rentwise.com,laikw@rentwise.com"; // TODO HARDCODED 29/11/2013
+	topeople = NOTIF_EMAILS; // defined in rwpurchaseReq_v2.zul
 	//topeople = "victor@rentwise.com";
 	emailsubj = "RE: New " + lnkc + " requested by " + iwho;
 	emailmsg = "A new PR has been created. Pending procurement-division action.";

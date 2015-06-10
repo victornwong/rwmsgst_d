@@ -1,5 +1,6 @@
 import org.victor.*;
 // General funcs for goodsReceive_v2.zul
+// need to port codes from MEL_specUpdate_FC6.zs for temp.GRN injection
 //  Written by Victor Wong
 
 String[] scanitems_colws = { "30px", "",          "180px",     "100px", "40px" };
@@ -216,6 +217,10 @@ void saveGRN_items(String igrn)
 	} catch (Exception e) { guihand.showMessageBox("ERR: cannot save the GRN items.."); }
 }
 
+/**
+ * Show RWMS GRN meta-data
+ * @param iwhat which GRN no.
+ */
 void showGRN_meta(String iwhat)
 {
 	r = getGRN_rec_NEW(iwhat);
@@ -226,9 +231,8 @@ void showGRN_meta(String iwhat)
 	ngfun.populateUI_Data(jkl,fl,r);
 
 	fillDocumentsList(documents_holder,GRN_PREFIX,iwhat);
-
-	// show 'em grn items
-	itms = sqlhand.clobToString(r.get("item_names")).split("~");
+	
+	itms = sqlhand.clobToString(r.get("item_names")).split("~"); // show 'em grn items
 	atgs = sqlhand.clobToString(r.get("asset_tags")).split("~");
 	srls = sqlhand.clobToString(r.get("serials")).split("~");
 	qtys = sqlhand.clobToString(r.get("qtys")).split("~");
@@ -260,8 +264,6 @@ void toggButts(boolean iwhat)
 	{
 		jkl[i].setDisabled(iwhat);
 	}
-
-	//ngfun.disableUI_obj(jkl,iwhat);
 }
 
 Object[] grnhds =

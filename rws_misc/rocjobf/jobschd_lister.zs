@@ -1,6 +1,14 @@
+/**
+ * Main lister funcs for rwJobScheduler_v1.zul
+ * @author Victor Wong
+ * @since  19/06/2014
+ */
 import org.victor.*;
-// main lister funcs for rwJobScheduler_v1.zul 
 
+/**
+ * Show ROC/SO meta-data and line items
+ * @param iroc the ROC/SO voucher no. selected from the listbox
+ */
 void rocmetaThing(String iroc)
 {
 	showROC_meta(iroc, glob_vtype);
@@ -13,7 +21,6 @@ void rocmetaThing(String iroc)
 	removeSubDiv(ergprgs_holder);
 	removeSubDiv(boms_holder);
 	removeSubDiv(dos_holder);
-
 	workarea.setVisible(true);
 }
 
@@ -49,6 +56,9 @@ DO_IDX = 15;
 BOM_IDX = 13;
 RDO_IDX = 17;
 
+/**
+ * showFCROCs() listbox on-click listener
+ */
 class roclciker implements org.zkoss.zk.ui.event.EventListener
 {
 	public void onEvent(Event event) throws UiException
@@ -67,11 +77,15 @@ class roclciker implements org.zkoss.zk.ui.event.EventListener
 }
 roclbcliekr = new roclciker();
 
-// itype: 1=by date, 2=search-text, 3=by roc
-// dtype: 1=roc, 2=so
+/**
+ * List out ROC/SO from FOCUS
+ * @param itype 1=by date(default), 2=search-text, 3=by roc
+ * @param dtype 1=ROC, 2=SO
+ */
 void showFCROCs(int itype, int dtype)
 {
 	lastlisttype = itype;
+	totalinvoices_lbl.setValue(""); // clear invoice-total always
 	glob_vtype = (vtype_dd.getSelectedItem().getLabel().equals("ROC")) ? 1 : 2;
 	sdate = kiboo.getDateFromDatebox(startdate);
 	edate = kiboo.getDateFromDatebox(enddate);
@@ -82,7 +96,7 @@ void showFCROCs(int itype, int dtype)
 
 	extratb = "u001b"; // default extra-table = ROC's
 	vtype = "5635";
-	if(glob_vtype == 2)
+	if(glob_vtype == 2) // if for SO
 	{
 		extratb = "u0017";
 		vtype = "5632";
@@ -91,12 +105,13 @@ void showFCROCs(int itype, int dtype)
 	switch(itype)
 	{
 		case 2: // by search-text
+			if(st.equals("")) return;
 			otherwhere += "and (ac.name like '%" + st + "%' or li.customerrefyh like '%" + st + "%') ";
 			break;
 		case 3: // by roc-no
 			if(brc.equals("")) return;
 			if(glob_vtype == 1)
-				otherwhere = "and d.voucherno='ROC" + brc + "' "; // NOTE chg ROC0 to ROC
+				otherwhere = "and d.voucherno like 'ROC%" + brc + "' "; // NOTE chg ROC0 to ROC
 			else
 				otherwhere = "and d.voucherno='SO0" + brc + "' ";
 			break;
@@ -121,9 +136,9 @@ void showFCROCs(int itype, int dtype)
 
 	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
 	if(trs.size() == 0) return;
-	newlb.setRows(20); newlb.setMold("paging");
-	newlb.addEventListener("onSelect", roclbcliekr);
+	newlb.setRows(20); newlb.setMold("paging"); newlb.addEventListener("onSelect", roclbcliekr);
 	ArrayList kabom = new ArrayList();
+	invoicetotal = 0.0; showinvoicetotal = false;
 	String[] fl = { "voucherno", "vdate", "customer_name", "customerrefyh", "etd", "eta", };
 	tody = kiboo.todayISODateString();
 	for(d : trs)
@@ -156,9 +171,8 @@ void showFCROCs(int itype, int dtype)
 		dost = checkDOs_Delivered_byROC_2( d.get("voucherno"), glob_vtype ); // 08/06/2015: modif to use new func
 		kabom.add(dost);
 
-		// 13/10/2014: RDO things
 		rdo = (!jid.equals("")) ? getDOLinkToJob(6,jid) : "";
-		kabom.add(rdo);
+		kabom.add(rdo); // 13/10/2014: RDO things
 
 		rdostat = (!jid.equals("")) ? getRDO_DeliveryStatus(jid) : ""; // rwjobfuncs.zs
 		kabom.add(rdostat);
@@ -169,8 +183,16 @@ void showFCROCs(int itype, int dtype)
 		kk = "";
 		if(unm.equals("leanne") || unm.equals("padmin") || unm.equals("mandy") || unm.equals("carmen"))
 		{
+			showinvoicetotal = true;
 			ivr = getTotal_fromRWISI(dinv, glob_vtype);
-			try { if(ivr != null) kk = GlobalDefs.nf2.format(ivr.get("invtotal")); } catch (Exception e) {}
+			try
+			{
+				if(ivr != null)
+				{
+					kk = GlobalDefs.nf2.format(ivr.get("invtotal"));
+					invoicetotal += Float.parseFloat( kk );
+				}
+			} catch (Exception e) {}
 		}
 		kabom.add( kk ); // RWI/SI amount
 
@@ -181,6 +203,9 @@ void showFCROCs(int itype, int dtype)
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",sty);
 		kabom.clear();
 	}
+
+	if(showinvoicetotal) // 09/06/2015: show invoices total
+		totalinvoices_lbl.setValue("Invoice total: " + GlobalDefs.nf2.format(invoicetotal));
 }
 
 

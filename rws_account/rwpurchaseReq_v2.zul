@@ -18,16 +18,17 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Purchase Requisition / Order";
-MYVERSION = "v0.4";
+MYVERSION = "v0.4.1";
 MYPANEL = "rwprmpopan";
-/*
-@Title Purchase Req and Order for Rentwise ONLY!
-@Author Victor Wong
-@Since 04/10/2013
-
-Revisions:
-26/05/2014: export data out for analysis as required by Satish
-*/
+/**
+ * Purchase Req and Order for Rentwise ONLY!
+ * @author Victor Wong
+ * @since 04/10/2013
+ *
+ * @revisions
+ * 26/05/2014: export data out for analysis as required by Satish
+ * 10/06/2015: add Navin to notification emails list, NOTIF_EMAILS
+ */
 import java.util.*;
 import java.text.*;
 import java.io.*;
@@ -42,6 +43,8 @@ if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
 kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
 ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com"; // TODO HARDCODED 29/11/2013
 
 Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
 global_selected_customerid = ""; // set in fc6_CustomerSelector.zs

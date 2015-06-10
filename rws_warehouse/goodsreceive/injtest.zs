@@ -15,7 +15,6 @@ int calcFocusDate(String dstr)
 	// ((2014-1950)*416) + ((9*32)+1) + (18 - 1);
 	//alert("year=" + thedate.get(Calendar.YEAR).toString() + "\nmonth=" + thedate.get(Calendar.MONTH).toString() +
 	//"\nday=" + thedate.get(Calendar.DAY_OF_MONTH).toString());
-
 	retval = ((thedate.get(Calendar.YEAR)-1950)*416) + ((thedate.get(Calendar.MONTH)+1)*32) + (thedate.get(Calendar.DAY_OF_MONTH));
 	return retval;
 }

@@ -17,16 +17,14 @@
 MYTITLE = "Goods Receival";
 MYVERSION = "v0.2";
 MYPANEL = "goodsrecv2pan";
-/*
-@Title Goods receiving module
-@Authoer Victor Wong
-@Since 18/09/2014
-@Notes
-Total redesign from last year's module - to replace tempGRN, MRN and audit specs update. Import from GCO also.
-
-16/10/2014: generate GRN printout . goodsrecv_funcs.zs.genPrint_GRN()
-
-*/
+/**
+ * Goods receiving module
+ * @author Victor Wong
+ * @since 18/09/2014
+ * @notes
+ * Total redesign from last year's module - to replace tempGRN, MRN and audit specs update. Import from GCO also.
+ * 16/10/2014: generate GRN printout . goodsrecv_funcs.zs.genPrint_GRN()
+ */
 import java.util.*;
 import java.text.*;
 import org.victor.*;
@@ -40,12 +38,9 @@ guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
 GRN_PREFIX = "GRN";
-
 last_showgrn_type = 1;
-glob_sel_grn = glob_sel_stat = glob_sel_auditstat = "";
-
+glob_sel_grn = glob_sel_stat = glob_sel_auditstat = showgrn_extra_sql = "";
 grn_show_meta = true; // used in goodsrecv_funcs.grnclicker
-showgrn_extra_sql = "";
 
 String JN_linkcode()
 {
@@ -284,6 +279,8 @@ void adminFunc(String itype)
 // IMPORTANT chg pallet-loca to AUDIT . GRN->AUDIT process, F30 palletid = 4, F12=4452
 void updateInventory_GRNItems()
 {
+	alert("WIP");
+	return;
 	AUDIT_PALLET_ID = "4452";
 	try
 	{
@@ -488,11 +485,11 @@ A.User = Audit user
 
 <style src="/real-world.css" />
 <style>
-.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
-{
-border: none; overflow: hidden; zoom: 1;
-border-top: none; border-left: none; border-right: none; border-bottom: none;
-} 
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	} 
 </style>
 
 <div width="1200px">
@@ -505,16 +502,12 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
 			<label value="End date" sclass="k9b" />
 			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-
 			<textbox id="searhtxt_tb" width="150px" sclass="k9" />
 			<button label="Load/Find" sclass="k9mo" onClick="showGRN(1)" />
-
 			<textbox id="assettag_by" width="60px" sclass="k9" />
 			<button label="by asset-tag" sclass="k9mo" onClick="showGRN(3)" />
-
 			<textbox id="grnid_tb" width="50px" sclass="k9" />
 			<button label="by GRN" sclass="k9mo" onClick="showGRN(2)" />
-
 			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" visible="false" onClick="adminpop.open(self)" />
 		</hbox>
 	</div>
@@ -535,7 +528,6 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 	</div>
 
 	<hbox>
-
 		<vbox>
 			<div id="grnmeta_holder" sclass="shadowbox" style="background:#36427F" visible="false" width="450px">
 				<grid>

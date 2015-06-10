@@ -134,7 +134,7 @@ JPL = Job items pick-list (RWMS)
 			<textbox id="searhtxt_tb" sclass="k9" />
 			<button label="Search" sclass="k9mo" onClick="showFCROCs(2,glob_vtype)" />
 			<textbox id="sbyrocno_tb" sclass="k9" width="60px" />
-			<button label="by ROC/SO" sclass="k9mo" onClick="showFCROCs(3,glob_vtype)" />
+			<button label="by ROC/SO(only no.)" sclass="k9mo" onClick="showFCROCs(3,glob_vtype)" />
 			<separator width="10px" />
 			<button id="expexcel_b" label="Export EXCEL" sclass="k9mo" onClick="doFunc(self.getId())" />
 			<button label="Help" sclass="k9" onClick="minihelp_pop.open(self)" />
@@ -144,6 +144,11 @@ JPL = Job items pick-list (RWMS)
 
 	<div sclass="shadowbox" style="background:#3A4566;overflow:auto;overflow-y:hidden">
 		<div id="rocsholder" width="2000px" />
+		<separator height="3px" />
+		<hbox>
+			<label id="totalinvoices_lbl" sclass="subhead1" />
+			<label sclass="k9" value="(**no currency conversion)" />
+		</hbox>
 	</div>
 	<separator height="2px" />
 
@@ -165,6 +170,61 @@ JPL = Job items pick-list (RWMS)
 			<tabpanels>
 				<tabpanel style="background:#2e3436;"> <!-- roc/job -->
 					<hbox>
+						<div id="rocsometaform_holder" width="600px" />
+					<div id="rocitems_holder" />
+					</hbox>
+					<separator height="3px" />
+				</tabpanel> <!-- ENDOF roc/job -->
+
+				<tabpanel style="background:#2e3436;"> <!-- PO -->
+					<hbox>
+						<vbox>
+							<button id="ldshowpo_b" label="Load PO details" sclass="k9" onClick="doFunc(self.getId())" />
+							<separator height="3px" />
+							<div id="poitems_holder" width="650px" />
+						</vbox>
+					</hbox>
+				</tabpanel> <!-- ENDOF PO -->
+
+				<tabpanel style="background:#2e3436;"> <!-- ERG/PRG -->
+					<button id="ldshoweprg_b" label="Load ERG/PRG details" sclass="k9" onClick="doFunc(self.getId())" />
+					<separator height="3px" />
+					<div id="ergprgs_holder" width="650px" />
+				</tabpanel> <!-- ENDOF ERG/PRG -->
+
+				<tabpanel style="background:#2e3436;"> <!-- BOM -->
+					<button id="ldshowboms_b" label="Load BOM details" sclass="k9" onClick="doFunc(self.getId())" />
+					<separator height="3px" />
+					<div id="boms_holder" />
+				</tabpanel> <!-- ENDOF BOM -->
+
+				<tabpanel style="background:#2e3436;"> <!-- DO -->
+					<button id="ldshowdos_b" label="Load DO details" sclass="k9" onClick="doFunc(self.getId())" />
+					<separator height="3px" />
+					<div id="dos_holder" width="650px" />
+				</tabpanel> <!-- ENDOF DO -->
+
+				<tabpanel style="background:#2e3436;"> <!-- RDO -->
+					<button id="ldrdodetails_b" label="Load RDO details" sclass="k9" onClick="doFunc(self.getId())" />
+					<separator height="3px" />
+					<div id="rdo_holder" width="650px" />
+				</tabpanel>
+			</tabpanels>
+		</tabbox>
+	</div> <!-- ENDOF workarea -->
+
+	<div id="kasiexport" visible="false" />
+
+<zscript>
+<![CDATA[
+
+rocosmetform = dynamicForm(rocsometaform_holder, "rocso_metagrid", "42");
+luhand.populateListbox_ByLookup(vtype_dd, "FC_VOUCHER_TYPE", 2);
+
+//glob_vtype = (vtype_dd.getSelectedItem().getLabel().equals("ROC")) ? 1 : 2;
+//showFCROCs(1,glob_vtype);
+//
+/*
 					<grid width="600px">
 						<rows>
 							<row style="background:#545282">
@@ -210,59 +270,7 @@ JPL = Job items pick-list (RWMS)
 							</row>
 						</rows>
 					</grid>
-
-					<div id="rocitems_holder" />
-					</hbox>
-					<separator height="3px" />
-					
-				</tabpanel> <!-- ENDOF roc/job -->
-
-				<tabpanel style="background:#2e3436;"> <!-- PO -->
-					<hbox>
-						<vbox>
-							<button id="ldshowpo_b" label="Load PO details" sclass="k9" onClick="doFunc(self.getId())" />
-							<separator height="3px" />
-							<div id="poitems_holder" width="650px" />
-						</vbox>
-					</hbox>
-				</tabpanel> <!-- ENDOF PO -->
-
-				<tabpanel style="background:#2e3436;"> <!-- ERG/PRG -->
-					<button id="ldshoweprg_b" label="Load ERG/PRG details" sclass="k9" onClick="doFunc(self.getId())" />
-					<separator height="3px" />
-					<div id="ergprgs_holder" width="650px" />
-				</tabpanel> <!-- ENDOF ERG/PRG -->
-
-				<tabpanel style="background:#2e3436;"> <!-- BOM -->
-					<button id="ldshowboms_b" label="Load BOM details" sclass="k9" onClick="doFunc(self.getId())" />
-					<separator height="3px" />
-					<div id="boms_holder" />
-				</tabpanel> <!-- ENDOF BOM -->
-
-				<tabpanel style="background:#2e3436;"> <!-- DO -->
-					<button id="ldshowdos_b" label="Load DO details" sclass="k9" onClick="doFunc(self.getId())" />
-					<separator height="3px" />
-					<div id="dos_holder" width="650px" />
-				</tabpanel> <!-- ENDOF DO -->
-
-				<tabpanel style="background:#2e3436;"> <!-- RDO -->
-					<button id="ldrdodetails_b" label="Load RDO details" sclass="k9" onClick="doFunc(self.getId())" />
-					<separator height="3px" />
-					<div id="rdo_holder" width="650px" />
-				</tabpanel>
-
-			</tabpanels>
-		</tabbox>
-	</div> <!-- ENDOF workarea -->
-
-	<div id="kasiexport" visible="false" />
-
-<zscript>
-<![CDATA[
-
-luhand.populateListbox_ByLookup(vtype_dd, "FC_VOUCHER_TYPE", 2);
-//glob_vtype = (vtype_dd.getSelectedItem().getLabel().equals("ROC")) ? 1 : 2;
-//showFCROCs(1,glob_vtype);
+ */
 
 ]]>
 </zscript>
