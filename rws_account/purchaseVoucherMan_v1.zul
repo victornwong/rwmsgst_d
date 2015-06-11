@@ -105,6 +105,12 @@ void itemFunc(String itype)
 			mpftextbox[i].setValue("");
 		}
 	}
+/*
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	if(!lgstr.equals("")) add_RWAuditLog(EMAILINVOICE_PREFIX,"",lgstr,useraccessobj.username); // inject audit-log if not empty string
+	if(refresh) showSentInvoices(last_showthing);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+*/
 }
 
 /**
