@@ -125,6 +125,70 @@ void submitPV_Focus()
 	alert("ya.. going to inject pv values now..");
 }
 
+/**
+ * [runMarketPrice_window description]
+ */
+void runMarketPrice_window()
+{
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","rws_sales/marketPricebook_v1.zul",kiboo.makeRandomId("vmp"),"",useraccessobj);
+}
+
+/**
+ * Interpolate RWSIMPLE excel worksheet, scan through worksheet asset-tags and grab cost. Worksheet columns
+ * as from RWSIMPLE
+ */
+void interpolateRwsimple()
+{
+	rwswk = new uploadedWorksheet();
+	rwswk.getUploadFileData();
+	if(rwswk.thefiledata == null)
+	{
+		guihand.showMessageBox("ERR: Invalid worksheet, try again");
+		return;
+	}
+
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	todaydate =  kiboo.todayISODateTimeString();
+	unm = useraccessobj.username;
+	String[] dt = new String[5];
+	sqlstm = "";
+
+	//inps = new ByteArrayInputStream(pricewk.thefiledata);
+	HSSFWorkbook excelWB = new HSSFWorkbook(pricewk.thefiledata);
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	wksht0 = excelWB.getSheetAt(0);
+	wknumrows = wksht0.getPhysicalNumberOfRows();
+
+	for(i=0; i<wknumrows; i++)
+	{
+		/*
+		try
+		{
+			checkrow = wksht0.getRow(i);
+			for(k=0; k<5; k++)
+			{
+				dt[k] = "";
+				try { kcell = checkrow.getCell(k); dt[k] = POI_GetCellContentString(kcell,evaluator,"").trim(); }
+				catch (Exception e) {}
+			}
+			if(!dt[0].equals("")) // make sure got item-name before inserting into database
+			{
+			}
+		} catch (Exception e) {}
+		*/
+	}
+	/*
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		reloadItem_typecategory(); // re-populate the drop-downs
+		listMktPriceItems(last_list_type,null); // list out the items
+		guihand.showMessageBox("Imported: " + lineimp.toString() + " rows from EXCEL worksheet..");
+	}
+	*/
+}
+
 ]]>
 </zscript>
 
@@ -229,9 +293,9 @@ void submitPV_Focus()
 				<label id="selectedpv_lbl" sclass="subhead1" />
 				<separator width="10px" />
 				<button label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
-				<button label="Interpolate RWSIMPLE" sclass="k9mo" />
+				<button label="Interpolate RWSIMPLE" sclass="k9mo" onClick="interpolateRwsimple()" />
 				<button label="View PO" sclass="k9mo" />
-				<button label="View market price list" sclass="k9mo" />
+				<button label="View market price list" sclass="k9mo" onClick="runMarketPrice_window()" />
 				<button label="Breakdown cost" sclass="k9mo" />
 				<button label="Submit to FOCUS" style="font-weight:bold;color:#C41212" onClick="submitPV_Focus()" />
 			</hbox>
@@ -244,6 +308,8 @@ void submitPV_Focus()
 			</hbox>
 		</vbox>
 	</div>
+
+	<div id="workbox" />
 
 <zscript>
 <![CDATA[

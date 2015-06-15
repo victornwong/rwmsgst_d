@@ -37,6 +37,19 @@ Object getGRN_rec_NEW(String iwhat)
 }
 
 /**
+ * [removeAllListitems description]
+ * @param ilb the listbox
+ */
+void removeAllListitems(Listbox ilb)
+{
+	kk = ilb.getItems().toArray();
+	for(i=0;i<kk.length;i++)
+	{
+		kk[i].setParent(null);
+	}
+}
+
+/**
  * Fill a listbox with distinct column items from a table RWMS
  * @param itbn database table name
  * @param ifl  field-name
@@ -58,6 +71,29 @@ void fillListbox_uniqField(String itbn, String ifl, Listbox ilb)
 		}
 	}
 	ilb.setSelectedIndex(0); // default select item 1 in listbox
+}
+
+/**
+ * Get selected items in a listbox and return string as number-comma or quoted-comma.
+ * To be used in SQL statement
+ * @param ilb the listbox to check
+ * @param  icol column to concatenate(zero-index)
+ * @param inum return string as true= number-comma, false= quoted-comma, 
+ * @return      [description]
+ */
+String getSelected_Listitems(Listbox ilb, int icol, boolean inum)
+{
+	String retval = "";
+	kx = ilb.getSelectedItems().toArray();
+	for(i=0; i<kx.length; i++)
+	{
+		vx = lbhand.getListcellItemLabel(kx[i],icol);
+		if(inum) // number-comma
+			retval += vx + ",";
+		else // quoted-comma
+			retval += "'" + vx + "',";
+	}
+	try { retval = retval.substring(0,retval.length()-1); return retval; } catch (Exception e) { return ""; }
 }
 
 /**

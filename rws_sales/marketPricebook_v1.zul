@@ -12,7 +12,7 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript>
 <![CDATA[
-MYTITLE = "Market Pricebook (Rentwise ONLY)";
+MYTITLE = "Re-Market Pricebook (Rentwise ONLY)";
 MYVERSION = "v0.1";
 MY_ID = "mktpricbokpenl";
 /**
@@ -23,6 +23,18 @@ MY_ID = "mktpricbokpenl";
 */
 import java.util.*;
 import java.text.*;
+import java.io.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
 import org.victor.*;
 sechand = new SecurityFuncs();
 myincludeid = Executions.getCurrent().getParameter("myid");
@@ -37,6 +49,30 @@ last_list_type = 0;
 newitem_tbs = glob_sel_mktlistitem = null;
 glob_sel_mktitem = "";
 
+/**
+ * Reload drop-downs for item category and type
+ */
+void reloadItem_typecategory()
+{
+	removeAllListitems(itemtype_dd);
+	fillListbox_uniqField("rw_mktpricebook","eqtype",itemtype_dd);
+	removeAllListitems(category_dd);
+	fillListbox_uniqField("rw_mktpricebook","category",category_dd);
+}
+
+/**
+ * Populate edit popup input-boxes with selected listbox item columns
+ */
+void popuEditItemInputboxes(Listitem iln)
+{
+	Object[] edititem_tbs = { e_itemname, e_description, e_eqtype, e_category, e_price, e_sdeviation }; // edit-item popup input boxes
+	for(i=0;i<edititem_tbs.length;i++)
+	{
+		kk = lbhand.getListcellItemLabel(iln,i+3);
+		edititem_tbs[i].setValue(kk);
+	}
+}
+
 Object[] mktitemslb_hds =
 {
 	new listboxHeaderWidthObj("REC",true,"50px"),
@@ -50,6 +86,7 @@ Object[] mktitemslb_hds =
 	new listboxHeaderWidthObj("StdDev",true,""),
 	new listboxHeaderWidthObj("LastUpd",true,""),
 	new listboxHeaderWidthObj("LastUser",true,""),
+	new listboxHeaderWidthObj("Atv",true,""),
 };
 
 class mktlbdcliker implements org.zkoss.zk.ui.event.EventListener
@@ -60,15 +97,8 @@ class mktlbdcliker implements org.zkoss.zk.ui.event.EventListener
 		if(glob_sel_pvitem_listitem != null)
 		{
 			glob_sel_mktitem = lbhand.getListcellItemLabel(glob_sel_mktlistitem,0);
-			alert(glob_sel_mktitem);
-/*
-			for(i=0;i<5;i++) // fill-up textbox from selected listbox item's column
-			{
-				kk = lbhand.getListcellItemLabel(glob_sel_mktlistitem, i+2);
-				uptbs[i].setValue(kk);
-			}
-			upditem_pop.open(glob_sel_mktlistitem);
-*/
+			popuEditItemInputboxes(glob_sel_mktlistitem); 
+			edititem_pop.open(glob_sel_mktlistitem);
 		}
 	}
 }
@@ -76,23 +106,45 @@ mktitemdclicker = new mktlbdcliker();
 
 /**
  * [listMktPriceItems description]
- * @param itype list type,
+ * @param itype list type, 1=by search-text or all, 2=by category, 3=by eq-type, 4=by cate and type
  * @param istb search text box
  */
 void listMktPriceItems(int itype, Object istb)
 {
 	last_list_type = itype;
+	workarea.setVisible(true);
 	st = (istb != null) ? kiboo.replaceSingleQuotes(istb.getValue().trim()) : "";
+	bycat = category_dd.getSelectedItem().getLabel();
+	bytyp = itemtype_dd.getSelectedItem().getLabel();
 	Listbox newlb = lbhand.makeVWListbox_Width(mktitems_holder, mktitemslb_hds, "mktitems_lb", 20);
 
 	sqlstm = "select * from rw_mktpricebook ";
+
+	switch(itype)
+	{
+		case 1: // by search-text if any
+			if(!st.equals("")) sqlstm += "where itemname like '%" + st + "%' or description like '%" + st + "%' or category like '%" + st + "%' or eqtype like '%" + st + "%';";
+			break;
+
+		case 2: // by category
+			sqlstm += "where category='" + bycat + "';";
+			break;
+
+		case 3: // by type
+			sqlstm += "where eqtype='" + bytyp + "';";
+			break;
+
+		case 4: // by category and type
+			sqlstm += "where category='" + bycat + "' and eqtype='" + bytyp + "';";
+			break;
+	}
 
 	r = sqlhand.gpSqlGetRows(sqlstm);
 	if(r.size() == 0) return;
 	newlb.setMold("paging"); newlb.setMultiple(true); newlb.setCheckmark(true);
 	//newlb.addEventListener("onSelect", pvlbonclicker );
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "origid", "datecreated", "username", "itemname", "description", "category", "eqtype", "price", "sdeviation", "lastupdate", "lastupdateuser" };
+	String[] fl = { "origid", "datecreated", "username", "itemname", "description", "category", "eqtype", "price", "sdeviation", "lastupdate", "lastupdateuser","active" };
 	for(d : r)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);
@@ -110,11 +162,11 @@ void mktItemFunc(String itype)
 	sqlstm = msgtext = "";
 	refresh = errflag = false;
 	unm = useraccessobj.username;
+	Object[] newitem_tbs = { n_itemname, n_description, n_eqtype, n_category, n_price, n_sdeviation }; // new-item popup input boxes
+	Object[] edititem_tbs = { e_itemname, e_description, e_eqtype, e_category, e_price, e_sdeviation }; // edit-item popup input boxes
 
 	if(itype.equals("newitem_b")) // insert new item into rw_mktpricebook
 	{
-		// n_itemname, n_description, n_eqtype, n_category, n_price, n_sdeviation
-		Object[] newitem_tbs = { n_itemname, n_description, n_eqtype, n_category, n_price, n_sdeviation }; // new-item popup input boxes
 		dt = ngfun.getString_fromUI(newitem_tbs);
 		dt[0] = (dt[0].equals("")) ? "NEW ITEM" : dt[0];
 		dt[1] = (dt[1].equals("")) ? "NEW DESCRIPTION" : dt[1];
@@ -127,11 +179,39 @@ void mktItemFunc(String itype)
 		"('" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "'," + dt[4] + "," + dt[5] + ",'" + todaydate + "','" + unm + "',1);";
 	}
 
+	if(itype.equals("upditem_b")) // update item metadata
+	{
+		if(glob_sel_mktitem.equals("")) return;
+		dt = ngfun.getString_fromUI(edititem_tbs);
+		if(!dt[0].equals(""))
+		{
+			// make sure numbers entered
+			try { kk = Float.parseFloat(dt[4]); dt[4] = kk.toString(); } catch (Exception e) { dt[4] = "0"; }
+			try { kk = Float.parseFloat(dt[5]); dt[5] = kk.toString(); } catch (Exception e) { dt[5] = "0"; }
+
+			sqlstm = "update rw_mktpricebook set itemname='" + dt[0] + "',description='" + dt[1] + "',eqtype='" + dt[2] + "',category='" + dt[3] + "'," +
+			"price=" + dt[4] + ",sdeviation=" + dt[5] + ",lastupdate='" + todaydate + "', lastupdateuser='" + unm + "' where origid=" + glob_sel_mktitem;
+			// add_RWAuditLog(EMAILINVOICE_PREFIX,"",lgstr,useraccessobj.username); TODO
+		}
+		else
+		{
+			msgtext = "ERR: item must have a name..";
+		}
+	}
+
 	if(itype.equals("clrnewitem_b")) // clear all input boxes in newitem_pop
 	{
 		for(i=0;i<newitem_tbs.length;i++)
 		{
 			newitem_tbs[i].setValue("");
+		}
+	}
+
+	if(itype.equals("clrupditem_b")) // clear all input-boxes in edititem_pop
+	{
+		for(i=0;i<edititem_tbs.length;i++)
+		{
+			edititem_tbs[i].setValue("");
 		}
 	}
 
@@ -142,29 +222,106 @@ void mktItemFunc(String itype)
 			if(Messagebox.show("Hard delete the selected items", "Are you sure?",
 				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
 
-			oids = "";
-			kx = mktitems_lb.getSelectedItems().toArray();
-
-			for(i=0; i<kx.length; i++)
-			{
-				oids = lbhand.getListcellItemLabel(kx[i],0) + ",";
-			}
-			try { oids = oids.substring(0,oids.length()-1); } catch (Exception e) {}
-
+			oids = getSelected_Listitems(mktitems_lb, 0, true); // get REC/origid
 			if(!oids.equals(""))
 			{
-				sqlstm = "delete from rw_mktpricebook where origid"
+				sqlstm = "delete from rw_mktpricebook where origid in (" + oids + ");";
+				msgtext = "Record(s) deleted";
 			}
 		}
+	}
+
+	if(itype.equals("toggitem_b")) // toggle active flag for selected items
+	{
+		if(lbhand.check_ListboxExist_SelectItem(mktitems_holder, "mktitems_lb"))
+		{
+			oids = getSelected_Listitems(mktitems_lb, 0, true); // get REC/origid
+			sqlstm = "update rw_mktpricebook set active=1-active where origid in (" + oids + ");";
+		}
+	}
+
+	if(itype.equals("exportlist_b"))
+	{
+		if(mktitems_holder.getFellowIfAny("mktitems_lb") == null) return;
+		try { exportExcelFromListbox(mktitems_lb, kasiexport, mktitemslb_hds, "remarketprices.xls","prices"); }
+		catch (Exception e) {}
 	}
 
 	if(!sqlstm.equals(""))
 	{
 		sqlhand.gpSqlExecuter(sqlstm);
+		reloadItem_typecategory();
 		listMktPriceItems(last_list_type,null);
 	}
 	//if(!lgstr.equals("")) add_RWAuditLog(EMAILINVOICE_PREFIX,"",lgstr,useraccessobj.username); // inject audit-log if not empty string
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/**
+ * Import market prices from EXCEL(XLS only) worksheet. Start from row 0, no need header. No duplication checks.
+ * Columns def:
+ * A = Item name
+ * B = Description
+ * C = Category
+ * D = Type
+ * E = Price
+ */
+void importMarketPrice_worksheet()
+{
+	pricewk = new uploadedWorksheet();
+	pricewk.getUploadFileData();
+	if(pricewk.thefiledata == null)
+	{
+		guihand.showMessageBox("ERR: Invalid worksheet, try again");
+		return;
+	}
+
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	todaydate =  kiboo.todayISODateTimeString();
+	unm = useraccessobj.username;
+	String[] dt = new String[5];
+	sqlstm = "";
+
+	//inps = new ByteArrayInputStream(pricewk.thefiledata);
+	HSSFWorkbook excelWB = new HSSFWorkbook(pricewk.thefiledata);
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	wksht0 = excelWB.getSheetAt(0);
+	wknumrows = wksht0.getPhysicalNumberOfRows();
+
+	lineimp = 0; // to count actual rows imported..
+
+	for(i=0; i<wknumrows; i++)
+	{
+		try
+		{
+			checkrow = wksht0.getRow(i);
+
+			for(k=0; k<5; k++)
+			{
+				dt[k] = "";
+				try { kcell = checkrow.getCell(k); dt[k] = POI_GetCellContentString(kcell,evaluator,"").trim(); }
+				catch (Exception e) {}
+			}
+
+			if(!dt[0].equals("")) // make sure got item-name before inserting into database
+			{
+				//sqlstm += "if not exists(select 1 from mr001 where code2='" + atg + "')" +
+				sqlstm += "insert into rw_mktpricebook (itemname,description,eqtype,category,price,datecreated,username,active) values " +
+				"('" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "'," + dt[4] + ",'" + todaydate + "','" + unm + "',1);";
+
+				lineimp++;
+			}
+		} catch (Exception e) {}
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		reloadItem_typecategory(); // re-populate the drop-downs
+		listMktPriceItems(last_list_type,null); // list out the items
+		guihand.showMessageBox("Imported: " + lineimp.toString() + " rows from EXCEL worksheet..");
+	}
 }
 
 ]]>
@@ -179,25 +336,27 @@ void mktItemFunc(String itype)
 	}
 </style>
 
-<window id="${MY_ID}" width="900px" height="600px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
+<window id="${MY_ID}" width="900px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true" >
 
 <popup id="newitem_pop">
-	<div sclass="shadowbox" style="background:#ACD244;" >
+	<div sclass="shadowbox" style="background:#3D86A5;" >
+		<label sclass="subhead1" value="New market-price item" />
+		<separator height="3px" />
 		<grid sclass="GridLayoutNoBorder">
 			<rows>
-				<row style="background:#ACD244;">
+				<row style="background:#3D86A5;">
 					<label value="Item name" sclass="k9" />
 					<textbox id="n_itemname" sclass="k9" />
 					<label value="Category" sclass="k9" />
 					<textbox id="n_category" sclass="k9" />
 				</row>
-				<row style="background:#ACD244;">
+				<row style="background:#3D86A5;">
 					<label value="Description" sclass="k9" />
 					<textbox id="n_description" sclass="k9" />
 					<label value="Type" sclass="k9" />
 					<textbox id="n_eqtype" sclass="k9" />
 				</row>
-				<row style="background:#ACD244;">
+				<row style="background:#3D86A5;">
 					<label value="Price" sclass="k9" />
 					<textbox id="n_price" sclass="k9" />
 					<label value="Std Deviation" sclass="k9" />
@@ -211,34 +370,91 @@ void mktItemFunc(String itype)
 	</div>
 </popup>
 
-<div>
+<popup id="edititem_pop">
+	<div sclass="shadowbox" style="background:#3D86A5;" >
+		<label sclass="subhead1" value="Edit market-price item" />
+		<separator height="3px" />
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#3D86A5;">
+					<label value="Item name" sclass="k9" />
+					<textbox id="e_itemname" sclass="k9" />
+					<label value="Category" sclass="k9" />
+					<textbox id="e_category" sclass="k9" />
+				</row>
+				<row style="background:#3D86A5;">
+					<label value="Description" sclass="k9" />
+					<textbox id="e_description" sclass="k9" />
+					<label value="Type" sclass="k9" />
+					<textbox id="e_eqtype" sclass="k9" />
+				</row>
+				<row style="background:#3D86A5;">
+					<label value="Price" sclass="k9" />
+					<textbox id="e_price" sclass="k9" />
+					<label value="Std Deviation" sclass="k9" />
+					<textbox id="e_sdeviation" sclass="k9" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<button id="upditem_b" label="Update item" sclass="k9mo" onClick="edititem_pop.close(); mktItemFunc(self.getId())" />
+		<button id="clrupditem_b" label="Clear" sclass="k9mo" onClick="mktItemFunc(self.getId())" />
+	</div>
+</popup>
+
+<popup id="help_pop">
+<div sclass="shadowbox" style="background:#92D13E" width="380px" >
+<label multiline="true">
+(( HELP ))
+
+Import price-list EXCEL worksheet columns definition
+
+A = Item name
+B = Description
+C = Category
+D = Type
+E = Price
+
+</label>
+</div>
+</popup>
+
+<div style="background:#F5311C;padding:3px">
 	<div sclass="shadowbox" style="background:#93BA56">
 		<hbox>
 			<label value="Search text" sclass="k9" />
 			<textbox id="mktitem_search_tb" sclass="k9" />
 			<button label="Load/search" sclass="k9mo" onClick="listMktPriceItems(1,mktitem_search_tb)" />
 			<listbox id="category_dd" sclass="k9" mold="select" />
-			<button label="by category" sclass="k9mo" />
+			<button label="by category" sclass="k9mo" onClick="listMktPriceItems(2,mktitem_search_tb)" />
 			<listbox id="itemtype_dd" sclass="k9" mold="select" />
-			<button label="by item type" sclass="k9mo" />
-			<button label="Audit-log" sclass="k9" />
+			<button label="by item type" sclass="k9mo" onClick="listMktPriceItems(3,mktitem_search_tb)" />
+			<button label="by category+item" sclass="k9mo" onClick="listMktPriceItems(4,mktitem_search_tb)" />
+		</hbox>
+		<hbox>
+			<button label="Audit-log" sclass="k9" visible="false" />
+			<button id="exportlist_b" label="Export EXCEL" sclass="k9" onClick="mktItemFunc(self.getId())" />
+			<button id="importlist_b" label="Import prices" sclass="k9" onClick="importMarketPrice_worksheet()" />
+			<button label="HELP" sclass="k9" onClick="help_pop.open(self)" />
 		</hbox>
 	</div>
-	<div sclass="shadowbox" style="background:#93BA56">
+	<separator height="2px" />
+	<div id="workarea" sclass="shadowbox" style="background:#93BA56" visible="false">
 		<hbox>
 			<button label="New item" sclass="k9mo" onClick="newitem_pop.open(self)" />
-			<button id="toggitem_b" label="Toggle active" sclass="k9mo" />
+			<button id="toggitem_b" label="Toggle active" sclass="k9mo" onClick="mktItemFunc(self.getId())" />
 			<button id="delitem_b" label="Delete" sclass="k9mo" style="color:#D12626" onClick="mktItemFunc(self.getId())" />
 		</hbox>
 		<separator height="3px" />
 		<div id="mktitems_holder" />
 	</div>
+	<div id="kasiexport" visible="false" />
 </div>
 
 <zscript>
 <![CDATA[
 
-
+reloadItem_typecategory();
 
 ]]>
 </zscript>
