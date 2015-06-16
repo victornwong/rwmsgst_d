@@ -486,13 +486,13 @@ void showPOitems(String iwhat, Div idiv)
 	gpMakeLabel(drow,"", prc.get("username"),"");
 
 	drow = new Row();
-	drow.setSpans("1,2");
+	drow.setSpans("1,3");
 	drow.setParent(drows);
 	gpMakeLabel(drow,"", "Vendor","");
 	gpMakeLabel(drow,"", prc.get("supplier_name"),"");
 
-	String[] colws = { "30px","","40px" };
-	String[] colls = { "No." ,"Item description","Qty" };
+	String[] colws = { "30px","","40px","" };
+	String[] colls = { "No." ,"Item description","Qty", "UPrice" };
 
 	mgrid = new Grid(); mgrid.setParent(idiv);
 	gpmakeGridHeaderColumns_Width(colls,colws,mgrid);
@@ -505,6 +505,7 @@ void showPOitems(String iwhat, Div idiv)
 	{
 		itms = sqlhand.clobToString(prc.get("pr_items")).split("~");
 		iqty = sqlhand.clobToString(prc.get("pr_qty")).split("~");
+		iupr = sqlhand.clobToString(prc.get("pr_unitprice")).split("~");
 		ks = "font-size:9px;";
 
 		for(i=0; i<itms.length; i++)
@@ -518,6 +519,11 @@ void showPOitems(String iwhat, Div idiv)
 			qty = "";
 			try { qty = iqty[i]; } catch (Exception e) {}
 			gpMakeLabel(irow,"",qty,ks);
+
+			prc = "";
+			try { prc = iupr[i]; } catch (Exception e) {}
+			gpMakeLabel(irow,"",prc,ks);
+
 			irow.setParent(mrows);
 		}
 	}

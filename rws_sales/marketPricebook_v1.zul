@@ -201,18 +201,12 @@ void mktItemFunc(String itype)
 
 	if(itype.equals("clrnewitem_b")) // clear all input boxes in newitem_pop
 	{
-		for(i=0;i<newitem_tbs.length;i++)
-		{
-			newitem_tbs[i].setValue("");
-		}
+		ngfun.clearUI_Field(newitem_tbs);
 	}
 
 	if(itype.equals("clrupditem_b")) // clear all input-boxes in edititem_pop
 	{
-		for(i=0;i<edititem_tbs.length;i++)
-		{
-			edititem_tbs[i].setValue("");
-		}
+		ngfun.clearUI_Field(edititem_tbs);
 	}
 
 	if(itype.equals("delitem_b")) // delete selected items
@@ -259,7 +253,7 @@ void mktItemFunc(String itype)
 
 /**
  * Import market prices from EXCEL(XLS only) worksheet. Start from row 0, no need header. No duplication checks.
- * Columns def:
+ * 16/06/2015 Columns def:
  * A = Item name
  * B = Description
  * C = Category
@@ -403,17 +397,20 @@ void importMarketPrice_worksheet()
 </popup>
 
 <popup id="help_pop">
-<div sclass="shadowbox" style="background:#92D13E" width="380px" >
-<label multiline="true">
-(( HELP ))
+<div sclass="shadowbox" style="background:#5A9724" width="380px" >
+<label multiline="true" style="color:#ffffff">
+((( HELP )))
 
-Import price-list EXCEL worksheet columns definition
+"Export EXCEL" : export entries listed as MS-Excel
+"Import price" : import price-list EXCEL worksheet columns definition
 
-A = Item name
-B = Description
-C = Category
-D = Type
+A = Item name B = Description
+C = Category D = Type
 E = Price
+
+"New item" : insert new entry
+"Toggle active" : set whether price to be applied in processing
+"Delete" : delete selected entry (Caution, this is a hard delete)
 
 </label>
 </div>

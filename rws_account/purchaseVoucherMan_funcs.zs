@@ -10,10 +10,11 @@ Object[] pvitemslb_hds =
 	new listboxHeaderWidthObj("Freight",true,""),
 	new listboxHeaderWidthObj("Rfb Cost",true,""),
 	new listboxHeaderWidthObj("Accm Depr",true,""),
-	new listboxHeaderWidthObj("salesid",false,""), // 7
+	new listboxHeaderWidthObj("Qty",true,""),
+	new listboxHeaderWidthObj("salesid",false,""), // 8
 };
 PVITMSLB_IDX_RATE = 2;
-PVITMSLB_IDX_SALESID = 7;
+PVITMSLB_IDX_SALESID = 8;
 
 class pvitmdcliekr implements org.zkoss.zk.ui.event.EventListener
 {
@@ -35,14 +36,19 @@ class pvitmdcliekr implements org.zkoss.zk.ui.event.EventListener
 }
 pvitmsdblicker = new pvitmdcliekr();
 
+/**
+ * [show_PVItems description]
+ * @param ipv the selected PV no.
+ */
 void show_PVItems(String ipv)
 {
 	edited_pv_values = false; // reset PV-values edited flag every load
 	selectedpv_lbl.setValue("PV: " + ipv);
+	workarea.setVisible(true);
 
 	Listbox newlb = lbhand.makeVWListbox_Width(pvitems_holder, pvitemslb_hds, "pvitems_lb", 20);
 
-	sqlstm = "select y.salesid, s.name, y.rate, y.input0 as insurance, y.input1 as freight, y.input2 as refurbcost, y.input3 as accmdepr " +
+	sqlstm = "select y.salesid, s.name, y.rate, y.input0 as insurance, y.input1 as freight, y.input2 as refurbcost, y.input3 as accmdepr, y.quantity " +
 	"from data d left join indta y on y.salesid = d.salesoff left join mr001 s on s.masterid = d.productcode " +
 	"where d.vouchertype=" + FOCUS_PV_VOUCHERTYPE + " and d.voucherno='" + ipv + "' and y.salesid is not null order by d.bodyid;";
 
@@ -51,7 +57,7 @@ void show_PVItems(String ipv)
 	newlb.setMold("paging"); newlb.setMultiple(true); newlb.setCheckmark(true);
 	//newlb.addEventListener("onSelect", pvlbonclicker );
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "name", "rate", "insurance", "freight", "refurbcost", "accmdepr", "salesid" };
+	String[] fl = { "name", "rate", "insurance", "freight", "refurbcost", "accmdepr", "quantity", "salesid" };
 	lnc = 1;
 	for(d : r)
 	{
@@ -141,3 +147,67 @@ void listPurchaseVoucher(int itype)
 	}
 }
 
+/**
+ * [runMarketPrice_window description]
+ */
+void runMarketPrice_window()
+{
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","rws_sales/marketPricebook_v1.zul",kiboo.makeRandomId("vmp"),"",useraccessobj);
+}
+
+/**
+ * Load,show PO details in a separate window. PO number entered in viewpo_pop.rwmspo_tb
+ */
+void loadViewPO()
+{
+	tpo = kiboo.replaceSingleQuotes(rwmspo_tb.getValue().trim());
+	if(tpo.equals("")) return;
+	try
+	{
+		kk = Integer.parseInt(tpo);
+		mwin = ngfun.vMakeWindow(winsholder,"PO " + tpo,"0","center","680px","");
+		pdiv = new Div(); pdiv.setParent(mwin);
+		showPOitems(tpo, pdiv); // to show PO details, jobMaker_funcs.zs
+	} catch (Exception e) {}
+}
+
+/**
+ * Calc break-down remainder of an item
+ * @param itype 1=normal calc, 2=clear boxes, 3=copy remainder to Cpu-box
+ */
+void breakdownCalc(int itype)
+{
+	Object[] ibx = { m_cpubox, m_monitor, m_ram1, m_ram2, m_ram3, m_ram4, m_hdd1, m_hdd2, m_hdd3, m_hdd4, m_battery, m_adaptor, m_graphic };
+	switch(itype)
+	{
+		case 1: // do the calculation
+			btotal = uprice = 0.0;
+			try { uprice = Float.parseFloat(m_unit_price.getValue().trim()); } catch (Exception e) {}
+
+			if(uprice == 0)
+			{
+				guihand.showMessageBox("Please enter unit price");
+				return;
+			}
+
+			for(i=0;i<ibx.length;i++)
+			{
+				kk = 0;
+				try { kk = Float.parseFloat(ibx[i].getValue().trim()); } catch (Exception e) {}
+				btotal += kk;
+			}
+
+			rmdr = uprice - btotal;
+			m_remainder.setValue( kiboo.nf2.format(rmdr) );
+
+			break;
+
+		case 2: // clear boxes
+			ngfun.clearUI_Field(ibx);
+			break;
+
+		case 3: // copy remainder to cpu-box
+			m_cpubox.setValue(m_remainder.getValue());
+			break;
+	}
+}
