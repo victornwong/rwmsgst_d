@@ -144,8 +144,10 @@ void submitPV_Focus()
 		",input3=" + dt[4] + " where salesid=" + slid + ";";
 	}
 
+	//sqlhand.rws_gpSqlExecuter(sqlstm);
 	alert(sqlstm);
 	edited_pv_values = false; // reset edited flag once values injected
+	//guihand.showMessageBox("Updated.. reload PV voucher in FOCUS to see changes");
 }
 
 /**
@@ -154,6 +156,8 @@ void submitPV_Focus()
  */
 void interpolateRwsimple()
 {
+	if(pvitems_holder.getFellowIfAny("pvitems_lb") == null) return; // no listbox
+
 	rwswk = new uploadedWorksheet();
 	rwswk.getUploadFileData();
 	if(rwswk.thefiledata == null)
@@ -164,44 +168,70 @@ void interpolateRwsimple()
 
 	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
 	Cell kcell;
-	todaydate =  kiboo.todayISODateTimeString();
-	unm = useraccessobj.username;
-	String[] dt = new String[5];
-	sqlstm = "";
+	HashMap dtg = new HashMap();
 
-	//inps = new ByteArrayInputStream(pricewk.thefiledata);
-	HSSFWorkbook excelWB = new HSSFWorkbook(pricewk.thefiledata);
+	inps = new ByteArrayInputStream(rwswk.thefiledata);	
+	HSSFWorkbook excelWB = new HSSFWorkbook(inps);
 	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
 	wksht0 = excelWB.getSheetAt(0);
 	wknumrows = wksht0.getPhysicalNumberOfRows();
 
-	for(i=0; i<wknumrows; i++)
+	ASSET_TAG_COL = 3; // column D - asset tag
+	ACCDEPR_COL = 10; // column K - accumulated depreciation
+	DOCOST_COL = 8; // column I - DO cost
+
+	for(i=0; i<wknumrows; i++) // traverse worksheet, grab column D(asset-tags) as key for hashmap, column K (accm deprn) as value
 	{
-		/*
 		try
 		{
 			checkrow = wksht0.getRow(i);
-			for(k=0; k<5; k++)
+			vk = "";
+			try { kcell = checkrow.getCell(ASSET_TAG_COL); vk = POI_GetCellContentString(kcell,evaluator,"").trim(); } // get asset-tag - column D
+			catch (Exception e) {}
+			if(!vk.equals("")) // got asset-tag, get accm-deprn and do-cost
 			{
-				dt[k] = "";
-				try { kcell = checkrow.getCell(k); dt[k] = POI_GetCellContentString(kcell,evaluator,"").trim(); }
-				catch (Exception e) {}
-			}
-			if(!dt[0].equals("")) // make sure got item-name before inserting into database
-			{
+				if(!dtg.containsKey(vk)) // make sure no dup ass-tag in hash
+				{
+					dprn = dorat = "";
+
+					try { kcell = checkrow.getCell(ACCDEPR_COL); dprn = POI_GetCellContentString(kcell,evaluator,"").trim(); } // get accm-deprn - column K
+					catch (Exception e) { dprn = "0.0"; }
+
+					try { kcell = checkrow.getCell(DOCOST_COL); dorat = POI_GetCellContentString(kcell,evaluator,"").trim(); } // get do-cost - column I
+					catch (Exception e) { dorat = "0.0"; }
+
+					dtg.put(vk.toUpperCase(), dorat + "::" + dprn); // put into hash acc-depr and do-cost
+				}
 			}
 		} catch (Exception e) {}
-		*/
 	}
-	/*
-	if(!sqlstm.equals(""))
+
+	udc = 0;
+	lx = pvitems_lb.getItems().toArray();
+	for(i=0;i<lx.length;i++) // iterate listbox put acc-depr if any based on asset-tag in PV item description
 	{
-		sqlhand.gpSqlExecuter(sqlstm);
-		reloadItem_typecategory(); // re-populate the drop-downs
-		listMktPriceItems(last_list_type,null); // list out the items
-		guihand.showMessageBox("Imported: " + lineimp.toString() + " rows from EXCEL worksheet..");
+		pvi = lbhand.getListcellItemLabel(lx[i],PVITMSLB_IDX_ITEM).toUpperCase();
+
+		Set set = dtg.entrySet();
+		Iterator itr = set.iterator();
+
+		while(itr.hasNext())
+		{
+			Map.Entry thisEntry = (Map.Entry)itr.next();
+			ikey = thisEntry.getKey();
+			ivalue = thisEntry.getValue().split("::");
+
+			if(pvi.indexOf(ikey) != -1) // PV item description matching asset-tag in hashmap
+			{
+				lbhand.setListcellItemLabel(lx[i], PVITMSLB_IDX_RATE, ivalue[0] ); // rate = do-cost
+				lbhand.setListcellItemLabel(lx[i], PVITMSLB_IDX_ACCMDEPR, ivalue[1] );
+
+				edited_pv_values = true;
+				udc++;
+			}
+		}
 	}
-	*/
+	guihand.showMessageBox("Interpolated " + udc.toString() + " DO-cost and accumulated depreciation");
 }
 
 ]]>
@@ -306,7 +336,7 @@ void interpolateRwsimple()
 			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
 			<textbox id="searhtxt_tb" sclass="k9" />
 			<button label="Load/Search" sclass="k9mo" onClick="listPurchaseVoucher(1)" />
-			<textbox id="bypv_tb" sclass="k9" width="70px" />
+			<textbox id="bypv_tb" sclass="k9" width="70px" value="23276" />
 			<button label="by PV" sclass="k9mo" onClick="listPurchaseVoucher(2)" />
 		</hbox>
 		<separator height="3px" />
@@ -321,7 +351,7 @@ void interpolateRwsimple()
 				<button label="Interpolate RWSIMPLE" sclass="k9mo" onClick="interpolateRwsimple()" />
 				<button label="View PO" sclass="k9mo" onClick="viewpo_pop.open(self)" />
 				<button label="Market price list" sclass="k9mo" onClick="runMarketPrice_window()" />
-				<button label="SUBMIT TO FOCUS" style="font-weight:bold;color:#C41212" onClick="submitPV_Focus()" />
+				<button label="SUBMIT TO FOCUS" sclass="k9mo" style="color:#C41212" onClick="submitPV_Focus()" />
 			</hbox>
 			<hbox>
 				<vbox>

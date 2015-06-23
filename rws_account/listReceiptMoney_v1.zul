@@ -9,19 +9,20 @@
 <zscript>
 <![CDATA[
 MYTITLE = "List-out FC6 Receipts";
-MYVERSION = "v0.3";
+MYVERSION = "v0.3.1";
 MYPANEL = "lstrecpdpan";
-/*
-Title		: List-out FC6 receipts
-Written by	: Victor Wong
-Dated		: 04/10/2013
-
-Revisions:
-06/03/2014: Mira req dig by amount
-03/07/2014: smooth UI, export to excel from listbox, dig receipt knockoff which RWI/SI
-07/08/2014: Mahesh request to dig by receipt-no.
-
-*/
+/**
+ * List-out FC6 receipts
+ * @author Victor Wong
+ * @since 04/10/2013
+ *
+ * @notes
+ * 06/03/2014: Mira req dig by amount
+ * 03/07/2014: smooth UI, export to excel from listbox, dig receipt knockoff which RWI/SI
+ * 07/08/2014: Mahesh request to dig by receipt-no.
+ * 18/06/2015: start port to FOCUS 0J1 database
+ * 1110349
+ */
 import java.util.*;
 import java.text.*;
 import org.victor.*;
@@ -31,11 +32,7 @@ myincludeid = Executions.getCurrent().getParameter("myid");
 useraccessobj = sechand.getUserAccessObject();
 if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
 
-kiboo = new Generals();
-sqlhand = new SqlFuncs();
-lbhand = new ListboxHandler();
-guihand = new GuiFuncs();
-luhand = new LookupFuncs();
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs(); luhand = new LookupFuncs();
 
 DecimalFormat nf3 = new DecimalFormat("#####0.00");
 DecimalFormat nf4 = new DecimalFormat("###,##0.00");
@@ -69,24 +66,23 @@ void showReceiptKnockBreakdown(String ibwof)
 	"aj.voucherno as aj_vn, aj.dueadjdate " +
 	"from refrn rf left join vw_adjustrefs aj on aj.newref = rf.ref " +
 	"left join data d on d.voucherno = aj.voucherno " +
-	"where rf.refid=" + ibwof + " and d.vouchertype in (4096,3840,3329,3328) order by aj.voucherno";
+	"where rf.refid=" + ibwof + " and d.vouchertype in (4096,3840,3329,3328,770,771,3332,3333,256) order by aj.voucherno";
+
+	//alert(sqlstm);
 
 	Listbox newlb = lbhand.makeVWListbox_Width(recpitems_holder, recpihds, "recpitems_lb", 20);
 	trecs = sqlhand.rws_gpSqlGetRows(sqlstm);
 	if(trecs.size() == 0) return;
-	newlb.setMold("paging");
-	newlb.setMultiple(true);
+	newlb.setMold("paging"); newlb.setMultiple(true);
 	ArrayList kabom = new ArrayList();
 	kktot = 0;
 	for(d : trecs)
 	{
-		try {
 		kabom.add( dtf2.format(d.get("dueadjdate")) );
 		kabom.add( kiboo.checkNullString(d.get("voucherno")) );
 		kabom.add( nf2.format(d.get("amount")) );
 		kktot += d.get("amount");
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
-		} catch (Exception e) {}
 		kabom.clear();
 	}
 	recptotal_lbl.setValue("Knockoff total: " + nf2.format(kktot));
@@ -94,7 +90,7 @@ void showReceiptKnockBreakdown(String ibwof)
 
 Object[] chqrechds =
 {
-	new listboxHeaderWidthObj("bwoff",false,""),
+	new listboxHeaderWidthObj("bwoff",true,""),
 	new listboxHeaderWidthObj("Dated",true,"70px"),
 	new listboxHeaderWidthObj("Receipt",true,"70px"),
 	new listboxHeaderWidthObj("Customer",true,""),
@@ -160,8 +156,7 @@ void loadfc6Receipts(int itype)
 
 	trecs = sqlhand.rws_gpSqlGetRows(sqlstm);
 	if(trecs.size() == 0) return;
-	newlb.setMold("paging");
-	newlb.addEventListener("onSelect", receipcliker);
+	newlb.setMold("paging"); newlb.addEventListener("onSelect", receipcliker);
 
 	amtdone = amtpend = amtrental = amtremark = amtsundry = amtunkw = amttokyo = 0.0;
 	ArrayList kabom = new ArrayList();
@@ -180,12 +175,12 @@ void loadfc6Receipts(int itype)
 		styl = "";
 
 		try {
-		dmt = d.get("originalamount");
-		if(kk.equals("RENTAL")) amtrental += dmt;
-		if(kk.equals("REMARKETING") && custn.indexOf("TOKYO") == -1) amtremark += dmt;
-		if(kk.equals("SUNDRY")) amtsundry += dmt;
-		if(kk.equals("UNKNOWN")) amtunkw += dmt;
-		if(custn.indexOf("TOKYO") != -1) { amttokyo += dmt; styl="font-size:9px;background:#56815e"; }
+			dmt = d.get("originalamount");
+			if(kk.equals("RENTAL")) amtrental += dmt;
+			if(kk.equals("REMARKETING") && custn.indexOf("TOKYO") == -1) amtremark += dmt;
+			if(kk.equals("SUNDRY")) amtsundry += dmt;
+			if(kk.equals("UNKNOWN")) amtunkw += dmt;
+			if(custn.indexOf("TOKYO") != -1) { amttokyo += dmt; styl="font-size:9px;background:#56815e"; }
 		} catch (Exception e) {}
 
 		kabom.add( kiboo.checkNullString(d.get("narrationyh")) );
@@ -194,17 +189,14 @@ void loadfc6Receipts(int itype)
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",styl);
 		kabom.clear();
 	}
-
 	//amtdone_lbl.setValue( nf4.format(amtdone) );
 	//amtpend_lbl.setValue( nf4.format(amtpend) );
 	amtgtotal_lbl.setValue( nf4.format(amtrental + amtremark + amtsundry + amtunkw ) );
-
 	amt_amtrental_lbl.setValue( nf4.format(amtrental) );
 	amt_amtremark_lbl.setValue( nf4.format(amtremark) );
 	amt_amtsundry_lbl.setValue( nf4.format(amtsundry) );
 	amt_amtunkw_lbl.setValue( nf4.format(amtunkw) );
 	amtctctotal_lbl.setValue( nf4.format(amttokyo) );
-
 }
 
 void exportReceiptRecs()
@@ -287,112 +279,112 @@ void exportReceiptToExcel()
 <style src="/real-world.css" />
 
 <popup id="expchqr_pop">
-<div sclass="shadowbox" style="background:#628821;">
-<label sclass="subhead1" value="Export cheque/payment receival list" />
-<separator height="10px" />
-<grid>
-	<rows>
-		<row>
-			<label value="Start date" />
-			<datebox id="exp_startdate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
-			<label value="End date" />
-			<datebox id="exp_enddate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
-		</row>
-		<row spans="4">
-			<hbox>
-				<button id="expundelv_b" label="Export cheque/bank-in list" onClick="exportReceiptRecs()" />
-			</hbox>
-		</row>
-	</rows>
-</grid>
-</div>
+	<div sclass="shadowbox" style="background:#628821;">
+		<label sclass="subhead1" value="Export cheque/payment receival list" />
+		<separator height="10px" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Start date" />
+					<datebox id="exp_startdate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
+					<label value="End date" />
+					<datebox id="exp_enddate" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self)" />
+				</row>
+				<row spans="4">
+					<hbox>
+						<button id="expundelv_b" label="Export cheque/bank-in list" onClick="exportReceiptRecs()" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+	</div>
 </popup>
 
 <popup id="knkdn_sumpop">
-<div sclass="shadowbox" style="background:#2e3436;">
-	<label id="knksum_lbl" style="font-weight:bold;color:#ffffff" />
-</div>
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<label id="knksum_lbl" style="font-weight:bold;color:#ffffff" />
+	</div>
 </popup>
 
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren>
 
-<div sclass="shadowbox" style="background:#2e3436;">
-	<hbox>
-		<label value="Start date" sclass="k9b" />
-		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-		<label value="End date" sclass="k9b" />
-		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-		<button label="Load receipts" sclass="k9mo" onClick="loadfc6Receipts(1)" />
-		<label value="Search" sclass="k9b" />
-		<textbox id="schtextb" sclass="k9" />
-		<label value="Amount" sclass="k9b" />
-		<textbox id="amt_tb" sclass="k9" width="60px" />
-		<button label="Dig amount" sclass="k9mo" onClick="loadfc6Receipts(2)" />
-		<textbox id="byno_tb" sclass="k9" width="60px" />
-		<button label="by receipt" sclass="k9mo" onClick="loadfc6Receipts(3)" />
-		<button label="Export receival list" sclass="k9mo" onClick="exportReceiptToExcel()" />
-	</hbox>
-</div>
-<separator height="5px" />
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<hbox>
+			<label value="Start date" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<button label="Load receipts" sclass="k9mo" onClick="loadfc6Receipts(1)" />
+			<label value="Search" sclass="k9b" />
+			<textbox id="schtextb" sclass="k9" />
+			<label value="Amount" sclass="k9b" />
+			<textbox id="amt_tb" sclass="k9" width="60px" />
+			<button label="Dig amount" sclass="k9mo" onClick="loadfc6Receipts(2)" />
+			<textbox id="byno_tb" sclass="k9" width="60px" />
+			<button label="by receipt" sclass="k9mo" onClick="loadfc6Receipts(3)" />
+			<button label="Export receival list" sclass="k9mo" onClick="exportReceiptToExcel()" />
+		</hbox>
+	</div>
+	<separator height="5px" />
 
-<div sclass="shadowbox" style="background:#2e3436;">
-	<hbox>
-		<div id="cheqsrec_holder" width="1000px" />
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<hbox>
+			<div id="cheqsrec_holder" width="1000px" />
 
-		<vbox>
-		<!--
-			<label sclass="subhead1" value="DONE Total:" />
-			<label sclass="subhead2" id="amtdone_lbl" />
-			<separator height="2px" />
-			<label sclass="subhead1" style="color:#ff0000" value="PENDING Total:" />
-			<label sclass="subhead2" style="color:#ff0000" id="amtpend_lbl" />
-			<separator height="2px" />
-		-->
-			<label sclass="subhead1" style="color:#9db91d" value="Total CTC:" />
-			<label sclass="subhead2" style="color:#9db91d" id="amtctctotal_lbl" />
-			<separator height="5px" />
-			<separator height="3px" bar="true" />
-			<separator height="5px" />
+			<vbox>
+			<!--
+				<label sclass="subhead1" value="DONE Total:" />
+				<label sclass="subhead2" id="amtdone_lbl" />
+				<separator height="2px" />
+				<label sclass="subhead1" style="color:#ff0000" value="PENDING Total:" />
+				<label sclass="subhead2" style="color:#ff0000" id="amtpend_lbl" />
+				<separator height="2px" />
+			-->
+				<label sclass="subhead1" style="color:#9db91d" value="Total CTC:" />
+				<label sclass="subhead2" style="color:#9db91d" id="amtctctotal_lbl" />
+				<separator height="5px" />
+				<separator height="3px" bar="true" />
+				<separator height="5px" />
 
-			<label sclass="subhead1" value="Rental:" />
-			<label sclass="subhead1" id="amt_amtrental_lbl" />
-			<separator height="2px" />
-			
-			<label sclass="subhead1" value="Remarketing:" />
-			<label sclass="subhead1" id="amt_amtremark_lbl" />
-			<separator height="2px" />
+				<label sclass="subhead1" value="Rental:" />
+				<label sclass="subhead1" id="amt_amtrental_lbl" />
+				<separator height="2px" />
+				
+				<label sclass="subhead1" value="Remarketing:" />
+				<label sclass="subhead1" id="amt_amtremark_lbl" />
+				<separator height="2px" />
 
-			<label sclass="subhead1" value="Sundry:" />
-			<label sclass="subhead1" id="amt_amtsundry_lbl" />
-			<separator height="2px" />
+				<label sclass="subhead1" value="Sundry:" />
+				<label sclass="subhead1" id="amt_amtsundry_lbl" />
+				<separator height="2px" />
 
-			<label sclass="subhead1" value="UNKNOWN:" />
-			<label sclass="subhead1" id="amt_amtunkw_lbl" />
-			<separator height="5px" />
+				<label sclass="subhead1" value="UNKNOWN:" />
+				<label sclass="subhead1" id="amt_amtunkw_lbl" />
+				<separator height="5px" />
 
-			<label sclass="subhead1" style="color:#f57900" value="Total All:" />
-			<label sclass="subhead2" style="color:#f57900" id="amtgtotal_lbl" />
+				<label sclass="subhead1" style="color:#f57900" value="Total All:" />
+				<label sclass="subhead2" style="color:#f57900" id="amtgtotal_lbl" />
 
-			<label id="debugbox" multiline="true" />
-		</vbox>
-	</hbox>
-</div>
-<separator height="2px" />
-
-<div sclass="shadowbox" style="background:#2e3436;">
-	<label id="recptitle_lbl" style="color:#ffffff;font-weight:bold" />
+				<label id="debugbox" multiline="true" />
+			</vbox>
+		</hbox>
+	</div>
 	<separator height="2px" />
-	<hbox>
-		<div id="recpitems_holder" width="350px" />
-		<button label="Sum" sclass="k9" onClick="knockDownSum(); knkdn_sumpop.open(self)" />
-	</hbox>
-	<separator height="2px" />
-	<label id="recptotal_lbl" style="color:#ffffff;font-weight:bold" />
-</div>
 
-<div id="kasiexport" visible="false" />
+	<div sclass="shadowbox" style="background:#2e3436;">
+		<label id="recptitle_lbl" style="color:#ffffff;font-weight:bold" />
+		<separator height="2px" />
+		<hbox>
+			<div id="recpitems_holder" width="350px" />
+			<button label="Sum" sclass="k9" onClick="knockDownSum(); knkdn_sumpop.open(self)" />
+		</hbox>
+		<separator height="2px" />
+		<label id="recptotal_lbl" style="color:#ffffff;font-weight:bold" />
+	</div>
+
+	<div id="kasiexport" visible="false" />
 
 <zscript>
 <![CDATA[
@@ -403,4 +395,3 @@ void exportReceiptToExcel()
 </panel>
 </div>
 </zk>
-

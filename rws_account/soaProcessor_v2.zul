@@ -11,29 +11,28 @@
 <zscript>
 <![CDATA[
 MYTITLE = "SOA Template Processor";
-MYVERSION = "v0.2.1";
+MYVERSION = "v0.2.2";
 MYPANEL = "soaproc2";
-/*
-Title		: Statement of Account template processor
-Written by	: Victor Wong
-
-**Notes**
-Focus uses mr000 and u0000 to store customer info
-select cust.name,cust.code,cust.code2,
-custd.address1yh, custd.address2yh, custd.address3yh, custd.address4yh,
-custd.telyh, custd.faxyh, custd.contactyh, custd.deliverytoyh,
-custd.salesrepyh, custd.emailyh
-from mr000 cust
-left join u0000 custd on custd.extraid = cust.masterid
-where
-cust.type=195
-order by cust.name
-
---
-14/11/2013: tie to extra customer's contact-points to send SOA directly
-26/02/2015: tweak and optimize
-
-*/
+/**
+ * Statement of Account template processor
+ * @author Victor Wong
+ *
+ * @notes
+ * Focus uses mr000 and u0000 to store customer info
+ * select cust.name,cust.code,cust.code2,
+ * custd.address1yh, custd.address2yh, custd.address3yh, custd.address4yh,
+ * custd.telyh, custd.faxyh, custd.contactyh, custd.deliverytoyh,
+ * custd.salesrepyh, custd.emailyh
+ * from mr000 cust
+ * left join u0000 custd on custd.extraid = cust.masterid
+ * where
+ * cust.type=195
+ * order by cust.name
+ *
+ * 14/11/2013: tie to extra customer's contact-points to send SOA directly
+ * 26/02/2015: tweak and optimize
+ * 18/06/2015: start port to FOCUS 0J1 database
+ */
 import java.util.*;
 import java.text.*;
 import java.io.*;
@@ -108,7 +107,20 @@ public class soaObj
 	}
 }
 
-// Callback after picking customer: fc6_CustomerSelector.zs
+int calcDayDiff(java.util.Date id1, java.util.Date id2)
+{
+	try
+	{
+		long diff = id2.getTime() - id1.getTime();
+		long diffDays = diff / (24 * 60 * 60 * 1000);
+		return (int)diffDays;
+	}
+	catch (Exception e) { return 0; }
+}
+
+/**
+ * Callback after picking customer: fc6_CustomerSelector.zs
+ */
 void pickcustomer_Callback()
 {
 	custr = getFocus_CustomerRec(global_selected_customerid);
@@ -152,7 +164,6 @@ void doFunc(Object iwhat)
 		emailmsg_tb.setValue("");
 		emailsubj_tb.setValue("");
 		email_pop.open(iwhat);
-
 	}
 
 	if(itype.equals("realemaildoc_b"))
@@ -176,9 +187,7 @@ void emailDocumentFromDS(String ireplyto, Object iextcnts, Object idocs, String 
 	{
 		cntseml += lbhand.getListcellItemLabel(kcnts[i],2) + ","; // HARDCODED in customerManager_funcs.extcontshds2
 	}
-	try {
-	cntseml = cntseml.substring(0,cntseml.length()-1);
-	} catch (Exception e) {}
+	try { cntseml = cntseml.substring(0,cntseml.length()-1); } catch (Exception e) {}
 
 	if(cntseml.equals("")) { guihand.showMessageBox("No email-address to send to.."); return; }
 
@@ -192,9 +201,7 @@ void emailDocumentFromDS(String ireplyto, Object iextcnts, Object idocs, String 
 	{
 		dcids += lbhand.getListcellItemLabel(kdcs[i],0) + ",";
 	}
-	try {
-	dcids = dcids.substring(0,dcids.length()-1);
-	} catch (Exception e) {}
+	try { dcids = dcids.substring(0,dcids.length()-1); } catch (Exception e) {}
 
 	sqlstm = "select file_name,file_data from DocumentTable where origid in (" + dcids + ")";
 	drcs = ds_sql.rows(sqlstm);
@@ -214,9 +221,8 @@ void emailDocumentFromDS(String ireplyto, Object iextcnts, Object idocs, String 
 		fncnt++;
 	}
 	ds_sql.close();
-	
-	// 06/12/2013: HARDCODE, send a copy to creditcontrol@rentwise.com
-	cntseml += ",creditcontrol@rentwise.com";
+
+	cntseml += ",creditcontrol@rentwise.com"; // 06/12/2013: HARDCODE, send a copy to creditcontrol@rentwise.com
 	gmail_sendEmailWithAttachment_2("", GMAIL_username, GMAIL_password, GMAIL_username, cntseml,
 	isubject, iemsg, tmpfnames,ireplyto);
 }
@@ -226,18 +232,16 @@ void generateExcelSOA(int itype)
 {
 	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
 	Cell kcell;
-	pgadder = 4;
-	page_break = 28;
-	page2_break = 46;
+	startscan = 9;
+	pgadder = 4; page_break = 28; page2_break = 46;
 
 	soaData.clear();
-
 	try
 	{
 		if(mainUpload_Data == null) return;
 		if(mainUpload_Data.thefiledata == null) return;
 	}
-	catch (Exception e) { return; }
+	catch (Exception e) { guihand.showMessageBox("ERR: invalid worksheet"); return; }
 
 	try
 	{
@@ -250,12 +254,11 @@ void generateExcelSOA(int itype)
 			inps = mainUpload_Data.thefiledata;
 
 		HSSFWorkbook excelWB = new HSSFWorkbook(inps);
-		
 		FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
 		numsheets = excelWB.getNumberOfSheets();
-
 		sheet = excelWB.getSheetAt(0);
 		numrows = sheet.getPhysicalNumberOfRows();
+
 		numc = 0;
 		FOC6_COL_READ = 10;
 		soa_inv_total = soa_recp_total = soa_balance_total = "";
@@ -268,8 +271,7 @@ void generateExcelSOA(int itype)
 		compname = compname.replaceAll(" \\/","_");
 		*/
 
-		// hardcoded to read from row 9 onwards..
-		for(rw=9; rw<numrows; rw++)
+		for(rw=startscan; rw<numrows; rw++) // hardcoded to read from "startrow" onwards..
 		{
 			String[] thed = new String[9];
 			checkrow = sheet.getRow(rw);
@@ -314,13 +316,11 @@ void generateExcelSOA(int itype)
 		custr.get("address3yh") + ", " + custr.get("address4yh") + "\n" +
 		"Contact: " + custr.get("contactyh") + "\n" +
 		"Tel: " + custr.get("telyh") + " Fax: " + custr.get("faxyh");
-
 		// + "\nDeliverTo: " + custr.get("deliverytoyh") + "\n" +
 		//"Customer Email: " + custr.get("emailyh") + "\nSalesRep: " + custr.get("salesrepyh");
 	}
 
 	compname = custr.get("name");
-
 	templatefn = "rwimg/soaTemplate_2.xls";
 
 	inpfn = session.getWebApp().getRealPath(templatefn);
@@ -334,13 +334,8 @@ void generateExcelSOA(int itype)
 	CellStyle numstyle = wwb.createCellStyle();
 	numstyle.setDataFormat(numformat.getFormat("###,###.#0"));
 */
-	Font wfont = wwb.createFont();
-	wfont.setFontHeightInPoints((short)8);
-	wfont.setFontName("Arial");
-
-	Font nfont = wwb.createFont(); // narration-font
-	nfont.setFontHeightInPoints((short)6);
-	nfont.setFontName("Arial");
+	Font wfont = wwb.createFont(); wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
+	Font nfont = wwb.createFont(); nfont.setFontHeightInPoints((short)6); nfont.setFontName("Arial"); // narration-font
 
 	wkarray = soaData.toArray();
 	
@@ -382,8 +377,7 @@ void generateExcelSOA(int itype)
 		currentrow = pgadder + rowcounter;
 
 		tmprwi = "";
-		try { tmprwi = wop[0].replaceAll("RWI:",""); }
-		catch (Exception e) {}
+		try { tmprwi = wop[0].replaceAll("RWI:",""); } catch (Exception e) {}
 
 		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,0,tmprwi),wfont,true,"");
 
@@ -395,9 +389,7 @@ void generateExcelSOA(int itype)
 		}
 
 		//excelInsertString(wsheet,pgadder+i,1,invdstr);
-
-		duedstr = "";
-		duedate = new Date();
+		duedstr = ""; duedate = new Date();
 
 		try {
 		duedate = (Date)dtfm.parse(wop[3]);
@@ -411,9 +403,7 @@ void generateExcelSOA(int itype)
 		for(j=4;j<7;j++) // inv-amt, receipt, balance
 		{
 			vak = 0;
-			try {
-			vak = Float.parseFloat(wop[j]);
-			} catch (Exception e) {}
+			try { vak = Float.parseFloat(wop[j]); } catch (Exception e) {}
 			if(vak < 0) vak = vak * -1;
 			kstr = (vak == 0) ? "" : vak.toString();
 			wop[j] = kstr; 
@@ -481,7 +471,6 @@ void generateExcelSOA(int itype)
 		{
 			//org.apache.poi.hssf.usermodel.HSSFRow hdrow = wsheet.createRow(rowcounter+pgadder);
 			// TODO mod here if template change
-
 			for(ci=0;ci<9;ci++)
 			{
 				Cell hdcell = mainhdrow.getCell(ci);
@@ -493,8 +482,7 @@ void generateExcelSOA(int itype)
 			rowcounter++;
 		}
 
-		// do those 0-30 days and etc group-calcs
-		if(!wop[6].equals(""))
+		if(!wop[6].equals("")) // do those 0-30 days and etc group-calcs
 		{
 			ktos = Float.parseFloat(ttos);
 			kck = wop[0].trim().toUpperCase();
@@ -620,18 +608,6 @@ void generateExcelSOA2(int itype)
 {
 }
 
-int calcDayDiff(java.util.Date id1, java.util.Date id2)
-{
-	try
-	{
-	long diff = id2.getTime() - id1.getTime();
-	long diffDays = diff / (24 * 60 * 60 * 1000);
-	return (int)diffDays;
-	}
-	catch (Exception e) { return 0; }
-}
-
-
 ]]>
 </zscript>
 
@@ -721,62 +697,61 @@ int calcDayDiff(java.util.Date id1, java.util.Date id2)
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren>
 
-<div sclass="shadowbox" style="background:#1b528c;" >
+	<div sclass="shadowbox" style="background:#1b528c;" >
+		<hbox>
+			<button id="selcustomer_b" label="Select customer" sclass="k9mo" onClick="pickcustomer_popup.open(self)" />
+			<button id="uploadsoa_b" label="Upload SOA from FOCUS6" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="gensoa_narr_b" label="Gen SOA with narration" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="gensoa_nonarr_b" label="Gen SOA without narration" sclass="k9mo" onClick="doFunc(self)" />
+		</hbox>
+		<separator height="5px" />
+		<hbox>
+			<grid width="500px">
+				<rows>
+					<row>
+						<label value="Interest rate" sclass="k9mo" />
+						<label id="customer_interest" sclass="k9" />
+						<label>Statement date</label>
+						<datebox id="statement_date" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+					</row>
+					<row>
+						<label value="Uploaded file" sclass="k9" />
+						<label id="upload_filename" sclass="k9" />
+						<label>Generated</label>
+						<label id="generated_lbl" style="text-decoration:blink" />
+					</row>
+				</rows>
+			</grid>
+		</hbox>
+		<separator height="10px" />
 
-	<hbox>
-		<button id="selcustomer_b" label="Select customer" onClick="pickcustomer_popup.open(self)" />
-		<button id="uploadsoa_b" label="Upload SOA from FOCUS6" onClick="doFunc(self)" />
-		<button id="gensoa_narr_b" label="Gen SOA with narration" onClick="doFunc(self)" />
-		<button id="gensoa_nonarr_b" label="Gen SOA without narration" onClick="doFunc(self)" />
-	</hbox>
-	<separator height="5px" />
-	<hbox>
-		<grid width="500px">
-			<rows>
-				<row>
-					<label value="Interest rate" />
-					<label id="customer_interest" />
-					<label>Statement date</label>
-					<datebox id="statement_date" format="yyyy-MM-dd" onCreate="kiboo.setTodayDatebox(self);" />
-				</row>
-				<row>
-					<label value="Uploaded file" />
-					<label id="upload_filename" />
-					<label>Generated</label>
-					<label id="generated_lbl" style="text-decoration:blink" />
-				</row>
-			</rows>
-		</grid>
-	</hbox>
-	<separator height="10px" />
+		<div style="background:#e58512;padding:2px">
+			<label id="customername" sclass="subhead1" style="color:#ffffff" />
+		</div>
+		<separator height="3px" />
 
-	<div style="background:#e58512;padding:2px">
-		<label id="customername" sclass="subhead1" style="color:#ffffff" />
+		<hbox>
+			<div sclass="shadowbox" style="background:#555753;">
+				<label sclass="subhead1" style="color:#ffffff">ATTACHMENT / DOCUMENTS</label>
+				<separator height="3px" />
+				<hbox>
+					<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
+					<button id="deletedoc_btn" label="Delete" sclass="k9"
+						onClick="deleteFile(documents_holder,FC6CUST_PREFIX,global_selected_customerid)" />
+				</hbox>
+				<separator height="3px" />
+				<div id="documents_holder" width="550px" />
+			</div>
+
+			<div sclass="shadowbox" style="background:#555753;">
+				<label sclass="subhead1" style="color:#ffffff" value="Contact Person" />
+				<separator height="3px" />
+				<button id="emaildoc_b" label="Email document to selected contact-persons" sclass="k9mo" onClick="doFunc(self)" />
+				<separator height="3px" />
+				<div id="extconts_holder" width="600px" />
+			</div>
+		</hbox>
 	</div>
-	<separator height="3px" />
-
-	<hbox>
-		<div sclass="shadowbox" style="background:#555753;">
-			<label sclass="subhead1" style="color:#ffffff">ATTACHMENT / DOCUMENTS</label>
-			<separator height="3px" />
-			<hbox>
-				<button id="viewdoc_btn" label="View file" sclass="k9" onClick="viewFile()" />
-				<button id="deletedoc_btn" label="Delete" sclass="k9"
-					onClick="deleteFile(documents_holder,FC6CUST_PREFIX,global_selected_customerid)" />
-			</hbox>
-			<separator height="3px" />
-			<div id="documents_holder" width="550px" />
-		</div>
-
-		<div sclass="shadowbox" style="background:#555753;">
-			<label sclass="subhead1" style="color:#ffffff" value="Contact Person" />
-			<separator height="3px" />
-			<button id="emaildoc_b" label="Email document to selected contact-persons" onClick="doFunc(self)" />
-			<separator height="3px" />
-			<div id="extconts_holder" width="600px" />
-		</div>
-	</hbox>
-</div>
 
 <label id="debugbox" multiline="true" />
 <div id="kasiexport" visible="false" />

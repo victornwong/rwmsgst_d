@@ -15,6 +15,8 @@ Object[] pvitemslb_hds =
 };
 PVITMSLB_IDX_RATE = 2;
 PVITMSLB_IDX_SALESID = 8;
+PVITMSLB_IDX_ITEM = 1;
+PVITMSLB_IDX_ACCMDEPR = 6;
 
 class pvitmdcliekr implements org.zkoss.zk.ui.event.EventListener
 {

@@ -12,7 +12,7 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript>
 <![CDATA[
-MYTITLE = "Provision for Stock Obsolences processor (Rentwise ONLY)";
+MYTITLE = "Provision for Stock Obsolescences processor (Rentwise ONLY)";
 MYVERSION = "v0.1";
 MY_ID = "stockobsowin";
 /**
