@@ -6,12 +6,13 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Calculate Insurance Premiums";
-MYVERSION = "v0.1";
+MYVERSION = "v0.2";
 MY_ID = "calcinsurpan";
 /*
 Written by	: Victor Wong
 Dated		: 03/06/2014
 NOTES:
+23/06/2015: mahes request remove GST calc in insurance last time. GST to be counted in FOCUS invoice
 */
 
 import org.victor.*;
@@ -32,7 +33,8 @@ void calcthething()
 	try { cy = conyear_tb.getValue().intValue(); } catch (Exception e) { return; }
 	pm = cm * 0.0035;
 	if(ity.equals("NB")) pm = cm * 0.0058;
-	sm = pm * 0.06;
+	//sm = pm * 0.06; 23/06/2015: mahes request remove GST calc in insurance previously
+	sm = 0;
 	ptot = (pm + sm) * cy;
 	if(ptot < 16) ptot = 16;
 	premi_lbl.setValue(nf2.format(ptot));
@@ -73,6 +75,11 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 		<row style="background:#79872A;">
 			<label sclass="subhead1" value="Insurance premium" />
 			<label sclass="subhead1" id="premi_lbl" />
+		</row>
+		<row spans="2" style="background:#79872A;">
+			<label>
+			(23/06/2015 Remove GST 6% from insurance calculation)
+			</label>
 		</row>
 	</rows>
 </grid>

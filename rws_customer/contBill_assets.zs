@@ -705,12 +705,12 @@ void impRWI_Extra()
 {
 	lcn = kiboo.replaceSingleQuotes(i_lc_no.getValue().trim());
 	if(lcn.equals("")) return;
-	lcn = "RW" + lcn;
+	//lcn = "RW" + lcn;
 
 	sqlstm = "select d.bookno, c.name, r.rocnoyh, r.noofinstallmentyh, " +
 	"convert(datetime, dbo.ConvertFocusDate(d.date_), 112) vdate, " +
 	"r.ordertypeyh, r.remarksyh, r.insttypeyh, " +
-	"(select sum(amount1) from data where voucherno='" + lcn + "') as contractamt, " +
+	"(select sum(amount1) from data where voucherno='" + lcn + "' and vouchertype=3329) as contractamt, " +
 	"convert(datetime, dbo.ConvertFocusDate(u.contractstartyh), 112) as cstart, " +
 	"convert(datetime, dbo.ConvertFocusDate(u.contractendyh), 112) as cend, " +
 	"case r.insttypeyh when 'monthly' then cast(round(u.totaldiffdaysyh/30,0) as int) else cast( (round(u.totaldiffdaysyh/30,0)/4) as int) end as rperiod " +
@@ -718,9 +718,10 @@ void impRWI_Extra()
 	"left join u011b u on u.extraid = d.extraoff " +
 	"left join u001b r on r.extraid = d.extraheaderoff " +
 	"left join mr000 c on c.masterid = d.bookno " +
-	"where d.voucherno = '" + lcn + "';";
+	"where d.voucherno = '" + lcn + "' and d.vouchertype=3329;";
 
 	drc = sqlhand.rws_gpSqlFirstRow(sqlstm);
+
 	if(drc == null) return;
 
 	String[] fl = { "name", "bookno", "cstart", "cend", "rocnoyh", "noofinstallmentyh",

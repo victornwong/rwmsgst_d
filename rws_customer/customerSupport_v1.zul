@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Customer Support / Helpdesk-tickets";
-MYVERSION = "v0.3.3";
+MYVERSION = "v0.3.4";
 MYPANEL = "custsupp1";
 /*
 @Title Customer support / help-tickets
@@ -27,6 +27,7 @@ NOTES:
 29/08/2014: start coding the LC assets replacement controls
 18/09/2014: vanita req , add extra field to classify ticket RMA,REMARKETING,AUDIT,DEPLOYMENT
 27/10/2014: button to source asset details from FC6
+24/06/2015: admin func to remove outsource partner resolutions etc
 
 */
 import java.util.*;
@@ -318,10 +319,18 @@ void adminFunc(Object iwhat)
 
 	if(itype.equals("delticket_b")) // delete ticket
 	{
-		if (Messagebox.show("HARD delete ticket..", "Are you sure?", 
+		if (Messagebox.show("HARD delete ticket..", "Are you sure?",
 			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
 
 		sqlstm = "delete from rw_helptickets where origid=" + glob_selected_ticket;
+	}
+
+	if(itype.equals("clroutsource")) // 24/06/2015: clear outsource partner resolution and etc
+	{
+		if (Messagebox.show("Going to remove outsource partner resolution and dates..", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "update rw_helptickets set os_pickup=null, os_resolvedate=null, os_resolution=null, os_user='' where origid=" + glob_selected_ticket;
 	}
 
 	if(!sqlstm.equals(""))
@@ -640,11 +649,11 @@ ACTIVATY_BOXWIDTH = "500px";
 
 <style src="/real-world.css" />
 <style>
-.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
-{
-border: none; overflow: hidden; zoom: 1;
-border-top: none; border-left: none; border-right: none; border-bottom: none;
-}
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
 </style>
 
 <div width="1200px">
@@ -681,6 +690,7 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 			<button id="viewsof_b" label="View SOF" sclass="k9" onClick="doFunc(self)" />
 			<button id="canceltick_b" label="CANCEL ticket" sclass="k9" onClick="checkOpenCancel()" />
 			<button id="chgtkstat_b" label="Set NEW" sclass="k9" onClick="adminFunc(self)" visible="false" />
+			<button id="clroutsource" label="Clear outsource resolution" sclass="k9" onClick="adminFunc(self)" visible="false" />
 			<button id="admin_b" label="Admin" visible="false" style="color:#cc0000" onClick="adminpopup.open(self)" />
 		</hbox>
 		<separator height="3px" />
@@ -977,17 +987,10 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 <zscript>
 <![CDATA[
 
-if(useraccessobj.accesslevel == 9)
-{
-	//adminstuff.setVisible(true);
-	admin_b.setVisible(true);
-	csvtxt_tb.setValue("1066");
-	chgtkstat_b.setVisible(true);
-}
-
-if(useraccessobj.username.equals("vanita"))
+if(useraccessobj.username.equals("vanita")) // need to re-code this to use security lookup-table
 {
 	chgtkstat_b.setVisible(true);
+	clroutsource.setVisible(true);
 }
 
 luhand.populateListbox_ByLookup(t_priority, "PRIORITY_LISTS", 2);
@@ -1004,8 +1007,16 @@ luhand.populateListbox_ByLookup(t_ticketclass, "TICKET_CLASSIFICATION", 2);
 //luhand.populateListbox_ByLookup(i_collected,"YESNO_DEF",2); // LC/asset-tag check popup
 // TODO confirmquote_b <-- hide/show depending on user's ability to confirm service-items quote
 //if(sechand.allowedUser(useraccessobj.username,"SERVICE_QUOTE_USERS")) confirmquote_b.setDisabled(false);
-
 //showTickets(1);
+
+if(useraccessobj.accesslevel == 9)
+{
+	//adminstuff.setVisible(true);
+	admin_b.setVisible(true);
+	csvtxt_tb.setValue("1066");
+	chgtkstat_b.setVisible(true);
+	clroutsource.setVisible(true);
+}
 
 ]]>
 </zscript>

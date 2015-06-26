@@ -26,6 +26,7 @@ MYPANEL = "salcolcla";
  * 29/05/2014: link to quotations created for cold-call customers
  * 18/11/2014: some optimization and requests by James
  * 03/06/2015: Tham req to show Customer-grading on screen. Add button to send notif email when grading done
+ * 26/06/2015: Mandy req to add customer-grade into dump-list Excel
  */
 import java.util.*;
 import java.text.*;

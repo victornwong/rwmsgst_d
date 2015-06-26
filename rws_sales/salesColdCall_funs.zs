@@ -256,7 +256,7 @@ void genColdCallDump()
 	wfont.setFontHeightInPoints((short)8);
 	wfont.setFontName("Arial");
 
-	String[] rhds = { "REC","Dated","User","Customer","Potential","Contact","Designation",
+	String[] rhds = { "REC","Dated","User","Customer","Grade","Potential","Contact","Designation",
 	"Address1","Address2","Address3","Address4","Tel","Fax","Email","Industry","Division",
 	"Total No PC","DT","NB","Tech.Level","OS","Brand","Specs","Warranty",
 	"Server brand","Server count", "MS-Off Ver", "MS-Off License",
@@ -270,7 +270,7 @@ void genColdCallDump()
 	"Customer remarks"
 	 };
 
-	String[] flsd = { "username","cust_name","potential","contact_person","designation",
+	String[] flsd = { "username","cust_name","customer_grade","potential","contact_person","designation",
 	"cust_address1","cust_address2","cust_address3","cust_address4",
 	"cust_tel","cust_fax","cust_email","industry","call_div" };
 
@@ -297,7 +297,7 @@ void genColdCallDump()
 	{
 		excelInsertString(sheet,rowcount,0, d.get("origid").toString() );
 		excelInsertString(sheet,rowcount,1, dtf2.format(d.get("datecreated")) );
-		for(k=0;k<14;k++)
+		for(k=0;k<flsd.length;k++)
 		{
 			excelInsertString(sheet,rowcount,k+2, kiboo.checkNullString(d.get(flsd[k])) );
 		}
@@ -320,7 +320,7 @@ void genColdCallDump()
 
 			for(k=0; k<hsds.length; k++)
 			{
-				excelInsertString(sheet,rowcount,k+16, kiboo.checkNullString( myhmap.get(hsds[k])) );
+				excelInsertString(sheet,rowcount,k+flsd.length+2, kiboo.checkNullString( myhmap.get(hsds[k])) );
 			}
 		}
 
