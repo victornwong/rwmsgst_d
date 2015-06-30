@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "LC Management";
-MYVERSION = "v0.4.6";
+MYVERSION = "v0.4.7";
 MYPANEL = "billtrkcpan";
 /*
 @Title LC billing tracking and so on
@@ -40,6 +40,7 @@ MYPANEL = "billtrkcpan";
 09/01/2015: Farah req import from RDO - the items
 09/03/2015: huping/nurul req, import assets with billable-flag on
 14/05/2015: shopa req, cpy metadata from other LC
+30/06/2015: add a to-do button to add to-do for LC - uses wall-module to show 'em
 
 */
 import java.util.*;
@@ -839,7 +840,6 @@ G.Stat = GCO status
 					</row>
 				</rows>
 			</grid>
-
 			<grid sclass="GridLayoutNoBorder">
 				<rows>
 					<row style="background:#2e3436;">
@@ -862,7 +862,6 @@ G.Stat = GCO status
 					</row>
 				</rows>
 			</grid>
-
 		</hbox>
 		<separator height="3px" />
 		<div id="rocs_holder" />
@@ -881,7 +880,6 @@ G.Stat = GCO status
 				<tab id="tab5" label="DOCUS / EMAILS / etc" />
 			</tabs>
 			<tabpanels>
-
 			<tabpanel> <!-- lc-roc meta -->
 				<hbox>
 					<button id="updlcmeta_b" label="Update metadata" style="font-weight:bold" onClick="doFunc(self)" />
@@ -895,41 +893,56 @@ G.Stat = GCO status
 				<hbox>
 					<div id="lcrocmeta_formholder" width="700px" />
 
-					<div sclass="shadowbox" style="background:#2e3436;" width="450px" id="jobnotes_div" >
-						<label sclass="subhead1" value="JOB NOTES" />
-						<separator height="3px" />
-						<div id="jobnotes_holder" />
-						<separator height="2px" />
-						<hbox>
-							<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
-								onClick="jobNoteFunc(self,JN_linkcode())" />
-						</hbox>
-						<separator height="2px" />
-						<div id="jobnotes_entry_holder">
-							<grid>
-								<rows>
-									<row visible="false">
-										<label value="To" sclass="k9" />
-										<textbox id="jn_towho" width="99%" style="font-weight:bold" />
-									</row>
-									<row>
-										<label value="Subject" sclass="k9" />
-										<textbox id="jn_subject" width="99%" style="font-weight:bold" />
-									</row>
-									<row>
-										<label value="Notes" sclass="k9" />
-										<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
-									</row>
-								</rows>
-							</grid>
+					<vbox>
+						<div sclass="shadowbox" style="background:#2e3436;" width="450px" id="jobnotes_div" >
+							<label sclass="subhead1" value="JOB NOTES" />
+							<separator height="3px" />
+							<div id="jobnotes_holder" />
 							<separator height="2px" />
-							<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
-							<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+							<hbox>
+								<button id="deletejobn_b" label="Delete" style="font-size:9px;font-weight:bold"
+									onClick="jobNoteFunc(self,JN_linkcode())" />
+							</hbox>
+							<separator height="2px" />
+							<div id="jobnotes_entry_holder">
+								<grid>
+									<rows>
+										<row visible="false">
+											<label value="To" sclass="k9" />
+											<textbox id="jn_towho" width="99%" style="font-weight:bold" />
+										</row>
+										<row>
+											<label value="Subject" sclass="k9" />
+											<textbox id="jn_subject" width="99%" style="font-weight:bold" />
+										</row>
+										<row>
+											<label value="Notes" sclass="k9" />
+											<textbox id="jn_msgbody" width="99%" multiline="true" height="60px" />
+										</row>
+									</rows>
+								</grid>
+								<separator height="2px" />
+								<button id="postjobn_b" label="Post" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+								<button id="clearjobn_b" label="Clear" style="font-weight:bold" onClick="jobNoteFunc(self,JN_linkcode())" />
+							</div>
 						</div>
-					</div>
+
+						<div sclass="shadowbox" style="background:#2e3436;" width="450px" >
+							<hbox>
+								<label sclass="subhead1" value="To-Do" />
+								<label style="color:#ffffff;font-size:9px">(for this LC ONLY)</label>
+							</hbox>
+							<separator height="3px" />
+							<div id="todoholder" />
+							<separator height="3px" />
+							<hbox>
+								<textbox id="todo_entry" width="300px" sclass="k9" />
+								<button id="addtodo_b" sclass="k9mo" label="+" onClick="todoFunc(self.getId())" />
+							</hbox>
+						</div>
+					</vbox>
 				</hbox>
 			</tabpanel> <!-- ENDOF lc-roc meta -->
-
 			<tabpanel> <!-- ASSETS -->
 				<div style="background:#2e3436">
 					<hbox>
@@ -957,7 +970,6 @@ G.Stat = GCO status
 					</vbox>
 				</hbox>
 			</tabpanel> <!-- ENDOF ASSETS -->
-
 			<tabpanel> <!-- ATTACHMENTS -->
 				<hbox>
 					<button id="uploaddoc_btn" label="Upload file" sclass="k9"
@@ -970,7 +982,6 @@ G.Stat = GCO status
 				<separator height="3px" />
 				<div id="documents_holder" />
 			</tabpanel> <!-- ENDOF ATTACHMENTS -->
-
 			</tabpanels>
 		</tabbox>
 	</div>
@@ -979,6 +990,15 @@ G.Stat = GCO status
 
 <zscript>
 <![CDATA[
+
+/**
+ * [todoFunc description]
+ * @param itype button-ID
+ */
+void todoFunc(String itype)
+{
+
+}
 
 lcrocmetaform = dynamicForm(lcrocmeta_formholder, "lcroc_metagrid", "18");
 assbform = dynamicForm(assbom_formholder, "assbom_metgrid", "20");

@@ -756,6 +756,7 @@ void doFunc(Object iwhat)
 		<west title="Wall" size="25%" collapsible="true" border="0" style="background:#254257;" >
 			<div>
 				<hbox id="wallbutts">
+					<button label="To-Do" sclass="k9" onClick="reloadWallMod(3)" />
 					<button label="Notifs" sclass="k9" onClick="reloadWallMod(2)" />
 					<button label="iBoard" sclass="k9" onClick="reloadWallMod(1)" />
 				</hbox>
@@ -794,7 +795,6 @@ void reloadWallMod(int itype)
 {
 	twin = "wallmod_holder";
 	fnm = pms = "";
-
 	switch(itype)
 	{
 		case 1: // announcements wall-mod
@@ -803,8 +803,10 @@ void reloadWallMod(int itype)
 		case 2: // notifications wall-mod
 			fnm = "wallmods/notifications_v1.zul";
 			break;
+		case 3: // To-dos
+			fnm = "wallmods/todos_v1.zul";
+			break;
 	}
-
 	if(!fnm.equals("")) activateModule(mainPlayground,twin,fnm,kiboo.makeRandomId("wal"),pms,useraccessobj);
 }
 

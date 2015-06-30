@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?page id="notifwallmod"?>
+<?page id="todowallmods"?>
 <zk>
 <zscript src="../rwglobal/rwglobaldefs.zs" />
 <zscript src="../rwglobal/rwsqlfuncs.zs" />
@@ -12,15 +12,16 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript>
 <![CDATA[
-MYTITLE = "Notifications";
+MYTITLE = "To-Do";
 MYVERSION = "v0.1";
-MYPANEL = "notifthingpanl";
-/*
-@Title System/Work Notifications wall module
-@Author Victor Wong
-@Since 12/03/2015
-@Notes
-*/
+MYPANEL = "todotingpal";
+/**
+ * @title To-Dos wall module
+ * @author Victor Wong
+ * @since 30/06/2015
+ * @notes
+ * 
+ */
 import java.util.*;
 import java.text.*;
 import org.victor.*;
@@ -35,7 +36,6 @@ gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
 glob_sel_notif_li = null;
 glob_sel_notif = "";
-
 last_list_type = 1;
 
 class notifClick implements org.zkoss.zk.ui.event.EventListener
@@ -164,59 +164,14 @@ void adminFunc(String itype)
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#0C203E">
 
-	<hbox>
-		<!-- <image src="/rwimg/Refresh-button.png" width="25px" onClick="showNotifs(last_list_type)" /> -->
-		<button label="View pending" sclass="k9" onClick="showNotifs(1)" />
-		<button label="View all" sclass="k9" onClick="showNotifs(2)" />
-		<button id="adminje" label="ADMIN" style="font-size:7px;color:#ff2200" visible="false" onClick="adminjepop.open(self)" />
-	</hbox>
-	<separator height="3px" />
-	<div id="notifications_holder" />
-	<separator height="3px" />
-	<div id="notifarea">
-		<grid sclass="GridLayoutNoBorder">
-			<rows>
-				<row style="background:#CCB40F">
-					<separator />
-				</row>
-				<row style="background:#86A1BC">
-					<hbox>
-						<label value="Thing :" sclass="k9mo" style="color:#ffffff" />
-						<label id="notifthing_lb" sclass="k9mo" style="color:#ffffff" />
-					</hbox>
-				</row>
-				<row style="background:#86A1BC">
-					<label value="Action" sclass="k9mo" style="color:#ffffff" />
-				</row>
-				<row style="background:#86A1BC">
-					<textbox id="n_action_text" width="99%" height="70px" sclass="k9" multiline="true" />
-				</row>
-				<row style="background:#86A1BC">
-					<button label="Post action" sclass="k9mo" />
-				</row>
-				<row style="background:#CCB40F">
-					<separator />
-				</row>
-				<row style="background:#86A1BC">
-					<hbox>
-						<label value="Repost date" sclass="k9mo" style="color:#ffffff" />
-						<datebox id="repostdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-					</hbox>
-				</row>
-			</rows>
-		</grid>
-	</div>
-
 <zscript>
 <![CDATA[
 
 if(useraccessobj.accesslevel == 9)
 {
-	adminje.setVisible(true);
 }
 else
 {
-	showNotifs(last_list_type);
 }
 
 ]]>
