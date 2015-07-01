@@ -256,6 +256,14 @@ Object[] ido_hds =
 	new listboxHeaderWidthObj("Dlvr",false,""),
 };
 
+/**
+ * [show_FC_DO description]
+ * @param iwher      pop-up open at position
+ * @param itype      type of listing
+ * @param iassholder assets holder
+ * @param ilbid      listbox ID string
+ */
+
 void show_FC_DO(Object iwher, int itype, Div iassholder, String ilbid )
 {
 	sqlstm = "select d.voucherno, p.name, p.code, p.code2, " +
@@ -298,37 +306,40 @@ void show_FC_DO(Object iwher, int itype, Div iassholder, String ilbid )
 		sqlstm += "and d.voucherno in (" + mdo + ");";
 	}
 
-	if(itype == 2)
-	{
-		idon = kiboo.replaceSingleQuotes( flexfc6do_tb.getValue().trim() );
-		if(idon.equals("")) return;
+	idon = kiboo.replaceSingleQuotes( flexfc6do_tb.getValue().trim() );
 
+	// Flexi-DO import function type
+	if(itype == 2 || itype == 3)
+	{
+		if(idon.equals("")) return;
 		/*
 		rwn = i_rwno.getValue().replaceAll("RWI:","").trim();
 		if(rwn.indexOf("RW") == -1) rwn = "RW" + rwn;
-
 		// "left join u001c di on di.extraid = d.extraheaderoff " +
-
 		sqlstm2 = "select top 1 ri.deliverytoyh from data d " +
 		"left join u001b ri on ri.extraid=d.extraheaderoff " +
 		"where d.voucherno='" + rwn + "';";
-
 		drc = sqlhand.rws_gpSqlFirstRow(sqlstm2);
 		do_deliveryto = kiboo.checkNullString(drc.get("deliverytoyh")).trim();
 		*/
-	
 		sqlstm2 = "select top 1 ri.deliveryaddressyh from data d " +
 		"left join u001c ri on ri.extraid=d.extraheaderoff " +
 		"where d.voucherno='" + idon + "' and d.vouchertype=6144;";
 
-		drc = sqlhand.rws_gpSqlFirstRow(sqlstm2);
-		do_deliveryto = kiboo.checkNullString(drc.get("deliveryaddressyh")).trim();
+		drc = null;
+		if(itype == 2) drc = sqlhand.rws_gpSqlFirstRow(sqlstm2);
+		if(itype == 3) drc = fj0_gpSqlFirstRow(sqlstm2);
 
-		// TODO check DO really belongs to customer
+		do_deliveryto = kiboo.checkNullString(drc.get("deliveryaddressyh")).trim();
 		sqlstm += "and d.voucherno='" + idon + "';";
+		// TODO check DO really belongs to customer
 	}
 
-	prds = sqlhand.rws_gpSqlGetRows(sqlstm);
+	prds = null;
+
+	if(itype == 2) prds = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(itype == 3) prds = fj0_gpSqlGetRows(sqlstm); // rws_warehouse/goodsreceive/injtest.zs
+
 	if(prds.size() == 0) return;
 
 	imp_do_lbl.setValue("FC6 DO : " + dorf);

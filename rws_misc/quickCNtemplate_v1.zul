@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="quickcntempldte"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="../rws_warehouse/goodsreceive/injtest.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Quick CN Template FnD (Rentwise ONLY)";
+MYVERSION = "v0.1";
+MY_ID = "quickcntemplatepp";
+/**
+ * @title Quick CN template generation - rentwise ONLY
+ * @author Victor Wong
+ * @since 01/07/2015
+ * @notes
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+/**
+ * [genCNTemplate_fnd description]
+ * @param itype 0=0J0, 1=0J1 database selector
+ */
+void genCNTemplate_fnd(int itype)
+{
+	vno = kiboo.replaceSingleQuotes( quickcn_tb.getValue().trim() );
+
+	try { kk = Integer.parseInt(vno); } catch (Exception e) { return; }
+
+	sqlstm = "select d.voucherno, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) vdate," +
+	"c.name,ci.address1yh,ci.address2yh,ci.address3yh,ci.address4yh, d.originalamount, u.refnoyh, u.remarksyh " +
+	"from data d left join u0111 u on u.extraid = d.extraoff left join u001b r on r.extraid = d.extraheaderoff " +
+	"left join mr000 c on c.masterid = d.bookno left join u0000 ci on ci.extraid = c.masterid " +
+	"where d.voucherno = '" + vno + "' and d.vouchertype=4096";
+
+	cnr = null;
+
+	if(itype == 1) cnr = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(itype == 0) cnr = fj0_gpSqlFirstRow(sqlstm); // rws_warehouse/goodsreceive/injtest.zs
+
+	if(cnr == null)
+	{
+		guihand.showMessageBox("ERR: cannot get CN record..");
+		return;
+	}
+
+	templatefn = "rwimg/manualcntemplate.xls";
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	Workbook wwb = WorkbookFactory.create(inp);
+	Sheet wsheet = wwb.getSheetAt(0);
+	FormulaEvaluator evaluator = wwb.getCreationHelper().createFormulaEvaluator();
+
+	excelInsertString(wsheet,8,1, kiboo.checkNullString(cnr.get("name")) );
+	excelInsertString(wsheet,9,1, kiboo.checkNullString(cnr.get("address1yh")) );
+	excelInsertString(wsheet,10,1, kiboo.checkNullString(cnr.get("address2yh")) );
+	excelInsertString(wsheet,11,1, kiboo.checkNullString(cnr.get("address3yh")) );
+	excelInsertString(wsheet,12,1, kiboo.checkNullString(cnr.get("address4yh")) );
+
+	excelInsertString(wsheet,8,8, vno ); // voucher no.
+	excelInsertString(wsheet,9,8, kiboo.dtf2.format(cnr.get("vdate")) );
+
+	excelInsertString(wsheet,16,1, kiboo.checkNullString(cnr.get("remarksyh")) );
+	excelInsertString(wsheet,16,2, kiboo.checkNullString(cnr.get("refnoyh")) );
+
+	excelInsertString(wsheet,16,5, kiboo.nf2.format(cnr.get("originalamount")) );
+
+	tfname = "CN" + vno + "_fnd.xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + tfname);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wwb.write(fileOut);
+	fileOut.close();
+	downloadFile(kasiexport,tfname,outfn);
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
+<window id="${MY_ID}" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true" >
+	<div style="background:#F5311C;padding:3px">
+		<hbox>
+		<textbox id="quickcn_tb" width="70px" />
+		<button label="Generate quick GST CN (0J1)" onClick="genCNTemplate_fnd(1)" />
+		<button label="Generate quick GST CN (0J0)" onClick="genCNTemplate_fnd(0)" />
+		</hbox>
+
+		<div id="kasiexport" visible="false" />
+	</div>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+
+</window>
+</zk>

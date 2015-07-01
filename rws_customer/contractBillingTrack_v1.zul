@@ -15,10 +15,11 @@
 <zscript src="./contBill_RMA.zs" />
 <zscript src="./contImport_funcs.zs" />
 <zscript src="./LCassReplaceTracker.zs" />
+<zscript src="../rws_warehouse/goodsreceive/injtest.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "LC Management";
-MYVERSION = "v0.4.7";
+MYVERSION = "v0.4.8";
 MYPANEL = "billtrkcpan";
 /*
 @Title LC billing tracking and so on
@@ -41,6 +42,7 @@ MYPANEL = "billtrkcpan";
 09/03/2015: huping/nurul req, import assets with billable-flag on
 14/05/2015: shopa req, cpy metadata from other LC
 30/06/2015: add a to-do button to add to-do for LC - uses wall-module to show 'em
+01/07/2015: add flexi-import DO for 0J0 (uses funcs rws_warehouse/goodsreceive/injtest.zs for temp. access 0J0 )
 
 */
 import java.util.*;
@@ -423,9 +425,10 @@ BUTT_WIDTH2 = "190px";
 <popup id="fleximportfc6_pop">
 	<div sclass="shadowbox" style="background:#5c0404;" width="600px" >
 		<hbox>
-			<label style="color:#ffffff" value="FC6 DO" />
-			<textbox id="flexfc6do_tb" />
-			<button label="Load DO items" onClick='show_FC_DO(newasset_b,2,flexi_impdoass_holder,"flximpfc6dolb")' />
+			<label sclass="k9mo" style="color:#ffffff" value="FC6 DO" />
+			<textbox id="flexfc6do_tb" sclass="k9" width="80px" />
+			<button label="DO items(0J1)" sclass="k9mo" onClick='show_FC_DO(newasset_b,2,flexi_impdoass_holder,"flximpfc6dolb")' />
+			<button label="DO items(0J0)" sclass="k9mo" onClick='show_FC_DO(newasset_b,3,flexi_impdoass_holder,"flximpfc6dolb")' />
 		</hbox>
 		<separator height="3px" />
 		<label id="flximp_lbl" />
