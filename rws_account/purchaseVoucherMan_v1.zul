@@ -131,7 +131,7 @@ void submitPV_Focus()
 		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
 
 	sqlstm = "";
-	String[] dt = new String[5];
+	String[] dt = new String[6];
 	kx = pvitems_lb.getItems().toArray();
 	for(i=0; i<kx.length; i++)
 	{
@@ -140,14 +140,19 @@ void submitPV_Focus()
 			dt[j] = lbhand.getListcellItemLabel(kx[i],j+2);
 		}
 		slid = lbhand.getListcellItemLabel(kx[i],PVITMSLB_IDX_SALESID);
+		bdid = lbhand.getListcellItemLabel(kx[i],PVITMSLB_BODYID);
+
 		sqlstm += "update indta set rate=" + dt[0] + ",input0=" + dt[1] + ",input1=" + dt[2] + ",input2=" + dt[3] +
 		",input3=" + dt[4] + " where salesid=" + slid + ";";
+
+		sqlstm += "update data set originalamount=" + dt[0] + " where bodyid=" + bdid + ";";
 	}
 
-	//sqlhand.rws_gpSqlExecuter(sqlstm);
-	alert(sqlstm);
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	//alert(sqlstm);
 	edited_pv_values = false; // reset edited flag once values injected
-	//guihand.showMessageBox("Updated.. reload PV voucher in FOCUS to see changes");
+	guihand.showMessageBox("Updated.. reload PV voucher in FOCUS to see changes and" +
+		" make sure to tab-tab for all entries to be recalculated by FOCUS");
 }
 
 /**
@@ -350,7 +355,7 @@ void interpolateRwsimple()
 				<button label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
 				<button label="Interpolate RWSIMPLE" sclass="k9mo" onClick="interpolateRwsimple()" />
 				<button label="View PO" sclass="k9mo" onClick="viewpo_pop.open(self)" />
-				<button label="Market price list" sclass="k9mo" onClick="runMarketPrice_window()" />
+				<button label="Re-market price list" sclass="k9mo" onClick="runMarketPrice_window()" />
 				<button label="SUBMIT TO FOCUS" sclass="k9mo" style="color:#C41212" onClick="submitPV_Focus()" />
 			</hbox>
 			<hbox>

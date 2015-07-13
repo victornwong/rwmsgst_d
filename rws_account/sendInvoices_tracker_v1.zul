@@ -760,6 +760,13 @@ void emailMultiTaxInvoices()
 	}
 }
 
+void exportsentinvoiceList()
+{
+	try {
+	exportExcelFromListbox(sentinvoices_lb, kasiexport, sndinvtckcols_headers, "sentinvoices.xls","list");
+	} catch (Exception e) {}
+}
+
 ]]>
 </zscript>
 
@@ -865,6 +872,7 @@ void emailMultiTaxInvoices()
 			<button label="by sent-date" sclass="k9mo" onClick="showSentInvoices(2)" />
 			<button label="Dig audit-logs" sclass="k9mo" onClick="digauditlog_pop.open(self)" />
 			<button id="sendasorig_b" label="Send as original" sclass="k9mo" style="color:#DA0C0C" visible="false" onClick="doFunc(self.getId())" />
+			<button label="Export Excel" sclass="k9mo" onClick="exportsentinvoiceList()" />
 			<button id="admdelete_rec" label="DELETE" style="font-weight:bold;color:#E32020" onClick="adminFunc(self.getId())" visible="false" />
 			<separator width="20px" />
 			<button id="adminbutt" label="ADMIN" sclass="k9mo" style="color:#D52121" visible="false" onClick="adminpop.open(self)" />
@@ -874,6 +882,8 @@ void emailMultiTaxInvoices()
 	<div sclass="shadowbox" style="background:#849324">
 		<div id="sentinv_holder" />
 	</div>
+
+	<div id="kasiexport" visible="false" />
 
 <zscript>
 <![CDATA[

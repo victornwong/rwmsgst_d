@@ -35,8 +35,15 @@ Object getFC_RWitems(String iwhat)
 void procInstalmentPrintout(int itype)
 {
 	instalmentprit_pop.close();
-	if(glob_sel_lcid.equals("")) return;
-	rwstr = "RW" + glob_sel_lcid;
+	kklc = glob_sel_lcid;
+
+	if(kklc.equals(""))
+	{
+		kklc = kiboo.replaceSingleQuotes( manual_gstinvoice_tb.getValue().trim() ); // 08/07/2015: get manual entered GST invoice no
+		if(kklc.equals("")) return; // not even manual-entered invoice no, return lor
+	}
+	//rwstr = "RW" + kklc;
+	rwstr = kklc; // 0J1 rental-invoice no more RW prefix
 	rwmeta = getFC_RWMeta(rwstr);
 	if(fcmeta == null) { guihand.showMessageBox("ERR: Cannot access rental-invoice.."); return; }
 	rwitems = getFC_RWitems(rwstr);
@@ -68,7 +75,7 @@ void procInstalmentPrintout(int itype)
 
 	excelInsertString(sheet,0,6, kiboo.checkNullString(rwmeta.get("manumberyh")) );
 	excelInsertString(sheet,1,6, kiboo.checkNullString(rwmeta.get("manumberyh")) );
-	excelInsertString(sheet,3,6, glob_sel_lcid );
+	excelInsertString(sheet,3,6, kklc );
 
 	//excelInsertString(sheet,1,9, dtf2.format(rwmeta.get("vdate")) );
 	excelInsertString(sheet,2,9, kiboo.checkNullString(rwmeta.get("customerrefyh")) );
@@ -93,6 +100,7 @@ void procInstalmentPrintout(int itype)
 	if(rwitems.size() > 0) // Insert 'em inv items
 	{
 		kc = 1;
+
 		for( d : rwitems)
 		{
 			xct = 2;
@@ -115,16 +123,31 @@ void procInstalmentPrintout(int itype)
 			sheet.addMergedRegion(new CellRangeAddress(rowcnt+1,rowcnt+1,1,4));
 			sheet.addMergedRegion(new CellRangeAddress(rowcnt+2,rowcnt+2,1,4));
 
-			excelInsertString(sheet,rowcnt,5, nf0.format(d.get("unitqty")) );
+			kk = "0";
+			try { kk = nf0.format(d.get("unitqty")); } catch (Exception e) {}
+			excelInsertString(sheet,rowcnt,5, kk );
+
 			excelInsertString(sheet,rowcnt,6, (instype == 1) ? "1 Month" : "3 Months" );
-			excelInsertString(sheet,rowcnt,7, (d.get("perunit") > 0) ? "RM " + nf2.format(d.get("perunit")) : "" );
-			excelInsertString(sheet,rowcnt,8, (d.get("mthtotal") > 0) ? "RM " + nf2.format(d.get("mthtotal")) : "" );
-			excelInsertString(sheet,rowcnt,9, (d.get("mthtotal") > 0) ? "RM " + nf2.format(d.get("mthtotal")) : "" );
-			qtytot += d.get("unitqty");
-			montot += d.get("mthtotal");
+
+			kk = "";
+			try { kk = (d.get("perunit") != null) ? "RM " + nf2.format(d.get("perunit")) : ""; } catch (Exception e) {}
+			excelInsertString(sheet,rowcnt,7, kk );
+
+			kk = "";
+			try { kk = (d.get("mthtotal") != null) ? "RM " + nf2.format(d.get("mthtotal")) : ""; } catch (Exception e) {}
+			excelInsertString(sheet,rowcnt,8, kk );
+
+			//kk = "";
+			//try { kk = (d.get("mthtotal") > 0) ? "RM " + nf2.format(d.get("mthtotal")) : ""; } catch (Exception e) {}
+			excelInsertString(sheet,rowcnt,9, kk );
+
+			if(d.get("unitqty") != null) qtytot += d.get("unitqty");
+			if(d.get("mthtotal") != null) montot += d.get("mthtotal");
+
 			kc++;
 			rowcnt += xct; // blnk 1 row
-			if(d.get("rentperiod") != 0) rwper = d.get("rentperiod");
+			if(d.get("rentperiod") != null)
+				if(d.get("rentperiod") != 0) rwper = d.get("rentperiod");
 		}
 	}
 

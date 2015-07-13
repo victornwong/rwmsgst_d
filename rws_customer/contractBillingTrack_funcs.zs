@@ -183,6 +183,7 @@ Object[] lclb_hds =
 	new listboxHeaderWidthObj("Status",true,"80px"), // 10
 	new listboxHeaderWidthObj("User",true,"90px"),
 	new listboxHeaderWidthObj("Ord.Type",true,""),
+	new listboxHeaderWidthObj("ASGN",true,"40px"),
 };
 
 class lclbClick implements org.zkoss.zk.ui.event.EventListener
@@ -219,7 +220,7 @@ void listROCLC(int itype)
 	lcsdate = kiboo.getDateFromDatebox(lcend_startdate);
 	lcedate = kiboo.getDateFromDatebox(lcend_enddate);
 
-	sqlstm = "select top 600 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder, " +
+	sqlstm = "select top 600 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder, lc.assigned, " +
 	"(select count(origid) from rw_lc_equips where lc_parent=lc.origid) as aqty, lc.inst_type, lc.rwno, " +
 	"(select count(lce1.gcn_id) from rw_lc_equips lce1 " +
 	"where lce1.lc_parent=lc.origid and (lce1.gcn_id is not null or lce1.gcn_id<>0)) as gcocount," +
@@ -244,7 +245,7 @@ void listROCLC(int itype)
 			break;
 
 		case 3 : // load latest entered
-			sqlstm = "select top 15 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder," +
+			sqlstm = "select top 15 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder, lc.assigned," +
 			"(select count(origid) from rw_lc_equips where lc_parent=lc.origid) as aqty, lc.inst_type, lc.rwno, " +
 			"(select count(lce1.gcn_id) from rw_lc_equips lce1 " +
 			"where lce1.lc_parent=lc.origid and (lce1.gcn_id is not null or lce1.gcn_id<>0)) as gcocount," +
@@ -270,7 +271,7 @@ void listROCLC(int itype)
 	newlb.addEventListener("onSelect", lclcblicker);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid", "lc_id", "rwno", "rocno", "customer_name", "aqty", "gcocount", "lstartdate", "lenddate", "period",
-	"inst_type", "lstatus", "username", "order_type" };
+	"inst_type", "lstatus", "username", "order_type", "assigned" };
 	for(dpi : lcrecs)
 	{
 		ngfun.popuListitems_Data(kabom,fl,dpi);

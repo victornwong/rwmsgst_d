@@ -53,6 +53,125 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
+// HARDCODED as to worksheet 07/07/2015
+START_ROW = 7; // start-row 8 as per Excel worksheet
+PRODNAME_COL = 1; // col B : prod-name in worksheet to search
+COST_COL = 16; // col Q : cost
+QTY_COL = 18; // col S : quantity
+FMV_COL = 19; // col T : FMV
+TOTALFMV_COL = 20; // col U : Total FMV
+DIFF_COL = 21; // col V : difference of total-fmv and cost
+FAVUN_COL = 29; // col AD : FAV or UNFAV
+
+OUTPUT_FILENAME = "provstockobso.xls";
+
+void procObsoleStock()
+{
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	HashMap dtg = new HashMap();
+
+	// grab market-prices into hashmap first, if nothing, no point upload worksheet
+	sqlstm = "select itemname,price from rw_mktpricebook;";
+	r = sqlhand.gpSqlGetRows(sqlstm);
+	if(r.size() == 0)
+	{
+		guihand.showMessageBox("ERR: nothing in re-market pricebook, cannot progress");
+		return;
+	}
+
+	for(d : r)
+	{
+		itm = kiboo.checkNullString(d.get("itemname")).trim();
+		if(!itm.equals(""))
+		{
+			vl = 0.0;
+			try { vl = d.get("price"); } catch (Exception e) {}
+
+			if(!dtg.containsKey(itm))
+			{
+				dtg.put(itm.toUpperCase(), vl);
+			}
+		}
+	}
+
+	rwswk = new uploadedWorksheet();
+	rwswk.getUploadFileData();
+	if(rwswk.thefiledata == null)
+	{
+		guihand.showMessageBox("ERR: Invalid worksheet, try again");
+		return;
+	}
+
+	inps = new ByteArrayInputStream(rwswk.thefiledata);	
+	HSSFWorkbook excelWB = new HSSFWorkbook(inps);
+	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	wksht0 = excelWB.getSheetAt(0);
+	wknumrows = wksht0.getPhysicalNumberOfRows();
+
+	for(i=START_ROW; i<wknumrows; i++) // iterate all rows and calc watever
+	{
+		try
+		{
+			checkrow = wksht0.getRow(i);
+			pnm = "";
+			try { kcell = checkrow.getCell(PRODNAME_COL); pnm = POI_GetCellContentString(kcell,evaluator,"").trim().toUpperCase(); }
+			catch (Exception e) {}
+			if(!pnm.equals("")) // found product-name
+			{
+				tcost = 0.0; // get cost from worksheet
+				try { kcell = checkrow.getCell(COST_COL); tcost = Float.parseFloat(POI_GetCellContentString(kcell,evaluator,"").trim()); }
+				catch (Exception e) {}
+
+				tqty = 0; // get quantity from worksheet
+				try { kcell = checkrow.getCell(QTY_COL); tqty = Integer.parseInt(POI_GetCellContentString(kcell,evaluator,"").trim()); }
+				catch (Exception e) {}
+
+				// go through market-price hashmap and try get 'em prices
+				Set set = dtg.entrySet();
+				Iterator itr = set.iterator();
+				ifmv = itotalfmv = 0.0;
+
+				while(itr.hasNext())
+				{
+					Map.Entry thisEntry = (Map.Entry)itr.next();
+					ikey = thisEntry.getKey().toUpperCase();
+					ifmv = thisEntry.getValue();
+
+					if(pnm.indexOf(ikey) != -1) // match product-name against re-market item
+					{
+						itotalfmv = tqty * ifmv;
+						break;
+					}
+				}
+
+				idiff = tcost - itotalfmv;
+				ifavstr = (idiff <= 0) ? "FAVORABLE" : "UNFAVORABLE";
+
+				// put 'em values into worksheet
+				excelInsertString(wksht0,i,FAVUN_COL,ifavstr); // fav/un string
+				excelInsertNumber(wksht0,i,FMV_COL,ifmv.toString()); // FMV value from hashmap
+				excelInsertNumber(wksht0,i,TOTALFMV_COL,itotalfmv.toString()); // total FMV
+				excelInsertNumber(wksht0,i,DIFF_COL,idiff.toString()); // Difference of cost and total-fmv
+			}
+		} catch (Exception e) {}
+	}
+	outfn = session.getWebApp().getRealPath("tmp/" + OUTPUT_FILENAME);
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut);
+	fileOut.close();
+	downloadFile(kasiexport,OUTPUT_FILENAME,outfn);
+}
+
+/**
+ * [runMarketPrice_window description]
+ */
+void runMarketPrice_window()
+{
+	guihand.globalActivateWindow(mainPlayground,"miscwindows","rws_sales/marketPricebook_v1.zul",kiboo.makeRandomId("vmp"),"",useraccessobj);
+}
+
+
 ]]>
 </zscript>
 
@@ -65,10 +184,18 @@ gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 	}
 </style>
 
-<window id="${MY_ID}" width="600px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true" >
+<window id="${MY_ID}" width="500px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true" >
 <div style="background:#F5311C;padding:3px">
-	<button label="Upload and process stock obsolescence worksheet" />
-
+	<vbox>
+		<button label="Upload and process stock obsolescence worksheet" onClick="procObsoleStock()" />
+		<button label="Re-market price list" onClick="runMarketPrice_window()" />
+		<separator height="3px"/>
+		<label multiline="true" sclass="k9mo" >
+Uses re-market prices database to process the stock obsolescence worksheet.
+Update the re-market prices regularly to improve accuracy
+Processing will take a while. Sit tight..
+		</label>
+	</vbox>
 	<div id="kasiexport" visible="false" />
 </div>
 

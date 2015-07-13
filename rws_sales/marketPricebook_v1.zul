@@ -114,8 +114,10 @@ void listMktPriceItems(int itype, Object istb)
 	last_list_type = itype;
 	workarea.setVisible(true);
 	st = (istb != null) ? kiboo.replaceSingleQuotes(istb.getValue().trim()) : "";
-	bycat = category_dd.getSelectedItem().getLabel();
-	bytyp = itemtype_dd.getSelectedItem().getLabel();
+	bycat = "";
+	try { bycat = category_dd.getSelectedItem().getLabel(); } catch (Exception e) {}
+	bytyp = "";
+	try { bytyp = itemtype_dd.getSelectedItem().getLabel(); } catch (Exception e) {}
 	Listbox newlb = lbhand.makeVWListbox_Width(mktitems_holder, mktitemslb_hds, "mktitems_lb", 20);
 
 	sqlstm = "select * from rw_mktpricebook ";

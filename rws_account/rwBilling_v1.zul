@@ -16,7 +16,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Billing / Assignment";
-MYVERSION = "v0.2.3";
+MYVERSION = "v0.2.4";
 MYPANEL = "bilingasspan";
 /*
 @Title Billing and Assignment super module..
@@ -27,6 +27,7 @@ Revisions:
 21/03/2014: recode - with data in rw_lc_records, build a tree
 11/06/2014: search by customer in expiring-LCs popup
 12/06/2014: add assignment-drawdown funcs
+08/07/2015: manual enter GST invoice no. in 0J1 to produce rental-schedule manual invoice
 
 */
 import java.util.*;
@@ -228,11 +229,20 @@ BUTT_WIDTH2 = "190px";
 <popup id="instalmentprit_pop">
 	<div sclass="shadowbox" style="background:#909d2a" >
 		<vbox>
-			<hbox>
-				<label value="Instalment No." sclass="k9mo" style="color:#ffffff" />
-				<textbox id="instno_tb" width="50px" />
-				<button label="by instalment" sclass="k9mo" onClick="procInstalmentPrintout(1)" />
-			</hbox>
+			<grid sclass="GridLayoutNoBorder">
+				<rows>
+					<row style="background:#909d2a">
+						<label value="Instalment No." sclass="k9mo" style="color:#ffffff" />
+						<textbox id="instno_tb" width="50px" />
+						<button label="by instalment" sclass="k9mo" onClick="procInstalmentPrintout(1)" />
+					</row>
+					<row style="background:#909d2a">
+						<label value="GST invoice" sclass="k9mo" style="color:#ffffff" />
+						<textbox id="manual_gstinvoice_tb" width="50px" />
+						<separator />
+					</row>
+				</rows>
+			</grid>
 			<separator height="2px" />
 			<button label="Whole rental schedule" sclass="k9mo" width="200px" onClick="procInstalmentPrintout(2)" />
 			<button label="List LC need instalment printout" sclass="k9mo" width="200px" onClick="showLC_tree(2, mainlc_tree); instalmentprit_pop.close()" />

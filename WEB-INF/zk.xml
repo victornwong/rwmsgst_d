@@ -81,6 +81,10 @@ Copyright (C) 2006 Potix Corporation. All Rights Reserved.
 	</system-config>
 	-->
 
+	<system-config>
+		<max-upload-size>10000</max-upload-size>
+	</system-config>
+
 	<!-- Optional -->
 	<!-- You can define any number of richlets as follows.
 		Note: To use richlet, you have to map zkLoader to /xx/* in web.xml,

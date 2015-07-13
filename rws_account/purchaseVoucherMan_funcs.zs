@@ -12,9 +12,11 @@ Object[] pvitemslb_hds =
 	new listboxHeaderWidthObj("Accm Depr",true,""),
 	new listboxHeaderWidthObj("Qty",true,""),
 	new listboxHeaderWidthObj("salesid",false,""), // 8
+	new listboxHeaderWidthObj("bodyid",false,""), // 9
 };
 PVITMSLB_IDX_RATE = 2;
 PVITMSLB_IDX_SALESID = 8;
+PVITMSLB_BODYID = 9;
 PVITMSLB_IDX_ITEM = 1;
 PVITMSLB_IDX_ACCMDEPR = 6;
 
@@ -50,7 +52,7 @@ void show_PVItems(String ipv)
 
 	Listbox newlb = lbhand.makeVWListbox_Width(pvitems_holder, pvitemslb_hds, "pvitems_lb", 20);
 
-	sqlstm = "select y.salesid, s.name, y.rate, y.input0 as insurance, y.input1 as freight, y.input2 as refurbcost, y.input3 as accmdepr, y.quantity " +
+	sqlstm = "select d.bodyid, d.originalamount, y.salesid, s.name, y.rate, y.input0 as insurance, y.input1 as freight, y.input2 as refurbcost, y.input3 as accmdepr, y.quantity " +
 	"from data d left join indta y on y.salesid = d.salesoff left join mr001 s on s.masterid = d.productcode " +
 	"where d.vouchertype=" + FOCUS_PV_VOUCHERTYPE + " and d.voucherno='" + ipv + "' and y.salesid is not null order by d.bodyid;";
 
@@ -59,7 +61,7 @@ void show_PVItems(String ipv)
 	newlb.setMold("paging"); newlb.setMultiple(true); newlb.setCheckmark(true);
 	//newlb.addEventListener("onSelect", pvlbonclicker );
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "name", "rate", "insurance", "freight", "refurbcost", "accmdepr", "quantity", "salesid" };
+	String[] fl = { "name", "originalamount", "insurance", "freight", "refurbcost", "accmdepr", "quantity", "salesid","bodyid" };
 	lnc = 1;
 	for(d : r)
 	{

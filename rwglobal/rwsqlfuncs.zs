@@ -70,7 +70,8 @@ void fillListbox_uniqField(String itbn, String ifl, Listbox ilb)
 			lbhand.insertListItems(ilb,kabom,"false","");
 		}
 	}
-	ilb.setSelectedIndex(0); // default select item 1 in listbox
+	try {	ilb.setSelectedIndex(0); } // default select item 1 in listbox
+	catch (Exception e) {}
 }
 
 /**
@@ -119,7 +120,7 @@ void rws_fillListbox_uniqField(String itbn, String ifl, Listbox ilb)
 			lbhand.insertListItems(ilb,kabom,"false","");
 		}
 	}
-	ilb.setSelectedIndex(0);
+	try {	ilb.setSelectedIndex(0); } catch (Exception e) {}
 }
 
 // TODO move this to listboxhandler.j
