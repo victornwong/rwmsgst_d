@@ -1,5 +1,6 @@
 import org.victor.*;
 // Inject DO into FC6. Codes copied over from adminmodules/injectFCtest.zul
+// 21/07/2015: Modification for OJ1 database
 
 DO_EXTRAHEADEROFF = "u001c";
 DO_EXTRAOFF = "u011c";

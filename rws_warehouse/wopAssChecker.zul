@@ -22,7 +22,7 @@ Make it to check stock-tick scanned asset against what're inside FC6 inventory t
 08/12/2014: req vimalan, able to change asset type (DT,MT,NB..etc)
 09/12/2014: req vimalan, able to change asset casing
 12/01/2015: repair-division req to show commentsyh in list
-
+21/07/2015: Satish req to put quantity column
 */
 
 import org.victor.*;
@@ -47,6 +47,7 @@ Object[] wpshd =
 	new listboxHeaderWidthObj("Type",true,""),
 	new listboxHeaderWidthObj("Case",true,""),
 	new listboxHeaderWidthObj("Comments",true,""),
+	new listboxHeaderWidthObj("Qty",true,""),
 };
 
 void checkEmAssets(int itype)
@@ -65,8 +66,9 @@ void checkEmAssets(int itype)
 	kk = "where ltrim(rtrim(s.code2)) in (" + asts + ") order by s.code2 desc;";
 	if(itype == 2) kk = "where ltrim(rtrim(s.code)) in (" + asts + ") order by s.code desc;";
 
-	sqlstm = "select s.name, s.code, s.code2, si.brandyh, si.modelyh, si.gradeyh, si.itemtypeyh, w.name as palletno, si.casingyh, si.commentsyh " +
+	sqlstm = "select s.name, s.code, s.code2, si.brandyh, si.modelyh, si.gradeyh, si.itemtypeyh, w.name as palletno, si.casingyh, si.commentsyh, p.qty " +
 	"from mr001 s left join u0001 si on si.extraid = s.eoff " +
+	"left join partsall_0 p on p.assettag = s.code2 " +
 	"left join mr003 w on w.masterid = si.palletnoyh " + kk;
 
 	ats = sqlhand.rws_gpSqlGetRows(sqlstm);
@@ -74,7 +76,7 @@ void checkEmAssets(int itype)
 	newlb.setRows(20); newlb.setMold("paging");
 	newlb.setMultiple(true); newlb.setCheckmark(true);
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "code2", "code", "name", "brandyh", "modelyh", "gradeyh", "palletno", "itemtypeyh", "casingyh", "commentsyh" };
+	String[] fl = { "code2", "code", "name", "brandyh", "modelyh", "gradeyh", "palletno", "itemtypeyh", "casingyh", "commentsyh","qty" };
 	for(d : ats)
 	{
 		ngfun.popuListitems_Data2(kabom,fl,d);

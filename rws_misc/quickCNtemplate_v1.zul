@@ -62,12 +62,12 @@ void genCNTemplate_fnd(int itype)
 	"left join mr000 c on c.masterid = d.bookno left join u0000 ci on ci.extraid = c.masterid " +
 	"where d.voucherno = '" + vno + "' and d.vouchertype=4096";
 
-	cnr = null;
+	rcs = null;
 
-	if(itype == 1) cnr = sqlhand.rws_gpSqlFirstRow(sqlstm);
-	if(itype == 0) cnr = fj0_gpSqlFirstRow(sqlstm); // rws_warehouse/goodsreceive/injtest.zs
+	if(itype == 1) rcs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(itype == 0) rcs = fj0_gpSqlGetRows(sqlstm); // rws_warehouse/goodsreceive/injtest.zs
 
-	if(cnr == null)
+	if(rcs == null)
 	{
 		guihand.showMessageBox("ERR: cannot get CN record..");
 		return;
@@ -80,19 +80,25 @@ void genCNTemplate_fnd(int itype)
 	Sheet wsheet = wwb.getSheetAt(0);
 	FormulaEvaluator evaluator = wwb.getCreationHelper().createFormulaEvaluator();
 
-	excelInsertString(wsheet,8,1, kiboo.checkNullString(cnr.get("name")) );
-	excelInsertString(wsheet,9,1, kiboo.checkNullString(cnr.get("address1yh")) );
-	excelInsertString(wsheet,10,1, kiboo.checkNullString(cnr.get("address2yh")) );
-	excelInsertString(wsheet,11,1, kiboo.checkNullString(cnr.get("address3yh")) );
-	excelInsertString(wsheet,12,1, kiboo.checkNullString(cnr.get("address4yh")) );
+	strow = 16;
 
-	excelInsertString(wsheet,8,8, vno ); // voucher no.
-	excelInsertString(wsheet,9,8, kiboo.dtf2.format(cnr.get("vdate")) );
+	for(cnr : rcs)
+	{
+		excelInsertString(wsheet,8,1, kiboo.checkNullString(cnr.get("name")) );
+		excelInsertString(wsheet,9,1, kiboo.checkNullString(cnr.get("address1yh")) );
+		excelInsertString(wsheet,10,1, kiboo.checkNullString(cnr.get("address2yh")) );
+		excelInsertString(wsheet,11,1, kiboo.checkNullString(cnr.get("address3yh")) );
+		excelInsertString(wsheet,12,1, kiboo.checkNullString(cnr.get("address4yh")) );
 
-	excelInsertString(wsheet,16,1, kiboo.checkNullString(cnr.get("remarksyh")) );
-	excelInsertString(wsheet,16,2, kiboo.checkNullString(cnr.get("refnoyh")) );
+		excelInsertString(wsheet,8,8, vno ); // voucher no.
+		excelInsertString(wsheet,9,8, kiboo.dtf2.format(cnr.get("vdate")) );
 
-	excelInsertString(wsheet,16,5, kiboo.nf2.format(cnr.get("originalamount")) );
+		excelInsertString(wsheet,strow,0, (strow-15).toString() + "." );
+		excelInsertString(wsheet,strow,1, kiboo.checkNullString(cnr.get("remarksyh")) );
+		excelInsertString(wsheet,strow,2, kiboo.checkNullString(cnr.get("refnoyh")) );
+		excelInsertString(wsheet,strow,5, kiboo.nf2.format(cnr.get("originalamount")) );
+		strow++;
+	}
 
 	tfname = "CN" + vno + "_fnd.xls";
 	outfn = session.getWebApp().getRealPath("tmp/" + tfname);

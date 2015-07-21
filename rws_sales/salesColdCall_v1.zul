@@ -27,6 +27,7 @@ MYPANEL = "salcolcla";
  * 18/11/2014: some optimization and requests by James
  * 03/06/2015: Tham req to show Customer-grading on screen. Add button to send notif email when grading done
  * 26/06/2015: Mandy req to add customer-grade into dump-list Excel
+ * 21/07/2015: remove "Go check" email notif by James request
  */
 import java.util.*;
 import java.text.*;
@@ -118,6 +119,7 @@ void contFunc(Object iwhat)
 		sqlstm = "update rw_activities_contacts set customer_grade='" + cgd + "' where origid=" + glob_sel_acticont;
 
 		// 01/12/2014: james req to send notif email to requesting-user and himself when grade is updated
+		/* 21/07/2015: removed by James request
 		topeople = "james.thomas@rentwise.com,sales@rentwise.com";
 		ur = sechand.getPortalUser_Rec_username(glob_sel_username);
 		if(ur != null)
@@ -129,6 +131,7 @@ void contFunc(Object iwhat)
 		subj = "Pre-pre-evaluation grade updated for " + cstn;
 		msgb = "Go check..";
 		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
+		*/
 	}
 
 	if(!sqlstm.equals(""))
