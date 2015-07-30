@@ -1,5 +1,60 @@
+// 27/07/2015: output PO via BIRT
 // generate PO from Excel-template .. used by rwpurchaseReq_v1.zul
 
+RWPOTEMPLATE_FN = "RWPO_v1.rptdesign";
+
+/**
+ * Generate PO via BIRT for multi-type exports
+ * @param ipr selected purchase-req
+ */
+void birt_genPO_Template(String ipr)
+{
+	// Extract items and put into report table - have to remove previous items if avail
+	sqlstm = "delete from purchasereq_items where pr_parent_id=" + ipr;
+	sqlhand.gpSqlExecuter(sqlstm);
+
+	prc = getPR_rec(ipr);
+
+	itms = sqlhand.clobToString(prc.get("pr_items")).split("~");
+	iqty = sqlhand.clobToString(prc.get("pr_qty")).split("~");
+	iupr = sqlhand.clobToString(prc.get("pr_unitprice")).split("~");
+
+	sqlstm = "";
+
+	if(itms.length > 0)
+	{
+		for(i=0; i<itms.length; i++)
+		{
+			unitprice = "0.0";
+			try { kk = Float.parseFloat(iupr[i]); unitprice = iupr[i]; } catch (Exception e) {}
+			quantity = "0";
+			try { kk = Integer.parseInt(iqty[i]); quantity = iqty[i]; } catch (Exception e) {}
+
+			sqlstm += "insert into purchasereq_items (pr_parent_id,description,unitprice,quantity,curcode) values " +
+			"(" + ipr + ",'" + kiboo.checkNullString(itms[i]) + "'," + unitprice + "," + quantity + ",'" + kiboo.checkNullString(prc.get("curcode")) + "');";
+		}
+		
+		sqlhand.gpSqlExecuter(sqlstm);
+
+		if(expass_div.getFellowIfAny("expassframe") != null) expassframe.setParent(null);
+		Iframe newiframe = new Iframe();
+		newiframe.setId("expassframe"); newiframe.setWidth("100%"); newiframe.setHeight("600px");
+		thesrc = birtURL() + "rwreports/" + RWPOTEMPLATE_FN + "&prid=" + ipr;
+		newiframe.setSrc(thesrc);
+		newiframe.setParent(expass_div);
+		expasspop.open(printpr2_b);
+
+	}
+	else
+	{
+		guihand.showMessageBox("No items in the purchase-order.. no output");
+	}
+}
+
+/**
+ * Original PO output by excel-worksheet
+ * @param ipr selected purchase-req
+ */
 void genPO_Template(String ipr)
 {
 	prc = getPR_rec(ipr);

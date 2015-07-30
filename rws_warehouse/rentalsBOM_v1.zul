@@ -8,6 +8,7 @@
 <zscript src="../rwglobal/systemAudit.zs" />
 <zscript src="../rwglobal/jobNotes_funcs.zs" />
 <zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
 <zscript src="./BOMfuncs/rentalsBOM_funcs.zs" />
 <zscript src="./BOMfuncs/ERG_ImpBOM.zs" />
 <zscript src="./BOMfuncs/buildsCommiter.zs" />
@@ -16,7 +17,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Bill Of Materials (BOM)";
-MYVERSION = "v0.5.5";
+MYVERSION = "v0.5.6";
 MYPANEL = "rentitebom3";
 /*
 @Title Rental items BOM maker
@@ -38,6 +39,7 @@ ERR: javax.mail.AuthenticationFailedException: No authentication mechansims supp
 10/07/2014: mass-update the things requested by Thanesh above to all selected builds
 16/10/2014: only show textbox to let user enter Job-ID which will link to BOM
 26/12/2014: can goto BOM by id
+30/07/2015: Prod. req to have docu attachment for each asset to store COA picture or whatever
 
 */
 import java.util.*;
@@ -51,7 +53,9 @@ param_bomid = Executions.getCurrent().getParameter("bom");
 
 kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler(); guihand = new GuiFuncs();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+dmshand = new DMSFuncs();
 
+ASS_PREFIX = "ASS";
 APPROVE_STR = "APPROVE";
 NEW_STR = "NEW";
 COMMIT_STR = "COMMIT";
@@ -622,6 +626,42 @@ void mpfFunc(String itype)
 </div>
 </popup>
 
+<popup id="updatefiledesc_popup"> <!-- update file description popup -->
+	<groupbox width="400px">
+		<caption id="updatefiledesc_label" />
+		<label value="Description" class="k9" />
+		<textbox id="update_file_description" multiline="true" height="70px" width="99%" class="k9" />
+		<separator height="3px" />
+		<hbox>
+			<button label="Update" class="k9" onClick="updateFileDescription(documents_holder,ASS_PREFIX,global_selected_build)" />
+			<button label="Close" class="k9" onClick="updatefiledesc_popup.close()" />
+		</hbox>
+	</groupbox>
+</popup>
+
+<popup id="uploadfile_popup"> <!-- upload a file popup -->
+	<groupbox>
+	<caption label="Upload a file" />
+		<grid>
+			<rows>
+				<row>
+					<label value="Filename" class="k9" />
+					<textbox id="fileupl_file_title" width="200px" class="k9" />
+				</row>
+				<row>
+					<label value="Description" class="k9" />
+					<textbox id="fileupl_file_description" multiline="true" height="60px" width="200px" class="k9" />
+				</row>
+			</rows>
+		</grid>
+	</groupbox>
+	<separator height="3px" />
+	<hbox>
+		<button label="Select file" onClick="uploadFile(documents_holder,ASS_PREFIX,global_selected_build)" class="k9" />
+		<button label="Close" onClick="uploadfile_popup.close()"  class="k9" />
+	</hbox>
+</popup>
+
 <style src="/real-world.css" />
 
 <div width="1200px">
@@ -764,21 +804,40 @@ void mpfFunc(String itype)
 		<separator height="3px" />
 
 		<hbox>
-			<div id="builds_holder" width="500px" />
-			<div id="form_holder">
-				<div style="background:#DBBB07;padding:5px">
-					<hbox>
-						<textbox id="fastscan_tb" multiline="true" width="180px" height="70px" />
-						<vbox>
-							<button id="pbuildparts_b" label="Populate selected build's parts" sclass="k9mo" onClick="autoPopulateParts()" />
-							<button id="autinserteq_b" label="Auto insert equipments" sclass="k9mo" onClick="autoInsertEquips()" />
-							<button id="autinsertmon_b" label="Auto insert monitors ONLY" sclass="k9mo" onClick="bomAutoInsertEquips(1)" />
-							<button label="Clear" sclass="k9mo" onClick='fastscan_tb.setValue("")' />
-						</vbox>
-					</hbox>
-				</div>
+			<vbox>
+				<div id="builds_holder" width="500px" />
 				<separator height="2px" />
-			</div>
+				<div sclass="shadowbox" style="background:#555753" id="docholder" width="500px" >
+					<vbox>
+						<label sclass="subhead1">ATTACHMENT / DOCUMENTS by ASSET</label>
+						<label sclass="k9b" value="(Attached COA/DO/Invoice/Anything here)" />
+						<hbox>
+							<button id="uploaddoc_btn" label="Upload file" class="k9" onClick="showUploadPopup(ASS_PREFIX,global_selected_build)" />
+							<button id="viewdoc_btn" label="View file" class="k9" onClick="viewFile()" />
+							<button id="editdoc_btn" label="Update" class="k9" onClick="updatefiledesc_popup.open(self)" />
+							<button id="deletedoc_btn" label="Delete" class="k9" onClick="deleteFile(documents_holder,ASS_PREFIX,global_selected_build)" />
+						</hbox>
+						<div id="documents_holder" />
+					</vbox>
+				</div>
+			</vbox>
+
+			<vbox>
+				<div id="form_holder">
+					<div style="background:#DBBB07;padding:5px">
+						<hbox>
+							<textbox id="fastscan_tb" multiline="true" width="180px" height="70px" />
+							<vbox>
+								<button id="pbuildparts_b" label="Populate selected build's parts" sclass="k9mo" onClick="autoPopulateParts()" />
+								<button id="autinserteq_b" label="Auto insert equipments" sclass="k9mo" onClick="autoInsertEquips()" />
+								<button id="autinsertmon_b" label="Auto insert monitors ONLY" sclass="k9mo" onClick="bomAutoInsertEquips(1)" />
+								<button label="Clear" sclass="k9mo" onClick='fastscan_tb.setValue("")' />
+							</vbox>
+						</hbox>
+					</div>
+				</div>
+			</vbox>
+
 		</hbox>
 	</div> <!-- ENDOF workarea -->
 

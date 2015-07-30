@@ -342,6 +342,8 @@ void showBuild_metadata(String ibui)
 	"optical", "webcam", "cardreader", "bluetooth" };
 
 	ngfun.populateUI_Data(fls,fln,ris);
+
+	fillDocumentsList(documents_holder,ASS_PREFIX,ibui);
 }
 
 Object[] builds_headers = 

@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Purchase Requisition / Order";
-MYVERSION = "v0.4.1";
+MYVERSION = "v0.4.2";
 MYPANEL = "rwprmpopan";
 /**
  * Purchase Req and Order for Rentwise ONLY!
@@ -28,6 +28,7 @@ MYPANEL = "rwprmpopan";
  * @revisions
  * 26/05/2014: export data out for analysis as required by Satish
  * 10/06/2015: add Navin to notification emails list, NOTIF_EMAILS
+ * 29/07/2015: export PR/PO via BIRT for PDF and etc
  */
 import java.util.*;
 import java.text.*;
@@ -156,6 +157,12 @@ void doFunc(Object iwhat)
 		if(itype.equals("printpr_b"))
 		{
 			if(glob_sel_prstatus.equals("APPROVE")) genPO_Template(glob_sel_prid);
+			else msgtext = "PR got no approval, cannot print/export anything..";
+		}
+
+		if(itype.equals("printpr2_b")) // 27/07/2015: output PO via BIRT
+		{
+			if(glob_sel_prstatus.equals("APPROVE")) birt_genPO_Template(glob_sel_prid);
 			else msgtext = "PR got no approval, cannot print/export anything..";
 		}
 
@@ -480,6 +487,10 @@ void reportFunc(Object iwhat)
 	</div>
 </popup>
 
+<popup id="expasspop">
+	<div id="expass_div" width="700px" />
+</popup>
+
 <style src="/real-world.css" />
 <style>
 .GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
@@ -513,7 +524,8 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 			<button id="notifynewpr_b" label="Notify procurement " sclass="k9mo" style="color:#3465a4" onClick="doFunc(self)" />
 			<button id="submitpr_b" label="Submit for approval" sclass="k9mo" style="color:#5c0404" onClick="doFunc(self)" />
 			<button id="cancelpr_b" label="CANCEL" sclass="k9mo" onClick="doFunc(self)" />
-			<button id="printpr_b" label="Print/Export" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="printpr_b" label="Print/Export" sclass="k9mo" onClick="doFunc(self)" visible="false" />
+			<button id="printpr2_b" label="Print/Export" sclass="k9mo" onClick="doFunc(self)" />
 			<button label="Reports" sclass="k9mo" onClick="preports_pop.open(self)" />
 			<button id="setnewpr_b" label="set DRAFT" sclass="k9mo" style="color:#909d2a" onClick="adminFunc(self)" disabled="true" />
 			<button id="shwauditlogs_b" label="Audit logs" sclass="k9mo" onClick="doFunc(self)" />

@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Tax Invoice Emailer - Tracker";
-MYVERSION = "v0.2";
+MYVERSION = "v0.2.1";
 MYPANEL = "emailsendinvt";
 /**
  * @title Tax invoice emailer - tracker thing
@@ -28,6 +28,7 @@ MYPANEL = "emailsendinvt";
  *  01/06/2015: Mahes change email message body
  *  01/06/2105: Auto attach Reissuance.pdf as requested to every email
  *  04/06/2015: move DELETE button outside to allow user to delete a tracker - do system audit-log
+ *  30/07/2015: button/popup to generate sent-out summary via BIRT . invsentoutSummary_v1.rptdesign
 */
 import java.util.*;
 import java.text.*;
@@ -54,6 +55,7 @@ DEBUGGING_EMAIL = "creditcontrol@rentwise.com,victor@rentwise.com";
 EMAILINVOICE_PREFIX = "EMLINV";
 TAXINVOICES_FOLDER = "tmp/taxinvoices";
 RESEND_TAXINVOICES_FOLDER = "tmp/taxinvoices/resend";
+INVSENTOUT_TEMPLATE_FN = "invsentoutSummary_v1.rptdesign";
 
 RESEND_EMAILMSG = "Dear Sir/Madam,\n\n" +
 "Attached, herewith is the softcopy attachment of GST Tax Compliant Rental Invoices for your perusal." +
@@ -767,6 +769,29 @@ void exportsentinvoiceList()
 	} catch (Exception e) {}
 }
 
+/**
+ * [exportSentoutSummary description] 30/07/2015: requested by Shopa/Nurul to generate sent-out summary - via BIRT
+ */
+void exportSentoutSummary()
+{
+	if(glob_sel_customer_name.equals(""))
+	{
+		guihand.showMessageBox("Have to select an entry to get customer-name to list sent-out summary..");
+		return;
+	}
+	sdate = kiboo.getDateFromDatebox(sumarystart);
+	edate = kiboo.getDateFromDatebox(sumaryend);
+	cnm = kiboo.escapedHTMLString(glob_sel_customer_name);
+	thesrc = birtURL() + "rwreports/" + INVSENTOUT_TEMPLATE_FN + "&sdate=" + sdate + "&edate=" + edate + "&custname=" + cnm;
+
+	if(expass_div.getFellowIfAny("expassframe") != null) expassframe.setParent(null);
+	Iframe newiframe = new Iframe();
+	newiframe.setId("expassframe"); newiframe.setWidth("100%"); newiframe.setHeight("600px");
+	newiframe.setSrc(thesrc);
+	newiframe.setParent(expass_div);
+	expasspop.open(sumaryend);
+}
+
 ]]>
 </zscript>
 
@@ -837,6 +862,24 @@ void exportsentinvoiceList()
 	</div>
 </popup>
 
+<popup id="buatsummary_pop">
+	<div sclass="shadowbox" style="background:#97b83a;" width="300px">
+		<vbox>
+			<label value="Sent-out summary" sclass="subhead1" />
+			<label sclass="k9">(Remember to select a sent-out entry. Will list all sent-out by selected customer and date range)</label>
+			<hbox>
+				<datebox id="sumarystart" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+				<label value="to" sclass="k9b" />
+				<datebox id="sumaryend" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			</hbox>
+			<button label="Generate summary" sclass="k9mo" onClick="exportSentoutSummary()" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="expasspop">
+	<div id="expass_div" width="700px" />
+</popup>
 
 <style src="/real-world.css" />
 <style>
@@ -859,6 +902,7 @@ void exportsentinvoiceList()
 		<button label="Auto email tax-invoices(1 by 1 email)" style="font-size:14px;font-weight:bold" onClick="batchEmailTaxInvoices()" visible="false" />
 		<button label="Resend tax-invoices" style="font-size:14px;font-weight:bold" onClick="resendemailaddress_tb.setValue(glob_sel_email);resend_pop.open(self)" />
 		<button label="View tax-invoices" style="font-size:14px;font-weight:bold" onClick="viewTaxInvoices()" />
+		<button label="Sumarry" style="font-size:14px;font-weight:bold" onClick="buatsummary_pop.open(self)" />
 	</hbox>
 	<separator height="5px" />
 	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
