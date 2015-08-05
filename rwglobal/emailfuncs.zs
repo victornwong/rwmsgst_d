@@ -377,7 +377,8 @@ boolean gmail_sendEmailWithAttachment_2(String ismtp, String iusername, String i
 		msg.setSentDate(new Date());
 
 		MimeBodyPart mbp1 = new MimeBodyPart();
-		mbp1.setText(imessage);
+		//mbp1.setText(imessage);
+		mbp1.setContent(imessage,"text/html;charset=utf-8");
 
 		Multipart mp = new MimeMultipart();
 		mp.addBodyPart(mbp1);

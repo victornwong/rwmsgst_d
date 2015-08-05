@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="qcjobsignof"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "QA Jobs Signoff";
+MYVERSION = "v0.1";
+MYPANEL = "qajobssignofpal";
+/**
+ * @title QA to sign-off jobs (from jobmaker)
+ * @author Victor Wong
+ * @since 05/08/2015
+ * @notes
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_sel_obj = null;
+glob_sel_job = "";
+
+Object[] jobs_hdrs =
+{
+	new listboxHeaderWidthObj("Job",true,"60px"),
+	new listboxHeaderWidthObj("Dated",true,"80px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("ROC/SO",true,"80px"),
+	new listboxHeaderWidthObj("ETA",true,"80px"),
+	new listboxHeaderWidthObj("ETD",true,"80px"),
+	new listboxHeaderWidthObj("User",true,""),
+	new listboxHeaderWidthObj("QA.Stat",true,"70px"),
+	new listboxHeaderWidthObj("QA.Check",true,"80px"),
+	new listboxHeaderWidthObj("QA",true,"80px"),
+	new listboxHeaderWidthObj("QA.Comment",true,""),
+};
+
+/**
+ * onClick event listener for listbox in showJobs()
+ */
+class jobslbonClk implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		glob_sel_obj = event.getReference();
+		if(glob_sel_obj != null)
+		{
+			glob_sel_job = lbhand.getListcellItemLabel(glob_sel_obj,0);
+		}
+	}
+}
+jobsonClick = new jobslbonClk();
+
+/**
+ * double-click for jobs listbox
+ */
+class jobsdoubclk implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		glob_sel_obj = event.getTarget();
+		if(glob_sel_obj != null)
+		{
+			glob_sel_job = lbhand.getListcellItemLabel(glob_sel_obj,0);
+			jobsqa_pop.open(glob_sel_obj);
+		}
+	}
+}
+jobsdoubleclik = new jobsdoubclk();
+
+/**
+ * Jobs lister, knock-off some from jobMaker_v2
+ * @param itype list display type holder 
+ */
+void showJobs(int itype)
+{
+	scht = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+	sdate = kiboo.getDateFromDatebox(startdate);
+	edate = kiboo.getDateFromDatebox(enddate);
+	jid = kiboo.replaceSingleQuotes(jobid_tb.getValue().trim());
+
+	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobs_hdrs, "jobs_lb", 20);
+
+	sqlstm = "select jbs.origid, jbs.datecreated, jbs.username, jbs.jobtype, jbs.fc6_custid, jbs.customer_name, jbs.status," +
+	"jbs.approve, jbs.pickup_by, jbs.pickup_date, jbs.complete_date, jbs.complete_by, jbs.eta, jbs.etd, jbs.whoscode, " +
+	"jbs.rwroc, jbs.order_type, jbs.qc_notes, jbs.qc_status, jbs.qc_person, jbs.qc_approve from rw_jobs jbs ";
+
+	chkdt = " jbs.datecreated between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' ";
+	whtst = "where " + chkdt;
+	if(!scht.equals(""))
+	{
+		whtst = "where (jbs.customer_name like '%" + scht + "%' or jbs.rwroc like '%" + scht + "%') ";
+		searhtxt_tb.setValue("");
+	}
+	if(!jid.equals(""))
+	{
+		try
+		{
+			kk = Integer.parseInt(jid);
+			whtst = "where jbs.origid=" + jid;
+			jobid_tb.setValue("");
+		} catch (Exception e)
+		{
+			return;
+		}
+	}
+
+	sqlstm += whtst + " order by jbs.origid ";
+	r = sqlhand.gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+
+	newlb.setRows(21); newlb.setMold("paging"); //newlb.setMultiple(true); newlb.setCheckmark(true);
+	newlb.addEventListener("onSelect", jobsonClick );
+
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid","datecreated","customer_name","rwroc","eta","etd","username",
+		"qc_status","qc_approve","qc_person","qc_notes"};
+
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		ki = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb,jobsdoubleclik);
+}
+
+]]>
+</zscript>
+
+<popup id="jobsqa_pop">
+	<div sclass="shadowbox" style="background:#51C6A4" width="400px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#51C6A4" spans="2">
+					<label sclass="subhead1" value="QA/QC Status Update" />
+				</row>
+				<row style="background:#51C6A4" spans="2">
+					<separator height="10px" />
+				</row>
+				<row style="background:#51C6A4">
+					<label value="QA status" sclass="k9mo" />
+					<listbox id="p_qc_status" sclass="k9" mold="select" />
+				</row>
+				<row style="background:#51C6A4" spans="2">
+					<label value="QA comments" sclass="k9mo" />
+				</row>
+				<row style="background:#51C6A4" spans="2">
+					<textbox id="p_qc_notes" multiline="true" width="99%" height="70px" />
+				</row>
+				<row style="background:#51C6A4" spans="2">
+					<button label="Update" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#0C203E">
+
+	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
+		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="searhtxt_tb" width="100px" sclass="k9" />
+			<label value="Job-id" sclass="k9b" />
+			<textbox id="jobid_tb" width="50px" sclass="k9" />
+			<button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
+		</hbox>
+	</div>
+	<separator height="2px" />
+	<div sclass="shadowbox" style="background:#849324">
+		<div id="jobs_holder" />
+	</div>
+
+<zscript>
+<![CDATA[
+
+luhand.populateListbox_ByLookup(p_qc_status, "QA_STATES", 2);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

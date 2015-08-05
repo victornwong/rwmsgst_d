@@ -50,26 +50,26 @@ guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
 DEBUGGING = 0;
-DEBUGGING_EMAIL = "creditcontrol@rentwise.com,victor@rentwise.com";
+DEBUGGING_EMAIL = "creditcontrol@rentwise.com,billing@rentwise.com";
 
 EMAILINVOICE_PREFIX = "EMLINV";
 TAXINVOICES_FOLDER = "tmp/taxinvoices";
 RESEND_TAXINVOICES_FOLDER = "tmp/taxinvoices/resend";
 INVSENTOUT_TEMPLATE_FN = "invsentoutSummary_v1.rptdesign";
 
-RESEND_EMAILMSG = "Dear Sir/Madam,\n\n" +
-"Attached, herewith is the softcopy attachment of GST Tax Compliant Rental Invoices for your perusal." +
+RESEND_EMAILMSG = "<p>Dear Sir/Madam,</p>" +
+"<p>Attached, herewith is the softcopy attachment of GST Tax Compliant Rental Invoices for your perusal." +
 " Hence, please also be informed that these GST Compliant Rental Invoices will supersede the previous Rental " +
-"Invoices and enclosed is the Letter which is self explanatory.\n\n" +
-"Should there be any further clarification, kindly liaise with Credit Control Dept at " + 
-"creditcontrol@rentwise.com, telephone no. 03-33416552 ext:8514/8516.";
+"Invoices and enclosed is the Letter which is self explanatory.</p>" +
+"<p>Should there be any further clarification, kindly liaise with Credit Control Dept at " + 
+"creditcontrol@rentwise.com, telephone no. 03-33416552 ext:8514/8516.</p>";
 
-EMAILMSG = "Dear Sir/Madam,\n\n" +
-"Attached, herewith is the softcopy attachment of GST Tax Compliant Rental Invoices for your perusal." +
+EMAILMSG = "<p>Dear Sir/Madam,</p>" +
+"<p>Attached, herewith is the softcopy attachment of GST Tax Compliant Rental Invoices for your perusal." +
 " Hence, please also be informed that these GST Compliant Rental Invoices will supersede the previous Rental " +
-"Invoices and enclosed is the Letter which is self explanatory.\n\n" +
-"Should there be any further clarification, kindly liaise with Credit Control Dept at " + 
-"creditcontrol@rentwise.com, telephone no. 03-33416552 ext:8514/8516.";
+"Invoices and enclosed is the Letter which is self explanatory.</p>" +
+"<p>Should there be any further clarification, kindly liaise with Credit Control Dept at " + 
+"creditcontrol@rentwise.com, telephone no. 03-33416552 ext:8514/8516.</p>";
 
 glob_sel_obj = null;
 last_showthing = 0;
@@ -87,9 +87,11 @@ Object[] sndinvtckcols_headers =
 	new listboxHeaderWidthObj("Sent",true,""),
 	new listboxHeaderWidthObj("Resend",true,""),
 	new listboxHeaderWidthObj("User",true,""),
+	new listboxHeaderWidthObj("ROC",true,""),
 };
 IDX_ORIGID = 0; IDX_INVDATE = 1; IDX_INVNO = 2; IDX_CUSTOMER = 3;
 IDX_EMAIL = 4; IDX_FILENAME = 5; IDX_SENT = 6; IDX_RESEND = 7; IDX_USER = 8;
+IDX_ROC = 9;
 
 /**
  * onClick event listener for listbox in showSentInvoices()
@@ -168,7 +170,7 @@ void showSentInvoices(int itype)
 	newlb.setRows(21); newlb.setMold("paging"); newlb.setMultiple(true); newlb.setCheckmark(true);
 	newlb.addEventListener("onSelect", sentinvcliker );
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "origid", "invoice_date", "invoice_no", "customer_name", "email" , "filename", "sentdate", "resenddate", "username" };
+	String[] fl = { "origid", "invoice_date", "invoice_no", "customer_name", "email" , "filename", "sentdate", "resenddate", "username","roc_no" };
 
 	for(d : screcs)
 	{
@@ -218,6 +220,8 @@ void extractTaxInvoiceMeta(String ipath, String ifilename, String[] iretvals)
 	iretvals[1] = doregex(tis,"Date: (.*?)\n"); // invoice-date
 	iretvals[2] = doregex(tis,"Issue To: (.*?)\n"); // customer-name
 	iretvals[3] = doregex(tis,"(.*?)\nEmail:"); // email-addr
+	iretvals[4] = doregex(tis,"RC/LC No.: (.*?)\n"); // try to grab RC/LC : 05/08/2015
+	//alert(doregex(tis,"RC/LC No.: (.*?)\n"));
 	if(iretvals[3].indexOf("@") == -1) iretvals[3] = ""; // not actually an email
 }
 
@@ -229,7 +233,7 @@ void procImportTaxInvoices(File[] flist)
 {
 	todaydate = kiboo.todayISODateTimeString();
 	fndate = kiboo.todayISODateString();
-	String[] invmeta = new String[4];
+	String[] invmeta = new String[5];
 	File oldfile,newfile;
 	sqlstm = msgtext = "";
 	String[] attchfn = new String[1];
@@ -264,9 +268,9 @@ void procImportTaxInvoices(File[] flist)
 							if( gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 								topeople, subj, EMAILMSG, attchfn, GMAIL_rwms_username) )
 							{
-								sqlstm += "insert into rw_email_invoice (datecreated,invoice_no,invoice_date,customer_name,email,filename,username,sentdate) values " +
+								sqlstm += "insert into rw_email_invoice (datecreated,invoice_no,invoice_date,customer_name,email,filename,username,sentdate,roc_no) values " +
 								"('" + todaydate + "','" + invmeta[0] + "','" + invmeta[1] + "','" + invmeta[2] + "','" + invmeta[3] + "','" + 
-								kfn + "','" + useraccessobj.username + "','" + todaydate + "');";
+								kfn + "','" + useraccessobj.username + "','" + todaydate + "','" + invmeta[4] + "');";
 							}
 							else
 							{
@@ -326,7 +330,7 @@ boolean checkPDF_filename_exist_tracker(String ifname)
 void importTaxInvoicesOnly()
 {
 	todaydate = kiboo.todayISODateTimeString();
-	String[] invmeta = new String[4];
+	String[] invmeta = new String[5];
 	fcounter = 0;
 	sqlstm = msgtext = "";
 
@@ -346,9 +350,9 @@ void importTaxInvoicesOnly()
 					extractTaxInvoiceMeta(TAXINVOICES_FOLDER, fn, invmeta);
 					if(!invmeta[0].equals("")) // process valid invoice-no only
 					{
-						sqlstm += "insert into rw_email_invoice (datecreated,invoice_no,invoice_date,customer_name,email,filename,username) values " +
+						sqlstm += "insert into rw_email_invoice (datecreated,invoice_no,invoice_date,customer_name,email,filename,username,roc_no) values " +
 							"('" + todaydate + "','" + invmeta[0] + "','" + invmeta[1] + "','" + invmeta[2] + "','" + invmeta[3] + "','" + 
-							fn + "','" + useraccessobj.username + "');";
+							fn + "','" + useraccessobj.username + "','" + invmeta[4] + "');";
 
 						fcounter++;
 					}
@@ -707,16 +711,28 @@ void emailMultiTaxInvoices()
 			else
 			if(!found_customer.equals(cnm)) // previous selected customer must same as current one
 			{
-				guihand.showMessageBox("ERR: Yordpdfwateru have selected non-identical customers tax-invoices.. please check");
+				guihand.showMessageBox("ERR: You have selected dissimilar customer's tax-invoices.. please check");
 				return;
 			}
 		}
 	}
 
+	invtable = "<p>Tax-invoices attached in this email</p><table border=\"1\" style=\"width:100%\">";
+	invtable += "<tr><th>Tax Invoice No.</th><th>Invoice Date</th><th>ROC/LC No.</th></tr>";
+
 	for(j=0; j<kx.length; j++)
 	{
+		invtable += "<tr>";
+
+		rocno = lbhand.getListcellItemLabel(kx[j],IDX_ROC);
+		invnumber = lbhand.getListcellItemLabel(kx[j],IDX_INVNO);
+		invdate = lbhand.getListcellItemLabel(kx[j],IDX_INVDATE);
+
+		invtable += "<td>" + invnumber + "</td><td>" + invdate + "</td><td>" + rocno + "</td>";
+
 		orig = lbhand.getListcellItemLabel(kx[j],IDX_ORIGID); // origid for table update 
 		pfn = lbhand.getListcellItemLabel(kx[j],IDX_FILENAME); // pdf filename from listbox
+
 		if(pfn.indexOf("sent") == -1) // only can send non 'sent' pdf in multi-pdfs email
 		{
 			kfn = pfn.replaceAll(".pdf",""); // remove .pdf extension from filename
@@ -731,7 +747,10 @@ void emailMultiTaxInvoices()
 				sqlstm += "update rw_email_invoice set sentdate='" + todaydate + "', filename='" + kfn + "' where origid=" + orig + ";";
 			}
 		}
+		invtable += "</tr>";
 	}
+
+	invtable += "</table>";
 
 	// 01/06/2105: Auto attach Reissuance.pdf as requested to every email
 	reissfn = session.getWebApp().getRealPath("rwimg/REISSUANCE.pdf");
@@ -745,7 +764,7 @@ void emailMultiTaxInvoices()
 	if(attaxhments.length > 0)
 	{
 		if( gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
-			topeople, subj, EMAILMSG, attaxhments, GMAIL_rwms_username) )
+			topeople, subj, EMAILMSG + invtable, attaxhments, GMAIL_rwms_username) )
 		{
 		}
 
