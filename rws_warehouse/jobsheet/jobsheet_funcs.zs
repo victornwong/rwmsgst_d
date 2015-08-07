@@ -250,6 +250,8 @@ Object[] jobslbhds =
 	new listboxHeaderWidthObj("J.Stat",true,"60px"), // 12
 	new listboxHeaderWidthObj("WH.Tx",true,"60px"),
 	new listboxHeaderWidthObj("WH.User",true,"60px"),
+	new listboxHeaderWidthObj("Prd",true,"70px"),
+	new listboxHeaderWidthObj("Prd.Recv",true,"70px"),
 };
 JOBSHEET_POS = 11;
 JOBSHEETSTAT_POS = 12;
@@ -288,7 +290,7 @@ void showJobs(int itype)
 	"(select top 1 origid from rw_jobpicklist where parent_job=rj.origid) as jobsheet, " +
 	"(select top 1 pstatus from rw_jobpicklist where parent_job=rj.origid) as jobstat " +
 	*/
-	"jpl.origid as jobsheet, jpl.pstatus as jobstat, jpl.ackby, jpl.ackdate " +
+	"jpl.origid as jobsheet, jpl.pstatus as jobstat, jpl.ackby, jpl.ackdate, jpl.produser, jpl.prodrecv " +
 	"from rw_jobs rj " +
 	"left join rw_jobpicklist jpl on jpl.parent_job=rj.origid ";
 
@@ -324,8 +326,8 @@ void showJobs(int itype)
 	newlb.setRows(21); newlb.setMold("paging");
 	newlb.addEventListener("onSelect", jobsclkier);
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "origid","datecreated","customer_name","username","jobtype","order_type",
-	"priority","etd","eta","pickup_date", "pickup_by", "jobsheet", "jobstat", "ackdate", "ackby" };
+	String[] fl = { "origid","datecreated","customer_name","username","jobtype","order_type","priority","etd","eta",
+	"pickup_date", "pickup_by", "jobsheet", "jobstat", "ackdate", "ackby", "produser", "prodrecv" };
 	for(d : rcs)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);
@@ -414,7 +416,9 @@ void js_adminDo(String itype)
 	if(!glob_sel_job.equals(""))
 	{
 		if(itype.equals("admclrpckup_b")) // clear rw_jobs pickup
+		{
 			sqlstm = "update rw_jobs set pickup_date=null, pickup_by=null where origid=" + glob_sel_job;
+		}
 	}
 
 	if(!glob_sel_jobsheet.equals(""))
@@ -427,6 +431,12 @@ void js_adminDo(String itype)
 
 		if(itype.equals("admclrack_b")) // clear WH ackby/ackdate
 			sqlstm = "update rw_jobpicklist set ackby=null,ackdate=null where origid=" + glob_sel_jobsheet;
+
+		if(itype.equals("admclrrecv_b")) // clear prod recv items from warehouse details (07/08/2015)
+		{
+			sqlstm = "update rw_jobpicklist set produser=null,prodrecv=null where origid=" + glob_sel_jobsheet;
+		}
+
 	}
 
 	if(!sqlstm.equals(""))

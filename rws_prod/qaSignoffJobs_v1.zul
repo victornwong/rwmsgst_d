@@ -36,6 +36,12 @@ gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 glob_sel_obj = null;
 glob_sel_job = "";
 
+String JN_linkcode()
+{
+	if(glob_sel_job.equals("")) return "";
+	return JOBS_PREFIX + glob_sel_job;
+}
+
 Object[] jobs_hdrs =
 {
 	new listboxHeaderWidthObj("Job",true,"60px"),
@@ -141,6 +147,60 @@ void showJobs(int itype)
 	lbhand.setDoubleClick_ListItems(newlb,jobsdoubleclik);
 }
 
+/**
+ * Update QA things into selected job
+ */
+void updateQAthings()
+{
+	if(glob_sel_job.equals("")) return;
+
+	todaydate = kiboo.todayISODateTimeString();
+	qacmt = kiboo.replaceSingleQuotes(p_qc_notes.getValue().trim());
+	qastat = p_qc_status.getSelectedItem().getLabel();
+	unm = useraccessobj.username;
+
+	sqlstm = "update rw_jobs set qc_approve='" + todaydate + "', qc_person='" + unm + "'," +
+	"qc_notes='" + qacmt + "', qc_status='" + qastat + "' where origid=" + glob_sel_job;
+
+	sqlhand.gpSqlExecuter(sqlstm);
+	lgstr = "QA/QC stat: " + qastat + " notes: " + qacmt;
+	add_RWAuditLog(JN_linkcode(),"",lgstr,unm);
+
+	showJobs(1); // refresh
+	guihand.showMessageBox("QA things updated for job..");
+}
+
+void expToExcel()
+{
+	try {
+	exportExcelFromListbox(jobs_lb, kasiexport, jobs_hdrs, "jobsqalist.xls","list");
+	} catch (Exception e) {}
+}
+
+void adminFunc(String itype)
+{
+	adminpop.close();
+	todaydate = kiboo.todayISODateTimeString();
+	sqlstm = msgtext = fnms = lgstr = ""; refresh = false;
+
+	if(glob_sel_job.equals("")) return;
+
+	if(itype.equals("clrqcrec_b"))
+	{
+		sqlstm = "update rw_jobs set qc_approve=null,qc_person=null,qc_notes=null,qc_status=null where origid=" + glob_sel_job;
+		lgstr = "QA/QC data cleared";
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		sqlhand.gpSqlExecuter(sqlstm);
+		showJobs(1);
+	}
+	//if(refresh)
+	if(!lgstr.equals("")) add_RWAuditLog(JN_linkcode(),"",lgstr,useraccessobj.username);
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+	
 ]]>
 </zscript>
 
@@ -165,10 +225,16 @@ void showJobs(int itype)
 					<textbox id="p_qc_notes" multiline="true" width="99%" height="70px" />
 				</row>
 				<row style="background:#51C6A4" spans="2">
-					<button label="Update" />
+					<button label="Update" onClick="updateQAthings()" />
 				</row>
 			</rows>
 		</grid>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#CB2727">
+		<button id="clrqcrec_b" label="Clear QA/QC data" sclass="k9mo" onClick="adminFunc(self.getId())" />
 	</div>
 </popup>
 
@@ -195,12 +261,17 @@ void showJobs(int itype)
 			<label value="Job-id" sclass="k9b" />
 			<textbox id="jobid_tb" width="50px" sclass="k9" />
 			<button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
+			<separator width="20px" />
+			<button label="Export EXCEL" sclass="k9mo" onClick="expToExcel()" />
+			<button label="ADMIN" sclass="k9mo" style="color:#DC2020" onClick="adminpop.open(self)" />
 		</hbox>
 	</div>
 	<separator height="2px" />
 	<div sclass="shadowbox" style="background:#849324">
 		<div id="jobs_holder" />
 	</div>
+
+	<div id="kasiexport" visible="false" />
 
 <zscript>
 <![CDATA[

@@ -8,7 +8,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "PROD Jobsheet";
-MYVERSION = "v0.1";
+MYVERSION = "v0.1.1";
 MYPANEL = "jobsheetpanel";
 /*
 <zscript src="../rws_account/jobMaker_funcs.zs" />
@@ -17,6 +17,7 @@ MYPANEL = "jobsheetpanel";
 @Since 27/08/2014
 
 @Notes
+07/08/2015: add button for Production to receive picked items for jobs - req by Satish/Navin
 */
 
 import java.util.*;
@@ -138,8 +139,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 		subj = "RE: Job pick-list submitted - " + glob_sel_jobsheet;
 		emsg = "Job items pick-list submitted for job " + glob_sel_job + ". Do process ASAP";
 
-		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username,
-			"victor@rentwise.com", subj, emsg );
+		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, "satish@rentwise.com, navin@rentwise.com, victor@rentwise.com", subj, emsg );
 	}
 
 	if(itype.equals("chkstock_b")) // check stock ticked items
@@ -163,6 +163,13 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 		} catch (Exception e) {}
 	}
 
+	if(itype.equals("ackrecvitems_b")) // ack items receival from warehouse (07/08/2015)
+	{
+		if(glob_sel_jobsheet.equals("")) return;
+		sqlstm = "update rw_jobpicklist set produser='" + unm + "', prodrecv='" + todaydate + "' where origid=" + glob_sel_jobsheet;
+		refresh_joblist = true;
+	}
+
 	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
 	if(refresh) drawPicklist(plx);
 	if(refresh_joblist) showJobs(last_joblist_type);
@@ -178,6 +185,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 		<vbox>
 			<button id="admclrpckup_b" label="Clear pickup" sclass="k9mo" onClick="js_adminDo(self.getId())" />
 			<button id="admclrcommit_b" label="Clear commit" sclass="k9mo" onClick="js_adminDo(self.getId())" />
+			<button id="admclrrecv_b" label="Clear prod recv items" sclass="k9mo" onClick="js_adminDo(self.getId())" />
 		</vbox>
 	</div>
 </popup> <!-- ENDOF adminPop -->
@@ -213,7 +221,9 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 
 	<vbox id="workarea" visible="false">
 		<div sclass="shadowbox" style="background:#CB533A">
-			<label id="jobtitle_lb" sclass="subhead1" />
+			<hbox>
+				<label id="jobtitle_lb" sclass="subhead1" />
+			</hbox>
 		</div>
 		<hbox>
 			<div sclass="shadowbox" style="background:#1D69A5">
@@ -228,7 +238,12 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 
 			<div sclass="shadowbox" style="background:#1D69A5">
 				<vbox>
-					<label value="Jobsheet - Items request" sclass="subhead1" />
+					<hbox>
+						<label value="Jobsheet - Items request" sclass="subhead1" />
+						<separator width="20px" />
+						<button id="ackrecvitems_b" label="ACK ITEMS RECEIVAL FROM WAREHOUSE" style="color:#E12525;font-size:14px;font-weight:bold"
+							onClick="pl_DoFunc(self.getId())" />
+					</hbox>
 					<label value="WH extra notes" sclass="k9mo" style="color:#ffffff" />
 					<textbox id="j_extranotes" multiline="true" width="99%" height="60px" sclass="k9" />
 					<hbox>
@@ -270,7 +285,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("1585");
+	jobid_tb.setValue("2664");
 }
 
 ]]>
