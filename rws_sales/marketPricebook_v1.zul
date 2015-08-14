@@ -279,8 +279,9 @@ void importMarketPrice_worksheet()
 	String[] dt = new String[5];
 	sqlstm = "";
 
-	//inps = new ByteArrayInputStream(pricewk.thefiledata);
-	HSSFWorkbook excelWB = new HSSFWorkbook(pricewk.thefiledata);
+	inps = new ByteArrayInputStream(pricewk.thefiledata);
+	//HSSFWorkbook excelWB = new HSSFWorkbook(pricewk.thefiledata);
+	HSSFWorkbook excelWB = new HSSFWorkbook(inps);
 	FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
 	wksht0 = excelWB.getSheetAt(0);
 	wknumrows = wksht0.getPhysicalNumberOfRows();
@@ -303,7 +304,7 @@ void importMarketPrice_worksheet()
 			if(!dt[0].equals("")) // make sure got item-name before inserting into database
 			{
 				//sqlstm += "if not exists(select 1 from mr001 where code2='" + atg + "')" +
-				sqlstm += "insert into rw_mktpricebook (itemname,description,eqtype,category,price,datecreated,username,active) values " +
+				sqlstm += "insert into rw_mktpricebook (itemname,description,category,eqtype,price,datecreated,username,active) values " +
 				"('" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "'," + dt[4] + ",'" + todaydate + "','" + unm + "',1);";
 
 				lineimp++;

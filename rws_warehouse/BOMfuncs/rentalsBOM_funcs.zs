@@ -248,6 +248,8 @@ class bomslbClick implements org.zkoss.zk.ui.event.EventListener
 		glob_sel_bomcategory = lbhand.getListcellItemLabel(isel,BOMCAT_IDX);
 		glob_sel_jobid = lbhand.getListcellItemLabel(isel,BOMJOB_IDX);
 
+		if(documents_holder.getFellowIfAny("doculinks_lb") != null) doculinks_lb.setParent(null);
+
 		showBOMMetadata(global_selected_bom);
 		showBuildItems(global_selected_bom);
 		bval = ( global_sel_bom_status.equals("COMMIT") || global_sel_bom_status.equals("APPROVE") ) ? true : false;
@@ -315,6 +317,8 @@ void showBOMList()
 
 void showBuild_metadata(String ibui)
 {
+	if(documents_holder.getFellowIfAny("doculinks_lb") != null) doculinks_lb.setParent(null);
+
 	ris = getRentalItems_build(ibui);
 	if(ris == null)
 	{

@@ -517,7 +517,7 @@ Object getFocus_CustomerRec(String icustid)
 	"custd.address1yh, custd.address2yh, custd.address3yh, custd.address4yh, " +
 	"custd.telyh, custd.faxyh, custd.contactyh, custd.deliverytoyh, " +
 	"custd.manumberyh, custd.rentaltermyh, custd.interestayh, " +
-	"custd.credit4yh, custd.credit5yh, custd.creditlimityh, " +
+	"custd.credit4yh, custd.credit5yh, custd.creditlimityh, custd.suspendyh, " +
 	"custd.salesrepyh,custd.interestayh,custd.emailyh, cust.type from mr000 cust " +
 	"left join u0000 custd on custd.extraid = cust.masterid " +
 	"where cust.masterid=" + icustid;

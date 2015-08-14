@@ -207,21 +207,14 @@ void extractTaxInvoiceMeta(String ipath, String ifilename, String[] iretvals)
 		reader.close();
 	} catch (com.itextpdf.text.exceptions.InvalidPdfException e) {}
 
-/*
-	tis = buff.toString().replaceAll("\n"," ");
-	iretvals[0] = doregex(tis,"Invoice No.: (.*?) "); // invoice-no
-	iretvals[1] = doregex(tis,"Date: (.*?) "); // invoice-date
-	iretvals[2] = doregex(tis,"Issue To: (.*?) PO No"); // customer-name
-	iretvals[3] = doregex(tis,"Email: (.*?) a\\)");
-	if(iretvals[3].indexOf("@") == -1) iretvals[3] = ""; // not actually an email
-*/
 	tis = buff.toString();
+
 	iretvals[0] = doregex(tis,"Invoice No.: (.*?)\n"); // invoice-no
 	iretvals[1] = doregex(tis,"Date: (.*?)\n"); // invoice-date
 	iretvals[2] = doregex(tis,"Issue To: (.*?)\n"); // customer-name
 	iretvals[3] = doregex(tis,"(.*?)\nEmail:"); // email-addr
 	iretvals[4] = doregex(tis,"RC/LC No.: (.*?)\n"); // try to grab RC/LC : 05/08/2015
-	//alert(doregex(tis,"RC/LC No.: (.*?)\n"));
+
 	if(iretvals[3].indexOf("@") == -1) iretvals[3] = ""; // not actually an email
 }
 

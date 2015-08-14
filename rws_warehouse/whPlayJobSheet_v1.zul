@@ -48,7 +48,8 @@ glob_sel_job = glob_sel_jobsheet = glob_sel_jstat = "";
 last_joblist_type = 0;
 
 // all these used in jobsheet_funcs.zs
-listjobs_extrasql = " and jpl.pstatus='COMMIT'"; // only list committed items-req
+//listjobs_extrasql = " and jpl.pstatus='COMMIT'"; // only list committed items-req
+listjobs_extrasql = ""; // make blank 12/08/2015
 reqitems_grid_type = 2; // WH side req-items, ada asset-tags colm and boxes
 checkitems_doubleclicker = null;
 

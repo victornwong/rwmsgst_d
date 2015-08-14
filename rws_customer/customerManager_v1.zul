@@ -30,6 +30,8 @@ custd.salesrepyh, custd.emailyh
 from mr000 cust left join u0000 custd on custd.extraid = cust.masterid
 where cust.type=195 order by cust.name
 
+11/08/2015: Mahes detected "Suspend" status not being updated into db. Fixed it
+
 */
 /*
 import java.util.*;
@@ -58,11 +60,11 @@ void pickcustomer_Callback()
 {
 	Object[] ob = { c_address1yh, c_address2yh, c_address3yh, c_address4yh, c_telyh, c_faxyh, c_contactyh,
 	c_deliverytoyh, c_emailyh, c_salesrepyh, k_manumberyh, k_rentaltermyh, k_interestayh, k_credit4yh,
-	k_credit5yh, k_creditlimityh, k_code, k_code2 };
+	k_credit5yh, k_creditlimityh, k_code, k_code2, k_statusyh };
 
 	String[] fl = { "address1yh", "address2yh", "address3yh", "address4yh", "telyh", "faxyh", "contactyh",
 	"deliverytoyh", "emailyh", "salesrepyh", "manumberyh", "rentaltermyh", "interestayh", "credit4yh",
-	"credit5yh", "creditlimityh", "code", "code2" };
+	"credit5yh", "creditlimityh", "code", "code2", "suspendyh" };
 
 	csr = getFocus_CustomerRec(global_selected_customerid);
 	populateUI_Data(ob,fl,csr);
@@ -210,14 +212,14 @@ void doFunc(Object iwhat)
 	if(itype.equals("uccbill_b"))
 	{
 		Object[] ob = { k_manumberyh, k_rentaltermyh, k_interestayh, k_credit4yh, k_credit5yh,
-		k_code, k_code2, k_creditlimityh };
+		k_code, k_code2, k_creditlimityh, k_statusyh };
 
 		dt = getString_fromUI(ob);
 		try { ik = Float.parseFloat(dt[7]); } catch (Exception e) { dt[7] = "0"; }
 
 		fcsqlstm =
 		"update u0000 set manumberyh='" + dt[0] + "', rentaltermyh='" + dt[1] + "', interestayh='" + dt[2] + "'," +
-		"credit4yh='" + dt[3] + "', credit5yh='" + dt[4] + "', creditlimityh=" + dt[7] +
+		"credit4yh='" + dt[3] + "', credit5yh='" + dt[4] + "', suspendyh='" + dt[8] + "', creditlimityh=" + dt[7] +
 		" where extraid=" + global_selected_customerid + ";";
 
 		fcsqlstm += "update mr000 set code='" + dt[5] + "', code2='" + dt[6] + "' where masterid=" + global_selected_customerid;

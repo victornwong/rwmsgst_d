@@ -8,7 +8,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "WhopAssets Checker/ Location Changer / Grade Also";
-MYVERSION = "v0.2.5";
+MYVERSION = "v0.2.6";
 MY_ID = "wopassdpan";
 /*
 @Author Victor Wong
@@ -23,6 +23,7 @@ Make it to check stock-tick scanned asset against what're inside FC6 inventory t
 09/12/2014: req vimalan, able to change asset casing
 12/01/2015: repair-division req to show commentsyh in list
 21/07/2015: Satish req to put quantity column
+10/08/2015: remove control on pallet textbox, can key in any pallet for fast changes - request by Satish
 */
 
 import org.victor.*;
