@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="kanbanmang1"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Kanban Manager";
+MYVERSION = "v0.1";
+MYPANEL = "kanbanpanel2";
+/**
+ * @title Kanban manager for all sort of things
+ * @author Victor Wong
+ * @since 17/08/2015
+ * @notes
+ * Inspired by Kanboard
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+BAR_HEIGHT = "450px";
+SEPARATOR_COLOR = "background:#666666";
+SEPARATOR_WIDTH="2px";
+
+void callmeclose()
+{
+	debugbox.setValue("close pop");
+	alert("clsoe call");
+}
+
+]]>
+</zscript>
+
+<popup id="addbacklogpop" onClose="callmeclose()">
+testing testing
+</popup>
+
+<style src="/real-world.css" />
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#363A48">
+
+	<separator height="5px" />
+	<hbox>
+		<div id="backlog_holder" width="300px" height="${BAR_HEIGHT}">
+			<hbox>
+				<label value="+" style="color:#ffffff;font-weight:bold;padding-left:10px;" onClick="addbacklogpop.open(self)" />
+				<label value="Backlog" style="color:#E96715;font-weight:bold" />
+			</hbox>
+			<separator bar="true" />
+			<textbox id="debugbox" multiline="true" height="50px" />
+		</div>
+
+		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
+
+		<div id="ready_holder" width="300px" height="${BAR_HEIGHT}" >
+			<label value="Ready" style="color:#E96715;font-weight:bold;padding-left:10px" />
+			<separator bar="true" />
+		</div>
+
+		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
+
+		<div id="wip_holder" width="300px" height="${BAR_HEIGHT}" >
+			<label value="Work in Progress" style="color:#E96715;font-weight:bold;padding-left:10px" />
+			<separator bar="true" />
+		</div>
+
+		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
+
+		<div id="done_holder" width="300px" height="${BAR_HEIGHT}" >
+			<label value="Done" style="color:#E96715;font-weight:bold;padding-left:10px" />
+			<separator bar="true" />
+		</div>
+	</hbox>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+
