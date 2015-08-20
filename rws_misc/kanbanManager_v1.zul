@@ -38,60 +38,258 @@ BAR_HEIGHT = "450px";
 SEPARATOR_COLOR = "background:#666666";
 SEPARATOR_WIDTH="2px";
 
-void callmeclose()
+Object contextSelectedRow = whopSelectedRow = null;
+
+Object[] jobslb_hds =
 {
-	debugbox.setValue("close pop");
-	alert("clsoe call");
+	new listboxHeaderWidthObj("Job",true,"60px"),
+	new listboxHeaderWidthObj("Customer",true,""),
+	new listboxHeaderWidthObj("Type",true,"40px"),
+	new listboxHeaderWidthObj("Priority",true,"80px"),
+	new listboxHeaderWidthObj("ROC/SO",true,"70px"),
+	new listboxHeaderWidthObj("ETD",true,"70px"),
+	new listboxHeaderWidthObj("ETA",true,"70px"),
+};
+
+void backlog_AddJob(Datebox isdate, Datebox iedate, Textbox ischt, Div iholder, String ilbid, Object ilbhds)
+{
+	scht = kiboo.replaceSingleQuotes(ischt.getValue()).trim();
+	sdate = kiboo.getDateFromDatebox(isdate);
+	edate = kiboo.getDateFromDatebox(iedate);
+
+	stsql = "";
+	if(!scht.equals(""))
+	{
+		stsql = "and (customer_name like '%" + scht + "%' or rwroc like '%" + scht + "%')";
+	}
+
+	Listbox newlb = lbhand.makeVWListbox_Width(iholder, ilbhds, ilbid, 10);
+
+	sqlstm = "select origid,customer_name,jobtype,priority,eta,etd,rwroc from rw_jobs where datecreated between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' " + stsql + " order by origid;";
+	r = sqlhand.gpSqlGetRows(sqlstm);
+
+	//newlb.setMultiple(true);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid", "customer_name", "jobtype", "priority", "rwroc", "etd", "eta" }; 
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+void backlog_InsertJob()
+{
+	addbacklogpop.close();
+	isel = ab_jobs_lb.getSelectedItem();
+
+	kk = contextSelectedRow.getChildren().toArray();
+	if(kk[0] instanceof Label) // check first Label see if content is "NEW BACKLOG"
+	{
+		kv = kk[0].getValue();
+		if(!kv.equals("NEW BACKLOG")) return;
+	}
+
+	kk[0].setParent(null);
+
+	String[] litems = new String[jobslb_hds.length];
+	for(i=0; i<jobslb_hds.length; i++)
+	{
+		litems[i] = lbhand.getListcellItemLabel(isel,i);
+	}
+	
+	styl = "font-size:9px";
+	ngfun.gpMakeLabel(contextSelectedRow,"",JOBS_PREFIX + litems[0],styl);
+	ngfun.gpMakeLabel(contextSelectedRow,"",litems[1],styl);
+}
+
+/**
+ * Simple hack to move grid.row around 
+ * @param event  the event object
+ * @param droped dropped into which Div
+ */
+void pipeDrop(DropEvent event, Object droped)
+{
+	Object dragged = event.getDragged();
+	Object findrws = findgrd = null;
+
+	if(droped instanceof Div)
+	{
+		cd1 = droped.getChildren().toArray();
+		for(i=0; i<cd1.length; i++)
+		{
+			if(cd1[i] instanceof Grid)
+			{
+				findgrd = cd1[i];
+				break;
+			}
+		}
+		if(findgrd != null)
+		{
+			cd2 = findgrd.getChildren().toArray();
+			for(i=0; i<cd2.length; i++)
+			{
+				if(cd2[i] instanceof Rows)
+				{
+					findrws = cd2[i];
+					break;
+				}
+			}
+		}
+	}
+	//alert(dragged + " :: " + droped + " :: " + findgrd + " :: " + findrws);
+
+	if(findrws != null)
+	{
+		kx = dragged.getChildren().toArray();
+		/*
+		if(findrws.getId().equals("d_lostbin")) // strike-out quotation if dragged to lost-bin
+			kx[1].setStyle( kx[1].getStyle() + ";text-decoration:line-through");
+		else
+			kx[1].setStyle( "font-size:9px" );
+		*/
+		dragged.setParent(findrws); // actually moving
+	}
+}
+
+/**
+ * Add new backlog into pipe #1
+ */
+void addBacklog()
+{
+	styl = "font-size:9px";
+	nrw = new org.zkoss.zul.Row(); nrw.setParent(glob_MyPipes[0]); nrw.setDraggable("pipefun");
+	nrw.setContext(qtContextMenu);
+
+	ngfun.gpMakeLabel(nrw,"","NEW BACKLOG",styl);
+	//ngfun.gpMakeLabel(nrw,"",d.get("customer_name") + " [" + d.get("username") + "] / " + d.get("taskcount").toString() , styl);
+	
+	qtContextMenu.addEventListener("onOpen",QTcontextonOpen);
+}
+
+class ctxopen implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		 whopSelectedRow = event.getReference(); // save Row which fires the context-menu
+	}
+}
+QTcontextonOpen = new ctxopen();
+
+/**
+ * Backlog context-menu handler
+ * @param iwhat the active object
+ */
+void qtContextDo(Object iwhat)
+{
+	itype = iwhat.getId();
+
+	if(itype.equals("linkjob_m"))
+	{
+		contextSelectedRow = whopSelectedRow; // have to do double-assignment for other funcs to see the selected Row
+		addbacklogpop.open(iwhat);
+	}
+
+	if(itype.equals("itask_m")) // internal tasks management
+	{
+		/*
+		ki = contextSelectedRow.getChildren().toArray();
+		glob_sel_quote = ki[0].getValue();
+		inttask_lbl.setValue("Internal tasks for quotation : " + glob_sel_quote);
+		showInternalTasksList(1,useraccessobj.username, JN_linkcode(), "", tasksfromyou_holder, "asstasks_lb");
+		internaltasks_man_pop.open(contextSelectedRow);
+		*/
+	}
 }
 
 ]]>
 </zscript>
 
-<popup id="addbacklogpop" onClose="callmeclose()">
-testing testing
+<popup id="addbacklogpop">
+	<div sclass="shadowbox" style="background:#328CCD" width="650px">
+		<label style="color:#ffffff" value=":: Link Job" />
+		<separator height="3px" />
+		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="ab_startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<label value="End" sclass="k9b" />
+			<datebox id="ab_enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<textbox id="ab_searhtxt_tb" sclass="k9" />
+			<button label="Load/Search" sclass="k9mo" onClick='backlog_AddJob(ab_startdate,ab_enddate,ab_searhtxt_tb,ab_jobs_holder,"ab_jobs_lb",jobslb_hds)' />
+		</hbox>
+		<separator height="3px" />
+		<div id="ab_jobs_holder" />
+		<separator height="3px" />
+		<button sclass="k9mo" label="Link job backlog" onClick="backlog_InsertJob()" />
+	</div>
 </popup>
+
+<menupopup id="qtContextMenu">
+	<menuitem id="linkjob_m" label="Link to job" onClick="qtContextDo(self)" />
+	<menuitem id="jobnotes_m" label="Job notes" onClick="qtContextDo(self)" />
+	<menuitem id="subtask_m" label="Sub tasks" onClick="qtContextDo(self)" />
+	<menuitem id="otherthing_m" label="Others" onClick="qtContextDo(self)" />
+</menupopup>
 
 <style src="/real-world.css" />
 
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#363A48">
+	<textbox id="debugbox" multiline="true" height="50px" visible="false" />
 
 	<separator height="5px" />
+	<button label="Add backlog" sclass="k9mo" style="font-weight:bold;padding-left:5px;" onClick="addBacklog()" />
+	<separator height="5px" bar="true" />
 	<hbox>
-		<div id="backlog_holder" width="300px" height="${BAR_HEIGHT}">
-			<hbox>
-				<label value="+" style="color:#ffffff;font-weight:bold;padding-left:10px;" onClick="addbacklogpop.open(self)" />
-				<label value="Backlog" style="color:#E96715;font-weight:bold" />
-			</hbox>
-			<separator bar="true" />
-			<textbox id="debugbox" multiline="true" height="50px" />
+		<div id="backlog_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
+			<label value="Backlog" style="color:#E96715;font-weight:bold;padding-left:10px" />
+			<separator height="5px" />
+			<grid>
+				<rows id="d_rows1">
+				</rows>
+			</grid>
 		</div>
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="ready_holder" width="300px" height="${BAR_HEIGHT}" >
+		<div id="ready_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
 			<label value="Ready" style="color:#E96715;font-weight:bold;padding-left:10px" />
-			<separator bar="true" />
+			<separator height="5px" />
+			<grid>
+				<rows id="d_rows2">
+				</rows>
+			</grid>
 		</div>
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="wip_holder" width="300px" height="${BAR_HEIGHT}" >
+		<div id="wip_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
 			<label value="Work in Progress" style="color:#E96715;font-weight:bold;padding-left:10px" />
-			<separator bar="true" />
+			<separator height="5px" />
+			<grid>
+				<rows id="d_rows3">
+				</rows>
+			</grid>
 		</div>
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="done_holder" width="300px" height="${BAR_HEIGHT}" >
+		<div id="done_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
 			<label value="Done" style="color:#E96715;font-weight:bold;padding-left:10px" />
-			<separator bar="true" />
+			<separator height="5px" />
+			<grid>
+				<rows id="d_rows4">
+				</rows>
+			</grid>
 		</div>
 	</hbox>
 
 <zscript>
 <![CDATA[
+
+Object[] glob_MyPipes = { d_rows1, d_rows2, d_rows3, d_rows4 };
 
 ]]>
 </zscript>

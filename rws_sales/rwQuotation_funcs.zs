@@ -221,7 +221,7 @@ void listQuotations()
 {
 	scht = kiboo.replaceSingleQuotes(searhtxt_tb.getValue()).trim();
 	sdate = kiboo.getDateFromDatebox(startdate);
-    edate = kiboo.getDateFromDatebox(enddate);
+	edate = kiboo.getDateFromDatebox(enddate);
 	Listbox newlb = lbhand.makeVWListbox_Width(quotes_holder, qtslb_hds, "quotations_lb", 10);
 
 	scsql = "";
