@@ -10,9 +10,10 @@
 <zscript src="../rwglobal/jobNotes_funcs.zs" />
 <zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
 <zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="kanbClass.zs" />
 <zscript>
 <![CDATA[
-MYTITLE = "Kanban Manager";
+MYTITLE = "Jobs (Kanban Manager)";
 MYVERSION = "v0.1";
 MYPANEL = "kanbanpanel2";
 /**
@@ -38,7 +39,9 @@ BAR_HEIGHT = "450px";
 SEPARATOR_COLOR = "background:#666666";
 SEPARATOR_WIDTH="2px";
 
-Object contextSelectedRow = whopSelectedRow = null;
+public Object contextSelectedRow = whopSelectedRow = null;
+
+kanbClass kanb = new kanbClass();
 
 Object[] jobslb_hds =
 {
@@ -98,110 +101,26 @@ void backlog_InsertJob()
 	{
 		litems[i] = lbhand.getListcellItemLabel(isel,i);
 	}
-	
+
 	styl = "font-size:9px";
+	if(!litems[3].equals("NORMAL"))
+	{
+		contextSelectedRow.setStyle("background:#BF1F1F");
+		styl = "font-size:9px;color:#ffffff;font-weight=bold";
+	}
+
 	ngfun.gpMakeLabel(contextSelectedRow,"",JOBS_PREFIX + litems[0],styl);
 	ngfun.gpMakeLabel(contextSelectedRow,"",litems[1],styl);
+
+	jobstr = "Type: " + litems[2] + "\nPriority: " + litems[3] + "\nROC/SO: " + litems[4] + "\nETD: " + litems[5] + "\nETA: " + litems[6];
+
+	k = ngfun.gpMakeLabel(contextSelectedRow,"",jobstr,styl);
+	k.setMultiline(true);
+
+
+	//alert(contextSelectedRow.getParent());
 }
 
-/**
- * Simple hack to move grid.row around 
- * @param event  the event object
- * @param droped dropped into which Div
- */
-void pipeDrop(DropEvent event, Object droped)
-{
-	Object dragged = event.getDragged();
-	Object findrws = findgrd = null;
-
-	if(droped instanceof Div)
-	{
-		cd1 = droped.getChildren().toArray();
-		for(i=0; i<cd1.length; i++)
-		{
-			if(cd1[i] instanceof Grid)
-			{
-				findgrd = cd1[i];
-				break;
-			}
-		}
-		if(findgrd != null)
-		{
-			cd2 = findgrd.getChildren().toArray();
-			for(i=0; i<cd2.length; i++)
-			{
-				if(cd2[i] instanceof Rows)
-				{
-					findrws = cd2[i];
-					break;
-				}
-			}
-		}
-	}
-	//alert(dragged + " :: " + droped + " :: " + findgrd + " :: " + findrws);
-
-	if(findrws != null)
-	{
-		kx = dragged.getChildren().toArray();
-		/*
-		if(findrws.getId().equals("d_lostbin")) // strike-out quotation if dragged to lost-bin
-			kx[1].setStyle( kx[1].getStyle() + ";text-decoration:line-through");
-		else
-			kx[1].setStyle( "font-size:9px" );
-		*/
-		dragged.setParent(findrws); // actually moving
-	}
-}
-
-/**
- * Add new backlog into pipe #1
- */
-void addBacklog()
-{
-	styl = "font-size:9px";
-	nrw = new org.zkoss.zul.Row(); nrw.setParent(glob_MyPipes[0]); nrw.setDraggable("pipefun");
-	nrw.setContext(qtContextMenu);
-
-	ngfun.gpMakeLabel(nrw,"","NEW BACKLOG",styl);
-	//ngfun.gpMakeLabel(nrw,"",d.get("customer_name") + " [" + d.get("username") + "] / " + d.get("taskcount").toString() , styl);
-	
-	qtContextMenu.addEventListener("onOpen",QTcontextonOpen);
-}
-
-class ctxopen implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(Event event) throws UiException
-	{
-		 whopSelectedRow = event.getReference(); // save Row which fires the context-menu
-	}
-}
-QTcontextonOpen = new ctxopen();
-
-/**
- * Backlog context-menu handler
- * @param iwhat the active object
- */
-void qtContextDo(Object iwhat)
-{
-	itype = iwhat.getId();
-
-	if(itype.equals("linkjob_m"))
-	{
-		contextSelectedRow = whopSelectedRow; // have to do double-assignment for other funcs to see the selected Row
-		addbacklogpop.open(iwhat);
-	}
-
-	if(itype.equals("itask_m")) // internal tasks management
-	{
-		/*
-		ki = contextSelectedRow.getChildren().toArray();
-		glob_sel_quote = ki[0].getValue();
-		inttask_lbl.setValue("Internal tasks for quotation : " + glob_sel_quote);
-		showInternalTasksList(1,useraccessobj.username, JN_linkcode(), "", tasksfromyou_holder, "asstasks_lb");
-		internaltasks_man_pop.open(contextSelectedRow);
-		*/
-	}
-}
 
 ]]>
 </zscript>
@@ -240,11 +159,11 @@ void qtContextDo(Object iwhat)
 	<textbox id="debugbox" multiline="true" height="50px" visible="false" />
 
 	<separator height="5px" />
-	<button label="Add backlog" sclass="k9mo" style="font-weight:bold;padding-left:5px;" onClick="addBacklog()" />
+	<button label="Add backlog" sclass="k9mo" style="font-weight:bold;padding-left:5px;" onClick="kanb.addBacklog()" />
 	<separator height="5px" bar="true" />
 	<hbox>
-		<div id="backlog_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
-			<label value="Backlog" style="color:#E96715;font-weight:bold;padding-left:10px" />
+		<div id="backlog_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="kanb.pipeDrop(event,self);" >
+			<label value="Backlogs" style="color:#E96715;font-weight:bold;padding-left:10px" />
 			<separator height="5px" />
 			<grid>
 				<rows id="d_rows1">
@@ -254,7 +173,7 @@ void qtContextDo(Object iwhat)
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="ready_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
+		<div id="ready_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="kanb.pipeDrop(event,self);" >
 			<label value="Ready" style="color:#E96715;font-weight:bold;padding-left:10px" />
 			<separator height="5px" />
 			<grid>
@@ -265,7 +184,7 @@ void qtContextDo(Object iwhat)
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="wip_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
+		<div id="wip_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="kanb.pipeDrop(event,self);" >
 			<label value="Work in Progress" style="color:#E96715;font-weight:bold;padding-left:10px" />
 			<separator height="5px" />
 			<grid>
@@ -276,7 +195,7 @@ void qtContextDo(Object iwhat)
 
 		<div width="${SEPARATOR_WIDTH}" style="${SEPARATOR_COLOR}" height="${BAR_HEIGHT}" />
 
-		<div id="done_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="pipeDrop(event,self);" >
+		<div id="done_holder" width="300px" height="${BAR_HEIGHT}" droppable="pipefun" onDrop="kanb.pipeDrop(event,self);" >
 			<label value="Done" style="color:#E96715;font-weight:bold;padding-left:10px" />
 			<separator height="5px" />
 			<grid>

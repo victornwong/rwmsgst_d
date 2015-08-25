@@ -204,15 +204,11 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
 		<label value="End date" sclass="k9b" />
 		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-
 		<textbox id="searhtxt_tb" width="100px" sclass="k9" />
 		<button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
-
 		<textbox id="jobid_tb" width="50px" sclass="k9" />
 		<button label="by job" sclass="k9mo" onClick="showJobs(2)" />
-
 		<textbox id="picklist_tb" width="50px" sclass="k9" visible="false" />
-
 		<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" onClick="adminPop.open(self)" visible="false" />
 	</hbox>
 
@@ -285,7 +281,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("2664");
+	jobid_tb.setValue("2688");
 }
 
 ]]>

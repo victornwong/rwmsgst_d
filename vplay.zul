@@ -753,7 +753,7 @@ void doFunc(Object iwhat)
 			</div>
 		</north>
 
-		<west title="Wall" size="25%" collapsible="true" border="0" style="background:#254257;" >
+		<west title="Wall" size="25%" collapsible="true" border="0" style="background:#254257;" visible="false" >
 			<div>
 				<hbox id="wallbutts">
 					<button label="To-Do" sclass="k9" onClick="reloadWallMod(3)" />

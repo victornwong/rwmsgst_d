@@ -202,6 +202,9 @@ void showThings(String iwhat)
 
 			ngfun.checkMakeGrid(p1,p2,pl_holder,"pl_grid","pl_rows","background:#97b83a","",centerme);
 			ln = 1; ks = "font-size:9px;font-weight:bold";
+
+			plx.clear(); // 25/08/2015: clear global-hashmap plx, re-populate below
+
 			for(i=0; i<itms.length; i++)
 			{
 				nrw = new org.zkoss.zul.Row();
@@ -225,6 +228,11 @@ void showThings(String iwhat)
 					n = ngfun.gpMakeTextbox(nrw,"",u,ks,"98%",textboxnulldrop); // fill-up asset-tags
 					n.setMultiline(true); n.setHeight("50px");
 				}
+
+				// 25/08/2015: put into global-hashmap plx for other funcs
+				pqty = 0;
+				try { pqty = Integer.parseInt(qtys[i]); } catch (Exception e) {}
+				plx.put(itms[i],pqty);
 
 				ln++;
 			}

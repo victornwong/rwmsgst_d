@@ -75,33 +75,39 @@ void saveDO_Metadata(String iwhat)
 
 void saveDO_items(String ido)
 {
-	try
+	sqlstm = "delete from deliveryorder where dono='" + ido + "';";
+	sqlhand.gpSqlExecuter(sqlstm); // remove all prev DO items first before saving new ones
+
+	sqlstm = "";
+	jk = items_rows.getChildren().toArray();
+	ArrayList itms = new ArrayList();
+
+	for(i=0;i<jk.length;i++)
 	{
-		sqlstm = "delete from deliveryorder where dono='" + ido + "';";
-		sqlhand.gpSqlExecuter(sqlstm); // remove all prev DO items first before saving new ones
+		ki = jk[i].getChildren().toArray();
+		ti = kiboo.replaceSingleQuotes( ki[1].getValue().trim() ); // item
+	
+		atgs = "";
+		try { atgs = kiboo.replaceSingleQuotes( ki[3].getValue().trim() ); } catch (Exception e) {}
 
-		sqlstm = "";
-		jk = items_rows.getChildren().toArray();
-		ArrayList itms = new ArrayList();
+		snms = "";
+		try { snms = kiboo.replaceSingleQuotes( ki[4].getValue().trim() ); } catch (Exception e) {}
 
-		for(i=0;i<jk.length;i++)
-		{
-			ki = jk[i].getChildren().toArray();
-			ti = kiboo.replaceSingleQuotes( ki[1].getValue().trim() ); // item
-			atgs = kiboo.replaceSingleQuotes( ki[3].getValue().trim() ); // asset-tags
-			snms = kiboo.replaceSingleQuotes( ki[4].getValue().trim() ); // s/nums
-			tq = "1";
-			try { kk = Integer.parseInt(kiboo.replaceSingleQuotes( ki[2].getValue().trim() ) ); tq = kk.toString(); }
-			catch (Exception e) {}
+		tq = "0";
+		try { kk = Integer.parseInt(kiboo.replaceSingleQuotes( ki[2].getValue().trim() ) ); tq = kk.toString(); }
+		catch (Exception e) {}
 
-			sqlstm += "insert into deliveryorder (dono,description,quantity,asset_tags,serial_numbers) values " +
-			"('" + ido + "','" + ti + "'," + tq + ",'" + atgs + "','" + snms + "');";
-		}
-		if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
-
-	} catch (Exception e) {}
+		sqlstm += "insert into deliveryorder (dono,description,quantity,asset_tags,serial_numbers) values " +
+		"('" + ido + "','" + ti + "'," + tq + ",'" + atgs + "','" + snms + "');";
+	}
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
 }
 
+/**
+ * Show all the DO items - create grid row
+ * 25/08/2015: hide asset-tags and s-nums textbox
+ * @param ido the RDO no.
+ */
 void showDO_items(String ido)
 {
 	if(items_holder.getFellowIfAny("items_grid") != null) items_grid.setParent(null);
@@ -117,8 +123,8 @@ void showDO_items(String ido)
 		ngfun.gpMakeCheckbox(irow,"","","");
 		ngfun.gpMakeTextbox(irow,"",d.get("description"),"font-size:9px;","99%",textboxnulldrop).setMultiline(true);
 		ngfun.gpMakeTextbox(irow,"", GlobalDefs.nf0.format(d.get("quantity")),"font-size:9px;","60%",textboxnulldrop);
-		ngfun.gpMakeTextbox(irow,"",sqlhand.clobToString(d.get("asset_tags")),"font-size:9px;","99%",textboxnulldrop).setMultiline(true);
-		ngfun.gpMakeTextbox(irow,"",sqlhand.clobToString(d.get("serial_numbers")),"font-size:9px;","99%",textboxnulldrop).setMultiline(true);
+		ngfun.gpMakeTextbox(irow,"",sqlhand.clobToString(d.get("asset_tags")),"font-size:9px;","99%",textboxnulldrop).setVisible(false);
+		ngfun.gpMakeTextbox(irow,"",sqlhand.clobToString(d.get("serial_numbers")),"font-size:9px;","99%",textboxnulldrop).setVisible(false);
 	}
 }
 
@@ -126,6 +132,8 @@ void showDO_meta(String ido)
 {
 	r = getnewDO_rec(ido);
 	if(r == null) { guihand.showMessageBox("ERR: cannot access DO table.."); return; }
+
+	glob_sel_fc6_code = r.get("Code"); // FC6 customer-ID store here
 
 	Object[] jkl = { customername, d_code, d_shipaddress1, d_shipaddress2, d_shipaddress3, d_shippingcontact, d_shippingphone, d_remark, d_transporter, d_airwaybill };
 	String[] fl = { "Name", "Code", "ShipAddress1", "ShipAddress2", "ShipAddress3", "ShippingContact", "ShippingPhone", "Remark", "transporter", "airwaybill" };

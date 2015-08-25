@@ -52,6 +52,7 @@ global_selected_customername = "";
 
 last_showdo_type = 0;
 glob_sel_do = glob_sel_do_stat = glob_sel_do_jobid = glob_sel_picklist = "";
+glob_sel_fc6_code = "";
 
 String JN_linkcode()
 {
@@ -238,12 +239,81 @@ void doFunc(String itype)
 		}
 	}
 
+	if(itype.equals("uploaddo_b")) // 25/08/2015: upload DO to FC6 - cautious
+	{
+		//alert(glob_sel_do_jobid + " :: " + glob_sel_picklist + " :: " + glob_sel_fc6_code);
+
+		if(glob_sel_do_jobid.equals("") || glob_sel_picklist.equals("")) // make sure got pick-list and link to job
+		{
+			msgtext = "ERR: DO not link to a job or job without a pick-list";
+		}
+		else
+		{
+			if(glob_sel_fc6_code.equals(""))
+			{
+				msgtext = "ERR: DO not link to a valid customer";
+			}
+			else
+			{
+				processInjectFC6DO(glob_sel_fc6_code, glob_sel_do, glob_sel_picklist);
+			}
+		}
+	}
+
 	if(!sqlstm.equals(""))
 	{
 		sqlhand.gpSqlExecuter(sqlstm);
 		showDOList(last_showdo_type);
 	}
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/**
+ * Grab 'em asset-tags and if no asset-tag, use item as generic inventory-name, store 'em qtys too
+ */
+void processInjectFC6DO(String ifc6, String ido, String ipl)
+{
+	sqlstm = "select pl_items, pl_qty, pl_asset_tags from rw_jobpicklist where origid=" + ipl;
+	r = sqlhand.gpSqlFirstRow(sqlstm);
+	if(r == null) return;
+
+	HashMap pil = new HashMap();
+
+	itms = sqlhand.clobToString(r.get("pl_items")).split("~");
+	qtys = sqlhand.clobToString(r.get("pl_qty")).split("~");
+	atgs = sqlhand.clobToString(r.get("pl_asset_tags")).split("~");
+	ks = "";
+
+	for(i=0; i<itms.length; i++)
+	{
+		testatg = "";
+		try { testatg = atgs[i]; } catch (Exception e) {}
+
+		if(testatg.length() > 0) // got asset-tags, use them instead of item-name as inventory-name
+		{
+			kg = testatg.split("\n");
+			for(j=0; j<kg.length; j++)
+			{
+				try { 
+					stg = kg[j].trim();
+	//ks += "put aset: " + stg + "\n";
+					pil.put(stg,1);
+
+				 } catch (Exception e) {}
+			}
+		}
+		else
+		{
+			iqty = 0;
+			try { iqty = Integer.parseInt(qtys[i]); } catch (Exception e) {}
+			pil.put(itms[i],iqty);
+
+			//ks += itms[i] + " :: " + qtys[i] + "\n";
+		}
+	}
+
+	//debugbox.setValue(ks);
+	//inject_FC6DO(ifc6,pil);
 }
 
 Object[] plisthds =
@@ -510,6 +580,8 @@ void closePanel()
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" onClose="closePanel()">
 <panelchildren style="background:#60718A">
+	
+	<label id="debugbox" multiline="true" />
 
 	<div sclass="shadowbox" style="background:#444D6A">
 		<hbox>
@@ -574,6 +646,7 @@ void closePanel()
 			</div>
 
 			<div sclass="shadowbox" style="background:#89AC4F">
+				<button id="uploaddo_b" label="UPLOAD TO FOCUS" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" />
 				<hbox>
 					<button id="additem_b" label="Add item" sclass="k9mo" onClick="doFunc(self.getId())" />
 					<button id="delitem_b" label="Delete" sclass="k9mo" onClick="doFunc(self.getId())" />

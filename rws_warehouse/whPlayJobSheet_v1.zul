@@ -18,14 +18,13 @@
 MYTITLE = "WH Jobsheet - Items Request";
 MYVERSION = "v0.1";
 MYPANEL = "whplayjspan";
-/*
-@Title WH side play with jobsheet request items
-@Authoer Victor Wong
-@Since 10/09/2014
-@Notes
-Uses share functions in jobsheet_funcs.zs
-
-*/
+/**
+ * WH side play with jobsheet request items
+ * @author Victor Wong
+ * @since 10/09/2014
+ *
+ * Uses share functions in jobsheet_funcs.zs
+ */
 import java.util.*;
 import java.text.*;
 import org.apache.poi.hssf.usermodel.*;
@@ -404,7 +403,7 @@ void reallyTransferItemsToProd()
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("1585");
+	jobid_tb.setValue("2688");
 	admpalletinp_tb.setVisible(true); // let admin change to pallet.. shortcut
 	admclrcommit_b.setVisible(true);
 }

@@ -23,12 +23,12 @@ Sql FC5030_Sql()
 {
 	try
 	{
-		String dbstring = "jdbc:jtds:sqlserver://192.168.100.201:1433/Focus5010";
+		String dbstring = "jdbc:jtds:sqlserver://192.168.100.201:1433/Focus50J0";
 		return(Sql.newInstance(dbstring, "testme", "9090", "net.sourceforge.jtds.jdbc.Driver"));
 	}
 	catch (SQLException e)
 	{
-		alert("f5030 error!");
+		alert("f50J0 error!");
 		return null;
 	}
 }

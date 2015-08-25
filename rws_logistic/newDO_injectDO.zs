@@ -9,12 +9,16 @@ DO_VOUCHERTYPE = "6144";
 // Inject header, u001c, u011c
 void inject_DO_Headers(String[] hdv)
 {
-	kdate = calcFocusDate("2007-03-31");
+	kdate = calcFocusDate("2015-08-25");
 	lgn = "upload" + Math.round(Math.random() * 100).toString();
 
 	// data.headeroff = header.headerid
 	sqlstm1 = "declare @domaxid int;" +
-	"set @domaxid = (select max(voucherno)+1 from header where vouchertype=" + DO_VOUCHERTYPE + ");" +
+
+	"select @domaxid=Max(VoucherNo)+1 from header with (ReadUnCommitted) " +
+	"where VoucherType=" + DO_VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
+	"with (ReadUnCommitted) where VoucherType=" + DO_VOUCHERTYPE + ");" +
+
 	"insert into header (" +
 	"id, version, noentries, tnoentries, login, date_, time_," +
 	"flags, flags2, defcurrency," +
@@ -22,7 +26,9 @@ void inject_DO_Headers(String[] hdv)
 	"0x0000, 0x5b, 0, 0, '" + lgn + "', " + kdate + ", 0x0a3b00," +
 	"0x0027, 6208, 0x00," +
 	DO_VOUCHERTYPE + ", @domaxid, 30, 0, 0 );";
+
 	f30_gpSqlExecuter(sqlstm1);
+	//alert(sqlstm1); return;
 
 	sqlstm2 = "select headerid,voucherno from header where login='" + lgn + "';"; // get inserted header.headerid
 	r = f30_gpSqlFirstRow(sqlstm2);
@@ -58,40 +64,45 @@ void inject_DO_Headers(String[] hdv)
 
 	sqlstm9 = "update " + DO_EXTRAOFF + " set remarksyh='' where extraid=" + hdv[2];
 	f30_gpSqlExecuter(sqlstm9);
-
 }
 
-// TODO make sure bookno is set properly or leave blank for user to select
-void inject_FC6DO()
+/**
+ * [inject_FC6DO description]
+ * @param bookno FC6 account-no.
+ * 
+ * headvals[0] = headerid, headvals[1] = DO_EXTRAHEADEROFF, headvals[2] = DO_EXTRAOFF, headvals[3] = voucherno
+	*	kk = "headerid=" + headvals[0] + "\nu001c.extraid=" + headvals[1] + "\nu011c.extraid=" + headvals[2] + "\nvoucherno=" + headvals[3];
+	*	debugbox.setValue(kk);
+	*	headerid=116938 u001c.extraid=2754 u011c.extraid=2241 voucherno=5267
+	*	headvals[0] = "116932"; headvals[1] = "2754";	headvals[2] = "2240";	headvals[3] = "5267";
+ */
+void inject_FC6DO(String bookno, Hashmap kpx)
 {
-	kdate = calcFocusDate("2007-03-31");
-	// headvals[0] = headerid, headvals[1] = DO_EXTRAHEADEROFF, headvals[2] = DO_EXTRAOFF, headvals[3] = voucherno
+	kdate = calcFocusDate("2015-08-25");
 	String[] headvals = new String[4];
-
 	inject_DO_Headers(headvals);
-	kk = "headerid=" + headvals[0] + "\nu001c.extraid=" + headvals[1] + "\nu011c.extraid=" + headvals[2] + "\nvoucherno=" + headvals[3];
-	scantags_tb.setValue(kk);
-	/*
-		return;
-	 	asd = kiboo.replaceSingleQuotes( scantags_tb.getValue().trim() );
-		if(asd.equals("")) return;
-		atgs = asd.split("\n");
-	*/
 
-	/*
-	headerid=116938
-	u001c.extraid=2754
-	u011c.extraid=2241
-	voucherno=5267
-	headvals[0] = "116932";
-	headvals[1] = "2754";
-	headvals[2] = "2240";
-	headvals[3] = "5267";
-	*/
-	atgs = "'91003526','91003528','91003529','91003531','91003532','91003534','91003535'";
+	atgs = "";
+
+	SortedSet keys = new TreeSet(kpx.keySet());
+	for( key : keys)
+	{
+		value = kpx.get(key).toString();
+		atgs += "'" + key + "',";
+	}
+	try { atgs = atgs.substring(0,atgs.length()-1); } catch (Exception e) {}
+
+	if(atgs.equals(""))
+	{
+		guihand.showMessageBox("ERR: no asset-tag or inventory-item in pick-list");
+		return;
+	}
+
+	//atgs = "'A0012230','A0015149','A0015223','A0015014','N0001075'";
+
 	mainsqlstm = "declare @dmaxid int; declare @imaxid int; ";
 
-	sqlstm1 = "select m.masterid as pcode, p.masterid as tags6v from mr001 AS m INNER JOIN " +
+	sqlstm1 = "select m.masterid as pcode, p.masterid as tags6v, m.code2 as assettag from mr001 AS m INNER JOIN " +
 	"dbo.u0001 AS u ON m.Eoff = u.ExtraId INNER JOIN dbo.mr008 AS p ON u.ProductNameYH = p.MasterId " +
 	"where m.code2 in (" + atgs + ");";
 
@@ -114,6 +125,8 @@ void inject_FC6DO()
 		"0,0,0,0,0,0,0,0," +
 		"0,0,0,0);";
 
+		// 1251 = bookno (chg to use parameter bookno), 1078=code
+
 		mainsqlstm += "set @dmaxid = (select max(bodyid)+1 from data); " +
 		"insert into data (" +
 		"bodyid, date_, vouchertype, voucherno, bookno, productcode," +
@@ -121,7 +134,7 @@ void inject_FC6DO()
 		"headeroff, extraoff, extraheaderoff, salesoff," +
 		"code, duedate, sizeofrec, links1, links2, links3, linktoprbatch, exchgrate, tags4, tags5, tags7, " +
 		"binnoentries, reserveno, reservetype) values (" +
-		"@dmaxid, " + kdate + "," + DO_VOUCHERTYPE + ", '" + headvals[3] +"', 1251, " + prodcode + "," +
+		"@dmaxid, " + kdate + "," + DO_VOUCHERTYPE + ", '" + headvals[3] +"', " + bookno + ", " + prodcode + "," +
 		"3, 3, 0, 9, 0, 0, 0, 2622464, 0, 0, " + tags6 + ", " +
 		headvals[0] + "," + headvals[2] + "," + headvals[1] + ",@imaxid," +
 		"1078," + kdate + ",240, 0, 0, 0, 0, 1, 0, 0, 0," +
