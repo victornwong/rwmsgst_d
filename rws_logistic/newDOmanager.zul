@@ -296,24 +296,24 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 			{
 				try { 
 					stg = kg[j].trim();
-	//ks += "put aset: " + stg + "\n";
+					//ks += "put aset: " + stg + "\n";
 					pil.put(stg,1);
 
 				 } catch (Exception e) {}
 			}
 		}
 		else
-		{
+		{ // no asset-tag items .. error-msg pop when delete DO - "automation object revoke"
+			/*
 			iqty = 0;
 			try { iqty = Integer.parseInt(qtys[i]); } catch (Exception e) {}
 			pil.put(itms[i],iqty);
-
+			*/
 			//ks += itms[i] + " :: " + qtys[i] + "\n";
 		}
 	}
-
 	//debugbox.setValue(ks);
-	//inject_FC6DO(ifc6,pil);
+	inject_FC6DO(ifc6,pil);
 }
 
 Object[] plisthds =

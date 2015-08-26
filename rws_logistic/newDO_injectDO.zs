@@ -9,7 +9,7 @@ DO_VOUCHERTYPE = "6144";
 // Inject header, u001c, u011c
 void inject_DO_Headers(String[] hdv)
 {
-	kdate = calcFocusDate("2015-08-25");
+	kdate = calcFocusDate(kiboo.todayISODateString());
 	lgn = "upload" + Math.round(Math.random() * 100).toString();
 
 	// data.headeroff = header.headerid
@@ -76,9 +76,9 @@ void inject_DO_Headers(String[] hdv)
 	*	headerid=116938 u001c.extraid=2754 u011c.extraid=2241 voucherno=5267
 	*	headvals[0] = "116932"; headvals[1] = "2754";	headvals[2] = "2240";	headvals[3] = "5267";
  */
-void inject_FC6DO(String bookno, Hashmap kpx)
+void inject_FC6DO(String bookno, HashMap kpx)
 {
-	kdate = calcFocusDate("2015-08-25");
+	kdate = calcFocusDate(kiboo.todayISODateString());
 	String[] headvals = new String[4];
 	inject_DO_Headers(headvals);
 
@@ -107,6 +107,8 @@ void inject_FC6DO(String bookno, Hashmap kpx)
 	"where m.code2 in (" + atgs + ");";
 
 	rx = f30_gpSqlGetRows(sqlstm1);
+
+	//alert(kdate + " :: " + sqlstm1 + " :: " + rx);
 	// TODO have to check how recs found based on asset-tags, if not equal, error-return
 	linecount = 0;
 
@@ -126,6 +128,7 @@ void inject_FC6DO(String bookno, Hashmap kpx)
 		"0,0,0,0);";
 
 		// 1251 = bookno (chg to use parameter bookno), 1078=code
+		bookno = "1251";
 
 		mainsqlstm += "set @dmaxid = (select max(bodyid)+1 from data); " +
 		"insert into data (" +
