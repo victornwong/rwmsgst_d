@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="rlmstkitm1"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript src="rlmsql.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "Stock Items";
+MYVERSION = "v0.1";
+MYPANEL = "stkitmrlmpan1";
+/**
+ * @title Stock items management
+ * @author Victor Wong
+ * @since 09/12/2014
+ * @notes
+ * Uses StockMasterDetails
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+//if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+NEWSTOCKITEM_BACKGROUND = "background:#77902F";
+
+last_show_stockitems = 0;
+
+glob_sel_stock_code = glob_sel_stock_cat = glob_sel_groupcode = glob_sel_classcode = glob_sel_description = glob_sel_id = "";
+
+/**
+ * Populate 'em drop-downs used throughout the UI
+ */
+void populateDropdowns()
+{
+	fillListbox_uniqField("StockMasterDetails","Stock_Cat", m_stock_cat_lb );
+	fillListbox_uniqField("StockMasterDetails","GroupCode", m_groupcode_lb );
+	fillListbox_uniqField("StockMasterDetails","ClassCode", m_classcode_lb );
+
+	fillComboboxUniq("StockMasterDetails","Stock_Cat",e_stock_cat_cb);
+	fillComboboxUniq("StockMasterDetails","GroupCode",e_groupcode_cb);
+	fillComboboxUniq("StockMasterDetails","ClassCode",e_classcode_cb);
+
+	fillComboboxUniq("StockMasterDetails","Stock_Cat",n_stock_cat_cb);
+	fillComboboxUniq("StockMasterDetails","GroupCode",n_groupcode_cb);
+	fillComboboxUniq("StockMasterDetails","ClassCode",n_classcode_cb);
+}
+
+boolean stockCodeExist(String istk)
+{
+	retval = false;
+	cq = "select stock_code from StockMasterDetails where stock_code='" + istk + "' limit 1;";
+	r = gpWMS_FirstRow(cq);
+	if(r != null) // stock-code exists - return
+		retval = true;
+
+	return retval;
+}
+
+/**
+ * Stock item functions
+ * @param iwhat button-ID
+ */
+void itemFunc(String iwhat)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	//refresh = false;
+	//unm = useraccessobj.username;
+	
+	Object[] newis = { n_stock_cat_cb, n_groupcode_cb, n_classcode_cb, n_stock_code_tb, n_description_tb } ;
+
+	if(iwhat.equals("insertitem_b")) // insert new stock-item, uses inputs from popup
+	{
+		dt = ngfun.getString_fromUI(newis);
+		if(dt[3].equals(""))
+		{
+			msgtext = "ERR: Mandatory stock-code needed..";
+		}
+		else
+		{ 
+			if(stockCodeExist(dt[3])) // stock-code exists - return
+			{
+				msgtext = "ERR: Stock-code already exist in database..";
+			}
+			else
+			{ // can insert new stock-code into db
+				sqlstm = "insert into StockMasterDetails (stock_cat,groupcode,classcode,stock_code,description,entrydate) values " +
+				"('" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "','" + dt[4] + "','" + todaydate + "');";
+
+				msgtext = "Item inserted into database..";
+			}
+		}
+	}
+
+	if(iwhat.equals("clearnewitem_b")) // clear 'em inputs in popup
+	{
+		ngfun.clearUI_Field(newis);
+	}
+
+	Object[] upis = { e_stock_cat_cb, e_groupcode_cb, e_classcode_cb, e_stock_code_tb, e_description_tb };
+	if(iwhat.equals("updateitem_b")) // update stock-item
+	{
+		if(glob_sel_id.equals("")) return;
+		dt = ngfun.getString_fromUI(upis);
+		sqlstm = "update StockMasterDetails set Stock_Cat='" + dt[0] + "', GroupCode='" + dt[1] + "', ClassCode='" + dt[2] + "', Description='" + dt[4] + "' where ID=" + glob_sel_id;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		gpWMS_execute(sqlstm);
+		listStockItems(last_show_stockitems);
+		populateDropdowns(); // refresh 'em drop-downs
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+Object[] stkitemshds =
+{
+	new listboxHeaderWidthObj("Stock-code",true,""),
+	new listboxHeaderWidthObj("Description",true,""),
+	new listboxHeaderWidthObj("Category",true,"80px"),
+	new listboxHeaderWidthObj("Group",true,"80px"),
+	new listboxHeaderWidthObj("Class",true,"80px"),
+	new listboxHeaderWidthObj("Entry",true,"70px"), // 5
+	new listboxHeaderWidthObj("id",false,""),
+};
+ITM_ID = 6;
+
+/**
+ * onSelect for stock_items_lb
+ */
+class stkitemclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
+		glob_sel_description = lbhand.getListcellItemLabel(isel,1);
+		glob_sel_stock_cat = lbhand.getListcellItemLabel(isel,2);
+		glob_sel_groupcode = lbhand.getListcellItemLabel(isel,3);
+		glob_sel_classcode = lbhand.getListcellItemLabel(isel,4);
+		glob_sel_id = lbhand.getListcellItemLabel(isel,ITM_ID);
+	}
+}
+stockitemclicker = new stkitemclik();
+
+class stkitemdoubelclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		try
+		{
+			glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
+			glob_sel_description = lbhand.getListcellItemLabel(isel,1);
+			glob_sel_stock_cat = lbhand.getListcellItemLabel(isel,2);
+			glob_sel_groupcode = lbhand.getListcellItemLabel(isel,3);
+			glob_sel_classcode = lbhand.getListcellItemLabel(isel,4);
+			glob_sel_id = lbhand.getListcellItemLabel(isel,ITM_ID);
+
+			e_stock_code_tb.setValue(glob_sel_stock_code);
+			e_description_tb.setValue(glob_sel_description);
+			e_stock_cat_cb.setValue(glob_sel_stock_cat);
+			e_groupcode_cb.setValue(glob_sel_groupcode);
+			e_classcode_cb.setValue(glob_sel_classcode);
+
+			editstockitem_pop.open(isel);
+
+		} catch (Exception e) {}
+	}
+}
+stkitem_doubclik = new stkitemdoubelclik();
+
+/**
+ * [listStockItems description]
+ * @param itype list type to perform - check switch-case
+ */
+void listStockItems(int itype)
+{
+	last_show_stockitems = itype;
+	Listbox newlb = lbhand.makeVWListbox_Width(stockitems_holder, stkitemshds, "stock_items_lb", 3);
+
+	sqlstm = "select Stock_Code,Description,Stock_Cat,GroupCode,ClassCode,EntryDate,ID from StockMasterDetails ";
+	wherestr = "";
+
+	switch(itype)
+	{
+		// all listing by drop-downs plung here
+		case 1: // by stock-cat
+		case 2: // by group-code
+		case 3: // by class-code
+			Object[] lsto = { m_stock_cat_lb, m_groupcode_lb, m_classcode_lb };
+			String[] lstn = { "Stock_Cat", "GroupCode", "ClassCode" };
+			fln = lstn[itype-1]; k = "";
+
+			try { k = lsto[itype-1].getSelectedItem().getLabel(); } catch (Exception e) {}
+
+			if(k.equals(""))
+			{
+				wherestr = "where " + fln + " is null or " + fln + "='' ";
+			}
+			else
+			{
+				wherestr = "where " + fln + "='" + kiboo.replaceSingleQuotes(k) + "' ";
+			}
+			break;
+
+		case 4: // by search-text or just dump everything -- need to limit
+			k = kiboo.replaceSingleQuotes( m_searchtext_tb.getValue().trim() );
+			if(!k.equals(""))
+			{
+				wherestr = "where Description like '%" + k + "%' ";
+			}
+			else
+			{
+				wherestr = "limit 100";
+			}
+			break;
+	}
+
+	sqlstm += wherestr;
+
+	r = gpWMS_GetRows(sqlstm);
+	if(r.size() == 0) return;
+	newlb.setRows(20); newlb.setMultiple(true); newlb.setCheckmark(true);
+	newlb.addEventListener("onSelect", stockitemclicker);
+
+	String[] fl = { "Stock_Code", "Description", "Stock_Cat", "GroupCode", "ClassCode", "EntryDate", "ID" };
+	ArrayList kabom = new ArrayList();
+
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, stkitem_doubclik);
+}
+
+]]>
+</zscript>
+
+<popup id="newstockitem_pop">
+	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" width="400px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<separator />
+					<label value="Create new stock-item" style="color:#ffffff;font-weight:bold;text-shadow: 1px 1px #333333;" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Category" sclass="k9b" />
+					<combobox id="n_stock_cat_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Group" sclass="k9b" />
+					<combobox id="n_groupcode_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Class" sclass="k9b" />
+					<combobox id="n_classcode_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Stock-code" sclass="k9b" />
+					<textbox id="n_stock_code_tb" sclass="k9" width="99%" value="testa1" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Description" sclass="k9b" />
+					<textbox id="n_description_tb" sclass="k9" width="99%" value="Test A punya 1 barang" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<separator />
+					<hbox>
+						<button id="insertitem_b" label="Insert" sclass="k9mo" onClick="itemFunc(self.getId())" />
+						<button id="clearnewitem_b" label="Clear" sclass="k9mo" onClick="itemFunc(self.getId())" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+	</div>
+</popup>
+
+<popup id="editstockitem_pop">
+	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" width="400px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<separator />
+					<label value="Edit stock-item" style="color:#ffffff;font-weight:bold;text-shadow: 1px 1px #333333;" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Category" sclass="k9b" />
+					<combobox id="e_stock_cat_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Group" sclass="k9b" />
+					<combobox id="e_groupcode_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Class" sclass="k9b" />
+					<combobox id="e_classcode_cb" sclass="k9" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Stock-code" sclass="k9b" />
+					<textbox id="e_stock_code_tb" sclass="k9" width="99%" disabled="true" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Description" sclass="k9b" />
+					<textbox id="e_description_tb" sclass="k9" width="99%" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<separator />
+					<hbox>
+						<button id="updateitem_b" label="Update" sclass="k9mo" onClick="editstockitem_pop.close(); itemFunc(self.getId())" />
+						<button label="Close" sclass="k9mo" onClick="editstockitem_pop.close()" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+	</div>
+</popup>
+
+<popup id="listout_pop">
+	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" >
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Category" sclass="wbo" />
+					<listbox id="m_stock_cat_lb" sclass="k9" mold="select" />
+					<button label="by category" sclass="k9mo" onClick="listout_pop.close(); listStockItems(1)" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Group" sclass="wbo" />
+					<listbox id="m_groupcode_lb" sclass="k9" mold="select" />
+					<button label="by group" sclass="k9mo" onClick="listout_pop.close(); listStockItems(2)" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Class" sclass="wbo" />
+					<listbox id="m_classcode_lb" sclass="k9" mold="select" />
+					<button label="by class" sclass="k9mo" onClick="listout_pop.close(); listStockItems(3)" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Search" sclass="wbo" />
+					<textbox id="m_searchtext_tb" sclass="k9" />
+					<button label="Load/Search" sclass="k9mo" onClick="listout_pop.close(); listStockItems(4)" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#455383">
+
+	<div sclass="shadowbox" style="background:#C7740D">
+		<hbox>
+			<button label="List items" sclass="k9mo" onClick="listout_pop.open(self)" />
+			<button label="New item" sclass="k9mo" onClick="newstockitem_pop.open(self)" />
+			<button label="Import from XLS" sclass="k9mo" />
+			<button label="Suspend item" sclass="k9mo" />
+			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#EF1E1E" visible="true" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+	<div id="stockitems_holder" sclass="shadowbox" style="background:#AEC622" />
+
+<zscript>
+<![CDATA[
+
+populateDropdowns();
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
+

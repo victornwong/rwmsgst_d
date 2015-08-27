@@ -26,6 +26,15 @@ luhand = new LookupFuncs(); NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = n
 ]]>
 </zscript>
 
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
 <window id="${MY_ID}" width="460px" height="600px" title="${MYTITLE} ${MYVERSION}" 
 position="center" mode="overlapped" border="normal" closable="true">
 <div>
