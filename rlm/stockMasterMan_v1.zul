@@ -11,6 +11,8 @@
 <zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript src="rlmsql.zs" />
+<zscript src="stockManf/stockmanfunc.zs" />
+<zscript src="stockManf/stocklister.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "Stock Items";
@@ -25,6 +27,20 @@ MYPANEL = "stkitmrlmpan1";
 */
 import java.util.*;
 import java.text.*;
+import java.io.*;
+import java.sql.*;
+import java.sql.Date;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
 import org.victor.*;
 sechand = new SecurityFuncs();
 
@@ -43,32 +59,11 @@ last_show_stockitems = 0;
 glob_sel_stock_code = glob_sel_stock_cat = glob_sel_groupcode = glob_sel_classcode = glob_sel_description = glob_sel_id = "";
 
 /**
- * Populate 'em drop-downs used throughout the UI
+ * Call-back from stock-master listbox clicker - call from stocklister.stkitemdoubelclik() and stocklister.stkitemclik()
+ * @param itarget the selected listitem object
  */
-void populateDropdowns()
+void stockItemListbox_callback(Object itarget)
 {
-	fillListbox_uniqField("StockMasterDetails","Stock_Cat", m_stock_cat_lb );
-	fillListbox_uniqField("StockMasterDetails","GroupCode", m_groupcode_lb );
-	fillListbox_uniqField("StockMasterDetails","ClassCode", m_classcode_lb );
-
-	fillComboboxUniq("StockMasterDetails","Stock_Cat",e_stock_cat_cb);
-	fillComboboxUniq("StockMasterDetails","GroupCode",e_groupcode_cb);
-	fillComboboxUniq("StockMasterDetails","ClassCode",e_classcode_cb);
-
-	fillComboboxUniq("StockMasterDetails","Stock_Cat",n_stock_cat_cb);
-	fillComboboxUniq("StockMasterDetails","GroupCode",n_groupcode_cb);
-	fillComboboxUniq("StockMasterDetails","ClassCode",n_classcode_cb);
-}
-
-boolean stockCodeExist(String istk)
-{
-	retval = false;
-	cq = "select stock_code from StockMasterDetails where stock_code='" + istk + "' limit 1;";
-	r = gpWMS_FirstRow(cq);
-	if(r != null) // stock-code exists - return
-		retval = true;
-
-	return retval;
 }
 
 /**
@@ -120,136 +115,35 @@ void itemFunc(String iwhat)
 		sqlstm = "update StockMasterDetails set Stock_Cat='" + dt[0] + "', GroupCode='" + dt[1] + "', ClassCode='" + dt[2] + "', Description='" + dt[4] + "' where ID=" + glob_sel_id;
 	}
 
+	if(iwhat.equals("delitem_b")) // delete stock-item - usually admin to do this
+	{
+		if(Messagebox.show("Hard delete the selected items", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		multiDeleteStockItems();
+	}
+
+	if(iwhat.equals("suspitem_b")) // suspend selected stock-items
+	{
+		multiSuspendActiveStockItems(0);
+	}
+
+	if(iwhat.equals("relitem_b")) // release/active selected stock-items
+	{
+		multiSuspendActiveStockItems(1);
+	}
+
+	if(iwhat.equals("chkdupstk_b")) // check for duplicates stock_code if any
+	{
+		checkDuplicateStockItems();
+	}
+
 	if(!sqlstm.equals(""))
 	{
 		gpWMS_execute(sqlstm);
-		listStockItems(last_show_stockitems);
-		populateDropdowns(); // refresh 'em drop-downs
+		refreshThings();
 	}
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
-}
-
-Object[] stkitemshds =
-{
-	new listboxHeaderWidthObj("Stock-code",true,""),
-	new listboxHeaderWidthObj("Description",true,""),
-	new listboxHeaderWidthObj("Category",true,"80px"),
-	new listboxHeaderWidthObj("Group",true,"80px"),
-	new listboxHeaderWidthObj("Class",true,"80px"),
-	new listboxHeaderWidthObj("Entry",true,"70px"), // 5
-	new listboxHeaderWidthObj("id",false,""),
-};
-ITM_ID = 6;
-
-/**
- * onSelect for stock_items_lb
- */
-class stkitemclik implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(Event event) throws UiException
-	{
-		isel = event.getReference();
-		glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
-		glob_sel_description = lbhand.getListcellItemLabel(isel,1);
-		glob_sel_stock_cat = lbhand.getListcellItemLabel(isel,2);
-		glob_sel_groupcode = lbhand.getListcellItemLabel(isel,3);
-		glob_sel_classcode = lbhand.getListcellItemLabel(isel,4);
-		glob_sel_id = lbhand.getListcellItemLabel(isel,ITM_ID);
-	}
-}
-stockitemclicker = new stkitemclik();
-
-class stkitemdoubelclik implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(Event event) throws UiException
-	{
-		isel = event.getTarget();
-		try
-		{
-			glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
-			glob_sel_description = lbhand.getListcellItemLabel(isel,1);
-			glob_sel_stock_cat = lbhand.getListcellItemLabel(isel,2);
-			glob_sel_groupcode = lbhand.getListcellItemLabel(isel,3);
-			glob_sel_classcode = lbhand.getListcellItemLabel(isel,4);
-			glob_sel_id = lbhand.getListcellItemLabel(isel,ITM_ID);
-
-			e_stock_code_tb.setValue(glob_sel_stock_code);
-			e_description_tb.setValue(glob_sel_description);
-			e_stock_cat_cb.setValue(glob_sel_stock_cat);
-			e_groupcode_cb.setValue(glob_sel_groupcode);
-			e_classcode_cb.setValue(glob_sel_classcode);
-
-			editstockitem_pop.open(isel);
-
-		} catch (Exception e) {}
-	}
-}
-stkitem_doubclik = new stkitemdoubelclik();
-
-/**
- * [listStockItems description]
- * @param itype list type to perform - check switch-case
- */
-void listStockItems(int itype)
-{
-	last_show_stockitems = itype;
-	Listbox newlb = lbhand.makeVWListbox_Width(stockitems_holder, stkitemshds, "stock_items_lb", 3);
-
-	sqlstm = "select Stock_Code,Description,Stock_Cat,GroupCode,ClassCode,EntryDate,ID from StockMasterDetails ";
-	wherestr = "";
-
-	switch(itype)
-	{
-		// all listing by drop-downs plung here
-		case 1: // by stock-cat
-		case 2: // by group-code
-		case 3: // by class-code
-			Object[] lsto = { m_stock_cat_lb, m_groupcode_lb, m_classcode_lb };
-			String[] lstn = { "Stock_Cat", "GroupCode", "ClassCode" };
-			fln = lstn[itype-1]; k = "";
-
-			try { k = lsto[itype-1].getSelectedItem().getLabel(); } catch (Exception e) {}
-
-			if(k.equals(""))
-			{
-				wherestr = "where " + fln + " is null or " + fln + "='' ";
-			}
-			else
-			{
-				wherestr = "where " + fln + "='" + kiboo.replaceSingleQuotes(k) + "' ";
-			}
-			break;
-
-		case 4: // by search-text or just dump everything -- need to limit
-			k = kiboo.replaceSingleQuotes( m_searchtext_tb.getValue().trim() );
-			if(!k.equals(""))
-			{
-				wherestr = "where Description like '%" + k + "%' ";
-			}
-			else
-			{
-				wherestr = "limit 100";
-			}
-			break;
-	}
-
-	sqlstm += wherestr;
-
-	r = gpWMS_GetRows(sqlstm);
-	if(r.size() == 0) return;
-	newlb.setRows(20); newlb.setMultiple(true); newlb.setCheckmark(true);
-	newlb.addEventListener("onSelect", stockitemclicker);
-
-	String[] fl = { "Stock_Code", "Description", "Stock_Cat", "GroupCode", "ClassCode", "EntryDate", "ID" };
-	ArrayList kabom = new ArrayList();
-
-	for(d : r)
-	{
-		ngfun.popuListitems_Data(kabom,fl,d);
-		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
-		kabom.clear();
-	}
-	lbhand.setDoubleClick_ListItems(newlb, stkitem_doubclik);
 }
 
 ]]>
@@ -366,6 +260,18 @@ void listStockItems(int itype)
 	</div>
 </popup>
 
+<popup id="showduplicates_pop">
+	<div sclass="shadowbox" style="background:#EA4713" width="400px">
+		<label id="dups_output_label" multiline="true" sclass="wbo" />
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#BC1E1E" >
+		<button id="delitem_b" label="DELETE stock-item" sclass="k9mo" onClick="itemFunc(self.getId())" />
+	</div>
+</popup>
+
 <style src="/real-world.css" />
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
@@ -384,9 +290,11 @@ void listStockItems(int itype)
 		<hbox>
 			<button label="List items" sclass="k9mo" onClick="listout_pop.open(self)" />
 			<button label="New item" sclass="k9mo" onClick="newstockitem_pop.open(self)" />
-			<button label="Import from XLS" sclass="k9mo" />
-			<button label="Suspend item" sclass="k9mo" />
-			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#EF1E1E" visible="true" />
+			<button label="Import from XLS" sclass="k9mo" onClick="importStockDetails()" />
+			<button id="chkdupstk_b" label="Check for duplicates" sclass="k9mo" onClick="itemFunc(self.getId())" />
+			<button id="suspitem_b" label="Suspend item" sclass="k9mo" onClick="itemFunc(self.getId())" />
+			<button id="relitem_b" label="Activate item" sclass="k9mo" onClick="itemFunc(self.getId())" />
+			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#EF1E1E" visible="true" onClick="adminpop.open(self)" />
 		</hbox>
 	</div>
 	<separator height="3px" />
