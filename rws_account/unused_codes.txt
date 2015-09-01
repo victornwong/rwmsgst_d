@@ -1,3 +1,385 @@
+// from soaProcessor_v2.zul
+// itype: 1=with narration, 2=no narration
+void generateExcelSOA(int itype)
+{
+	org.apache.poi.hssf.usermodel.HSSFRow checkrow;
+	Cell kcell;
+	startscan = 9;
+	pgadder = 4; page_break = 28; page2_break = 46;
+
+	soaData.clear();
+	try
+	{
+		if(mainUpload_Data == null) return;
+		if(mainUpload_Data.thefiledata == null) return;
+	}
+	catch (Exception e) { guihand.showMessageBox("ERR: invalid worksheet"); return; }
+
+	try
+	{
+		//ByteArrayInputStream mybytes = new ByteArrayInputStream(mainUpload_Data.thefiledata);
+		inps = null;
+
+		if(!(mainUpload_Data.thefiledata instanceof java.io.ByteArrayInputStream))
+			inps = new ByteArrayInputStream(mainUpload_Data.thefiledata);
+		else
+			inps = mainUpload_Data.thefiledata;
+
+		HSSFWorkbook excelWB = new HSSFWorkbook(inps);
+		FormulaEvaluator evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+		numsheets = excelWB.getNumberOfSheets();
+		sheet = excelWB.getSheetAt(0);
+		numrows = sheet.getPhysicalNumberOfRows();
+
+		numc = 0;
+		FOC6_COL_READ = 10;
+		soa_inv_total = soa_recp_total = soa_balance_total = "";
+		
+		// hardcoded to read company-name from B9
+		/*
+		checkrow = sheet.getRow(8);
+		kcell = checkrow.getCell(1);
+		compname = POI_GetCellContentString(kcell,evaluator,"#").trim();
+		compname = compname.replaceAll(" \\/","_");
+		*/
+
+		for(rw=startscan; rw<numrows; rw++) // hardcoded to read from "startrow" onwards..
+		{
+			String[] thed = new String[9];
+			checkrow = sheet.getRow(rw);
+			
+			for(rc=1; rc<FOC6_COL_READ; rc++)
+			{
+				kcell = checkrow.getCell(rc);
+				if(kcell != null)
+				{
+					thed[rc-1] = POI_GetCellContentString(kcell,evaluator,"#.00").trim();
+				}
+				else
+					thed[rc-1] = "";
+			}
+
+			if(thed[1].equals("Total"))
+			{
+				soa_inv_total = thed[4];
+				soa_recp_total = thed[5];
+				soa_balance_total = thed[6];
+			}
+
+			if(thed[0].equals("")) break;
+			//soaObj ikdo = new soaObj(thed[0],thed[1],thed[2],thed[3],thed[4],thed[5],thed[6]);
+			soaData.add(thed);
+			numc++;
+		}
+	}
+	catch (java.io.IOException e)
+	{
+		guihand.showMessageBox("ERR: Cannot parse worksheet");
+		return;
+	}
+
+	wkarray = soaData.toArray();
+	dbg = "";
+	for(i=0;i<wkarray.length;i++)
+	{
+		m = wkarray[i];
+		for(k=0; k<m.length; k++)
+		{
+			dbg += m[k] + " :: ";
+		}
+		dbg += "\n";
+	}
+
+	dbg += "\nsoa_inv_total = " + soa_inv_total + " :: soa_recp_total = " + soa_recp_total + " :: soa_balance_total = " + soa_balance_total;
+	debugbox.setValue(dbg);
+	return;
+
+	custdetstr = "";
+	custr = getFocus_CustomerRec(global_selected_customerid); // prep customer-details
+	if(custr != null)
+	{
+		custdetstr = custr.get("name") + "\n" +
+		custr.get("address1yh") + ", " + custr.get("address2yh") + "\n" +
+		custr.get("address3yh") + ", " + custr.get("address4yh") + "\n" +
+		"Contact: " + custr.get("contactyh") + "\n" +
+		"Tel: " + custr.get("telyh") + " Fax: " + custr.get("faxyh");
+		// + "\nDeliverTo: " + custr.get("deliverytoyh") + "\n" +
+		//"Customer Email: " + custr.get("emailyh") + "\nSalesRep: " + custr.get("salesrepyh");
+	}
+
+	compname = custr.get("name");
+	templatefn = "rwimg/soaTemplate_2.xls";
+
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	Workbook wwb = WorkbookFactory.create(inp);
+	Sheet wsheet = wwb.getSheetAt(0);
+	FormulaEvaluator evaluator = wwb.getCreationHelper().createFormulaEvaluator();
+	org.apache.poi.hssf.usermodel.HSSFRow mainhdrow = wsheet.getRow(3);
+	Font wfont = wwb.createFont(); wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
+	Font nfont = wwb.createFont(); nfont.setFontHeightInPoints((short)6); nfont.setFontName("Arial"); // narration-font
+
+	wkarray = soaData.toArray();
+	
+	sttd = kiboo.getDateFromDatebox(statement_date);
+	sttds = "Statement date: " + sttd;
+	dfints = "Late payment charges: " + customer_interest.getValue() + "%";
+
+	excelInsertString(wsheet,0,0,custdetstr); // insert customer-det into worksheet
+	excelInsertString(wsheet,0,8,sttds); // insert statement date
+	excelInsertString(wsheet,0,5,dfints); // insert interest rate
+
+	if(itype == 2) excelInsertString(wsheet,3,8,""); // remove "Narration" for no-narration type
+
+	rowcounter = 0;
+	totalinterest = 0.0;
+	sumundef = sum0_30 = sum31_60 = sum61_90 = sum91_120 = sum121_150 = sum150_on = 0.0;
+	unadjcred = 0.0;
+
+	//debugbox.setValue(debugbox.getValue() + "\nD> wkarray = " + wkarray.length.toString());
+	//debugbox.setValue(debugbox.getValue() + "\nD> insert -30days" );
+
+	for(i=0;i<wkarray.length;i++)
+	{
+		Date invdate, duedate;
+
+		wop = wkarray[i];
+		pgbreakd = false;
+		//if(wop[0].equals("Unadjusted credits")) { unadjusted = wop; continue; }
+		/*
+		debugbox.setValue(debugbox.getValue() + "\nD> wop = " + wop[0] + " : " + wop[1] + " : " + wop[2] + " : " + 
+		wop[3] + " : " + wop[4] + " : " + wop[5] + " : "
+		);
+		*/
+
+		chkrwi = "";
+		try { chkrwi = (wop[0].substring(0,3)).toUpperCase(); }
+		catch (Exception e) {}
+
+		currentrow = pgadder + rowcounter;
+
+		tmprwi = "";
+		try { tmprwi = wop[0].replaceAll("RWI:",""); } catch (Exception e) {}
+
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,0,tmprwi),wfont,true,"");
+
+		invdstr = "";
+		if(!wop[1].equals("") && wop[1] != null)
+		{
+			invdate = (Date)dtfm.parse(wop[1]);
+			invdstr = dtfm.format(invdate);
+		}
+
+		//excelInsertString(wsheet,pgadder+i,1,invdstr);
+		duedstr = ""; duedate = new Date();
+
+		try {
+		duedate = (Date)dtfm.parse(wop[3]);
+		duedstr = dtfm.format(duedate);
+		} catch (Exception e) {}
+
+		kstr = duedstr; // default to invoice-due-date
+		//if(!chkrwi.equals("RWI")) kstr = invdstr; // wop[1]; // if it's an RWI, use RWI date instead TODO
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,1,kstr),wfont,true,"");
+
+		for(j=4;j<7;j++) // inv-amt, receipt, balance
+		{
+			vak = 0;
+			try { vak = Float.parseFloat(wop[j]); } catch (Exception e) {}
+			if(vak < 0) vak = vak * -1;
+			kstr = (vak == 0) ? "" : vak.toString();
+			wop[j] = kstr; 
+
+			POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,j-2,wop[j]),wfont,true,"");
+			//excelInsertString(wsheet,currentrow,j+1,wop[j]);
+			//debugbox.setValue( debugbox.getValue() + "\nIRB> wop " + j.toString() + " = " + wop[j] );
+		}
+
+		dydff = calcDayDiff(duedate,statement_date.getValue()) - 14; // 11/09/2013: grace period 14 days for any aging
+		if(dydff < 0) dydff = 0;
+
+		intrcs = "";
+		intrc = 0;
+
+		if(!wop[4].equals("") && (chkrwi.equals("RWI") || chkrwi.equals("DNT")) )
+		{
+			// interest calc based on balance - not inv amount
+			try {
+			intrc = (Float.parseFloat(wop[6]) * Float.parseFloat(customer_interest.getValue()) / 100) / 365 * dydff;
+			} catch (Exception e) {}
+
+			if(intrc > 0)
+			{
+				totalinterest += intrc;
+				intrcs = nf2.format(intrc);
+			}
+		}
+
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,5,intrcs),wfont,true,""); // interest
+
+		if(dydff == 0)
+			agestr = "";
+		else
+		{
+			if(chkrwi.equals("RWI") || chkrwi.equals("DNT"))
+				agestr = dydff.toString();
+			else
+				agestr = "";
+		}
+
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,7,agestr),wfont,true,"###"); // age
+
+		whtstr = wop[7]; // narration
+		if(chkrwi.equals("RWI")) whtstr = wop[8];
+		if(itype == 2) whtstr = ""; // no-narration type
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,8,whtstr),nfont,false,"");
+
+		ttos = ""; // total o/s
+		if(!wop[6].equals("")) ttos = nf2.format(Float.parseFloat(wop[6]) + intrc);
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,6,ttos),wfont,true,"");
+		//excelInsertString(wsheet,currentrow,6,ttos);
+
+		rowcounter++;
+
+		if(i == page_break) { pgbreakd = true; wsheet.setRowBreak(currentrow); }
+		if(i > page_break)
+			if(( (i+page_break) % page2_break) == 0)
+			{
+				pgbreakd = true;
+				wsheet.setRowBreak(currentrow);
+			}
+
+		if(pgbreakd) // re-gen header-row - copy from first header
+		{
+			//org.apache.poi.hssf.usermodel.HSSFRow hdrow = wsheet.createRow(rowcounter+pgadder);
+			// TODO mod here if template change
+			for(ci=0;ci<9;ci++)
+			{
+				Cell hdcell = mainhdrow.getCell(ci);
+				hdstr = POI_GetCellContentString(hdcell,evaluator,"#").trim();
+				jhdc = excelInsertString(wsheet,rowcounter+pgadder,ci,hdstr);
+				//POI_CellSetAllBorders(wwb,jhdc,wfont,true);
+				jhdc.setCellStyle(hdcell.getCellStyle());
+			}
+			rowcounter++;
+		}
+
+		if(!wop[6].equals("")) // do those 0-30 days and etc group-calcs
+		{
+			ktos = Float.parseFloat(ttos);
+			kck = wop[0].trim().toUpperCase();
+			//if(wop[0].equals("Unadjusted credits")) { unadjcred += ktos; ktos = 0; }
+			// 08/01/2013: check for "ON-ACCOUNT"
+			if(kck.equals("UNADJUSTED CREDITS") || kck.equals("ON-ACCOUNT") ) { unadjcred += ktos; ktos = 0; }
+
+			if(dydff <= 0)
+			{
+				sumundef += ktos;
+			}
+
+			if(dydff < 31 && dydff >= 0) sum0_30 += ktos;
+			//if(ktos < 0) ktos = ktos * -1;
+
+			if(dydff > 30 && dydff < 61) sum31_60 += ktos;
+			if(dydff > 60 && dydff < 91) sum61_90 += ktos;
+			if(dydff > 90 && dydff < 121) sum91_120 += ktos;
+			if(dydff > 120 && dydff < 151) sum121_150 += ktos;
+			if(dydff > 150) sum150_on += ktos;
+		}
+	}
+	//debugbox.setValue(debugbox.getValue() + "\nD> wop[2] duedate : " + i.toString() );
+
+	rowcounter++;
+	totalrw = pgadder + rowcounter;
+	Font tfont = wwb.createFont();
+	tfont.setFontHeightInPoints((short)9);
+	tfont.setFontName("Arial");
+	tfont.setBoldweight(Font.BOLDWEIGHT_BOLD);
+
+	// put TOTAL row
+	mergs = "A" + (totalrw + 1).toString() + ":B" + (totalrw + 1).toString();
+	CellRangeAddress region = CellRangeAddress.valueOf(mergs);
+	wsheet.addMergedRegion(region);
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,0,"TOTAL"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,1,""),tfont,true,"");
+
+	if(soa_balance_total.equals("")) soa_balance_total = "0";
+
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw,2,soa_inv_total.toString()),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw,3,soa_recp_total.toString()),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber( wsheet,totalrw,4,nf2.format( Float.parseFloat(soa_balance_total)*-1)),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw,5,totalinterest.toString()),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw,6,
+		nf2.format( Float.parseFloat(soa_balance_total)*-1 + totalinterest)),tfont,true,"");
+
+	// insert those 0-30 days and so on at the end of the SOA
+	//debugbox.setValue(debugbox.getValue() + "\nD> insert -30days" );
+
+	rowcounter += 2;
+	totalrw = pgadder + rowcounter;
+	nxttotalrw = totalrw + 1;
+	dyclm = 0;
+
+	// 14/11/2013: req by Tony, include undefined/future-aged amount
+	// 21/11/2013: agreed by CC, put as "Unadjusted credits" instead of "UNDEFINED"
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm,"UNADJUSTED CREDITS"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm, nf2.format(unadjcred * -1) ),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+1,"0-30 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+1,sum0_30.toString()),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+2,"31-60 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+2,sum31_60.toString()),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+3,"61-90 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+3,sum61_90.toString()),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+4,"91-120 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+4,sum91_120.toString()),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+5,"121-150 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+5,sum121_150.toString()),tfont,true,"");
+
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+6,"Over 150 Days"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+6,sum150_on.toString()),tfont,true,"");
+
+	kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on) - unadjcred;
+	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL"),tfont,true,"");
+	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+7,kktot.toString()),tfont,true,"");
+
+	duetotal = sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on;
+	duestr = "REMINDER:\nWe would like to bring to your attention that your account of RM" + nf3.format(duetotal) +
+	" has exceeded the due date.\nWe hope to receive your payment within 14 days from the date of this statement " +
+	"to avoid service suspension.\nPlease ignore this reminder if payment has been made.";
+	excelInsertString(wsheet,1,5,duestr);
+
+	if(compname.length() > 15) compname = compname.substring(0,15).trim();
+	compname = compname.replaceAll(" ","_");
+	//compname = compname.replaceAll("\\","_");
+	compname = compname.replaceAll("/","_");
+
+	DateFormat fndfmt = new SimpleDateFormat("MMMyyyy");
+	kdte = fndfmt.format(statement_date.getValue());
+
+	tfname = compname + "_SOA_" + kdte + ".xls";
+	outfn = session.getWebApp().getRealPath("tmp/" + tfname); // TODO create some meaningful filename
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	wwb.write(fileOut);
+	fileOut.close();
+	glob_processed_filename = outfn; // for later usage
+	generated_lbl.setValue(tfname);
+
+	// 14/11/2013: save a copy of the SOA by customer-id
+	// global_selected_customerid set when user select a customer from popup
+	saveFileToDMS( FC6CUST_PREFIX + global_selected_customerid, tfname, outfn, "application/vnd.ms-excel","xls" );
+
+	fillDocumentsList_2(documents_holder,FC6CUST_PREFIX,global_selected_customerid);
+
+	//downloadFile(kasiexport,tfname,outfn); // rwsqlfuncs.zs TODO need to move this
+	upload_filename.setValue(""); // once gen, imported worksheet cleared
+}
+
 // from insuranceMan_v1.zul
 void showAllRiskSched()
 {
