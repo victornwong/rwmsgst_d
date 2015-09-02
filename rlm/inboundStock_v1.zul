@@ -12,6 +12,7 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript src="rlmsql.zs" />
 <zscript src="stockManf/stocklister.zs" />
+<zscript src="stockManf/itemsfunc.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "INBOUND Inventory Management";
@@ -25,11 +26,26 @@ MYPANEL = "inbounstockpanel";
 */
 import java.util.*;
 import java.text.*;
+import java.io.*;
+import java.sql.*;
+import java.sql.Date;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
 import org.victor.*;
+
 sechand = new SecurityFuncs();
 myincludeid = Executions.getCurrent().getParameter("myid");
-useraccessobj = sechand.getUserAccessObject();
-if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+//useraccessobj = sechand.getUserAccessObject();
+//if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
 
 kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
@@ -41,9 +57,11 @@ WORKAREA_BACKGROUND = "background:#208EC7";
 // stock-master-details global vars
 glob_sel_stock_code = glob_sel_stock_cat = glob_sel_groupcode = glob_sel_classcode = glob_sel_description = glob_sel_id = "";
 
-glob_stkin_stkid = glob_stkin_id = glob_stkin_description = glob_stkin_ref = glob_stkin_user = glob_stkin_post = "";
+glob_stkin_stkid = glob_stkin_id = glob_stkin_description = glob_stkin_ref = glob_stkin_user = glob_stkin_post = glob_stkin_stockcode = "";
 
 last_show_stockin = 1;
+
+itemcode_sel_obj = null;
 
 /**
  * Call-back from stock-master listbox clicker - call from stocklister.stkitemdoubelclik() and stocklister.stkitemclik()
@@ -55,91 +73,6 @@ void stockItemListbox_callback(Object itarget)
 	w_stock_code_tb.setValue(glob_sel_stock_code);
 	editstockitem_pop.close();
 	liststkmaster_pop.close();
-	//alert(glob_sel_id + " :: " + glob_sel_stock_code);
-}
-
-Object[] stkinhds =
-{
-	new listboxHeaderWidthObj("STKIN",true,"80px"),
-	new listboxHeaderWidthObj("Ref",true,""),
-	new listboxHeaderWidthObj("Supplier / Desc",true,""),
-	new listboxHeaderWidthObj("StkItem",true,"200px"),
-	new listboxHeaderWidthObj("Qty",true,"70px"),
-	new listboxHeaderWidthObj("User",true,"80px"), // 5
-	new listboxHeaderWidthObj("Post",true,"70px"),
-	new listboxHeaderWidthObj("stk_id",false,""),
-};
-STKID_POS = 7;
-
-class stkinclik implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(Event event) throws UiException
-	{
-		isel = event.getReference();
-		glob_stkin_id = lbhand.getListcellItemLabel(isel,0);
-		glob_stkin_ref = lbhand.getListcellItemLabel(isel,1);
-		glob_stkin_description = lbhand.getListcellItemLabel(isel,2);
-		glob_stkin_user = lbhand.getListcellItemLabel(isel,5);
-		glob_stkin_stkid = lbhand.getListcellItemLabel(isel,STKID_POS);
-
-		w_id_lbl.setValue(glob_stkin_id);
-		w_reference_tb.setValue(glob_stkin_ref);
-		w_description_tb.setValue(glob_stkin_description);
-		w_stock_code_tb.setValue( lbhand.getListcellItemLabel(isel,3) ); // stock-code display name only - real linking in stk_id
-	}
-}
-stockinclicker = new stkinclik();
-
-class stkindobuleclik implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(Event event) throws UiException
-	{
-		isel = event.getTarget();
-		try
-		{
-		} catch (Exception e) {}
-	}
-}
-stkindoublecliker = new stkindobuleclik();
-
-void refreshThings()
-{
-	listStockIn(last_show_stockin);
-}
-
-/**
- * [listStockIn description]
- * @param itype listing type - check switch statement
- */
-void listStockIn(int itype)
-{
-	if(itype == 0) return;
-	last_show_stockin = itype;
-
-	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
-	sdate = kiboo.getDateFromDatebox(startdate);
-	edate = kiboo.getDateFromDatebox(enddate);
-
-	Listbox newlb = lbhand.makeVWListbox_Width(stockins_holder, stkinhds, "stockin_lb", 3);
-	sqlstm = "select Id,Reference,Description, (select Stock_Code from StockMasterDetails where ID=stk_id) as stock_code,Quantity,Posted,username,stk_id from tblStockInMaster where EntryDate between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' ";
-	if(!st.equals(""))
-		sqlstm += " and (Reference like '%" + st + "%' or Description like '%" + st + "%');";
-
-	r = gpWMS_GetRows(sqlstm);
-	if(r.size() == 0) return;
-	newlb.setRows(20); newlb.setMold("paging"); // newlb.setMultiple(true); newlb.setCheckmark(true); 
-	newlb.addEventListener("onSelect", stockinclicker);
-
-	String[] fl = { "Id", "Reference", "Description", "stock_code", "Quantity", "username", "Posted","stk_id" };
-	ArrayList kabom = new ArrayList();
-
-	for(d : r)
-	{
-		ngfun.popuListitems_Data(kabom,fl,d);
-		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
-		kabom.clear();
-	}
-	lbhand.setDoubleClick_ListItems(newlb, stkindoublecliker);
 }
 
 /**
@@ -153,18 +86,79 @@ void doFunc(String iwhat)
 
 	if(iwhat.equals("newstockin_b")) // insert new stock-in voucher
 	{
-		sqlstm = "insert into tblStockInMaster (EntryDate,Reference,Description,Quantity,Posted) values ('" + todaydate + "','NEW STOCK-IN','SUPPLIER ETC',0,0);";
+		sqlstm = "insert into tblStockInMaster (EntryDate,Reference,Description,Quantity,Posted,status) values ('" + todaydate + "','NEW STOCK-IN','SUPPLIER ETC',0,0,'DRAFT');";
 	}
 
 	Object[] upbx = { w_reference_tb, w_description_tb };
 
-	if(iwhat.equals("updstkin_b")) // update stock-in voucher
+	if(!glob_stkin_id.equals("")) // these funcs need selected stk-in voucher
+	{
+		if(iwhat.equals("updstkin_b")) // update stock-in voucher
+		{
+			dt = ngfun.getString_fromUI(upbx);
+			isk = 0;
+			try { isk = Integer.parseInt(glob_stkin_stkid); } catch (Exception e) {}
+			sqlstm = "update tblStockInMaster set Reference='" + dt[0] + "', Description='" + dt[1] + "', stk_id=" + isk.toString() + " where Id=" + glob_stkin_id + ";";
+		}
+
+		if(iwhat.equals("setvtoday_b")) // reset voucher to today's date
+		{
+			sqlstm = "update tblStockInMaster set EntryDate='" + todaydate + "' where Id=" + glob_stkin_id + ";";
+		}
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		gpWMS_execute(sqlstm);
+		refreshThings();
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/**
+ * Stock-item functions
+ * @param iwhat button-ID
+ */
+void itemFunc(String iwhat)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+
+	if(iwhat.equals("capitemcode_b")) // parse item-codes in textbox, insert into listbox
+	{
+		ks = kiboo.replaceSingleQuotes(scanitemcode_tb.getValue().trim());
+		insertItemcodes(ks,captureitemcodes_holder,"itemcodes_lb");
+		scanitemcode_tb.setValue(""); // clear textbox once items inserted into listbox
+	}
+
+	if(iwhat.equals("remvitem_b")) // remove selected items
+	{
+		removeItemcodes(captureitemcodes_holder,"itemcodes_lb");
+	}
+
+	if(iwhat.equals("saveitem_b")) // save into tblstockindetail - temporary until really push into stocklist
 	{
 		if(glob_stkin_id.equals("")) return;
-		dt = ngfun.getString_fromUI(upbx);
-		isk = 0;
-		try { isk = Integer.parseInt(glob_stkin_stkid); } catch (Exception e) {}
-		sqlstm = "update tblStockInMaster set Reference='" + dt[0] + "', Description='" + dt[1] + "', stk_id=" + isk.toString() + " where Id=" + glob_stkin_id + ";";
+		if(glob_stkin_stkid.equals(""))
+		{
+			msgtext = "ERR: please assign a stock-code for this stock-in entry";
+		}
+		else
+		{
+			saveItemcodes(glob_stkin_id, glob_stkin_stkid, glob_stkin_stockcode, captureitemcodes_holder, "itemcodes_lb");
+		}
+	}
+
+	if(iwhat.equals("chkdupitem_b")) // check for duplicates within listbox
+	{
+		checkDuplicateItems(captureitemcodes_holder, "itemcodes_lb", 1);
+	}
+
+	if(iwhat.equals("upditem_b")) // update selected item things - call from popup
+	{
+		try { itm = kiboo.replaceSingleQuotes( i_itemcode_tb.getValue().trim() ); lbhand.setListcellItemLabel(itemcode_sel_obj,ITEM_CODE_POS,itm); } catch (Exception e) {}
+		try { fv = Float.parseFloat( i_quantity_tb.getValue().trim() ); lbhand.setListcellItemLabel(itemcode_sel_obj,ITEM_QTY_POS,fv.toString()); } catch (Exception e) {}
+		try { fv = Float.parseFloat( i_cost_tb.getValue().trim() ); lbhand.setListcellItemLabel(itemcode_sel_obj,ITEM_COST_POS,fv.toString()); } catch (Exception e) {}
 	}
 
 	if(!sqlstm.equals(""))
@@ -177,6 +171,34 @@ void doFunc(String iwhat)
 
 ]]>
 </zscript>
+
+<popup id="edititem_pop">
+	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" width="300px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Item code" sclass="k9b" />
+					<textbox id="i_itemcode_tb" sclass="k9" width="99%" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Quantity" sclass="k9b" />
+					<textbox id="i_quantity_tb" sclass="k9" width="40%" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<label value="Cost" sclass="k9b" />
+					<textbox id="i_cost_tb" sclass="k9" width="40%" />
+				</row>
+				<row style="${NEWSTOCKITEM_BACKGROUND}">
+					<separator />
+					<hbox>
+						<button id="upditem_b" label="Update" sclass="k9mo" onClick="edititem_pop.close(); itemFunc(self.getId())" />
+						<button label="Close" sclass="k9mo" onClick="edititem_pop.close()" />
+					</hbox>
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
 
 <popup id="editstockitem_pop">
 	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" width="400px">
@@ -257,6 +279,12 @@ void doFunc(String iwhat)
 	</div>
 </popup>
 
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#D21616" >
+		<button id="setvtoday_b" label="Set today date" sclass="k9mo" onClick="doFunc(self.getId())" />
+	</div>
+</popup>
+
 <style src="/real-world.css" />
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
@@ -274,6 +302,10 @@ void doFunc(String iwhat)
 		<hbox>
 			<button label="List stock-in vouchers" sclass="k9mo" onClick="listout_pop.open(self)" />
 			<button id="newstockin_b" label="New stock-in" sclass="k9mo" onClick="doFunc(self.getId())" />
+			<button id="commitstkin_b" label="COMMIT" sclass="k9mo" />
+			<button id="poststock_b" label="POST IN STOCK" sclass="k9mo" />
+			<separator width="10px" />
+			<button label="ADMIN" sclass="k9mo" style="color:#EE1D1D" onClick="adminpop.open(self)" />
 		</hbox>
 	</div>
 	<separator height="3px" />
@@ -281,41 +313,58 @@ void doFunc(String iwhat)
 	<separator height="3px" />
 
 	<div id="workarea" sclass="shadowbox" style="background:#AEC622">
-		<grid sclass="GridLayoutNoBorder" width="400px">
-			<rows>
-				<row style="${WORKAREA_BACKGROUND}">
-					<label value="STOCK-IN" style="color:#ffffff;font-weight:bold" />
-					<label id="w_id_lbl" style="color:#ffffff;font-weight:bold" />
-				</row>
-				<row style="${WORKAREA_BACKGROUND}">
-					<label value="Reference" sclass="wbo" />
-					<textbox id="w_reference_tb" sclass="k9" width="98%" />
-				</row>
-				<row style="${WORKAREA_BACKGROUND}">
-					<label value="Supplier / Description" sclass="wbo" />
-					<textbox id="w_description_tb" sclass="k9" width="98%" />
-				</row>
-				<row style="${WORKAREA_BACKGROUND}">
-					<button label="Stock code" sclass="k9mo" onClick="liststkmaster_pop.open(self)" />
-					<textbox id="w_stock_code_tb" sclass="k9" width="98%" disabled="true" />
-				</row>
-				<row style="${WORKAREA_BACKGROUND}" spans="2">
-					<hbox>
-						<button id="updstkin_b" label="Update" sclass="k9mo" onClick="doFunc(self.getId())" />
-					</hbox>
-				</row>
-			</rows>
-		</grid>
+		<hbox>
+			<vbox>
+				<grid sclass="GridLayoutNoBorder" width="400px">
+					<rows>
+						<row style="${WORKAREA_BACKGROUND}">
+							<label value="STOCK-IN" style="color:#ffffff;font-weight:bold" />
+							<label id="w_id_lbl" style="color:#ffffff;font-weight:bold" />
+						</row>
+						<row style="${WORKAREA_BACKGROUND}">
+							<label value="Reference" sclass="wbo" />
+							<textbox id="w_reference_tb" sclass="k9" width="98%" />
+						</row>
+						<row style="${WORKAREA_BACKGROUND}">
+							<label value="Supplier / Description" sclass="wbo" />
+							<textbox id="w_description_tb" sclass="k9" width="98%" />
+						</row>
+						<row style="${WORKAREA_BACKGROUND}">
+							<button label="Stock code" sclass="k9mo" onClick="liststkmaster_pop.open(self)" />
+							<textbox id="w_stock_code_tb" sclass="k9" width="98%" disabled="true" />
+						</row>
+						<row style="${WORKAREA_BACKGROUND}" spans="2">
+							<hbox>
+								<button id="updstkin_b" label="Update stock-in metadata" sclass="k9mo" onClick="doFunc(self.getId())" />
+							</hbox>
+						</row>
+					</rows>
+				</grid>
+				<separator height="2px" />
+				<label value="Item-code scan capture" sclass="k9mo" />
+				<textbox id="scanitemcode_tb" multiline="true" width="99%" height="180px" />
+				<hbox>
+					<button id="capitemcode_b" label="Capture" sclass="k9mo" onClick="itemFunc(self.getId())" />
+					<button label="Clear" sclass="k9mo" onClick='scanitemcode_tb.setValue("")' />
+				</hbox>
+			</vbox>
+			<vbox>
+				<hbox>
+					<button id="chkdupitem_b" label="Check duplicate" sclass="k9mo" onClick="itemFunc(self.getId())" />
+					<button id="saveitem_b" label="Save" sclass="k9mo" onClick="itemFunc(self.getId())" />
+					<button id="remvitem_b" label="Remove" sclass="k9mo" onClick="itemFunc(self.getId())" />
+				</hbox>
+				<div id="captureitemcodes_holder" />
+			</vbox>
+		</hbox>
 	</div>
 
 <zscript>
 <![CDATA[
 
-	fillListbox_uniqField("StockMasterDetails","Stock_Cat", m_stock_cat_lb );
-	fillListbox_uniqField("StockMasterDetails","GroupCode", m_groupcode_lb );
-	fillListbox_uniqField("StockMasterDetails","ClassCode", m_classcode_lb );
-
-
+fillListbox_uniqField("StockMasterDetails","Stock_Cat", m_stock_cat_lb );
+fillListbox_uniqField("StockMasterDetails","GroupCode", m_groupcode_lb );
+fillListbox_uniqField("StockMasterDetails","ClassCode", m_classcode_lb );
 
 ]]>
 </zscript>
