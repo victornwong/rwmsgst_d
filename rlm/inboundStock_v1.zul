@@ -23,6 +23,7 @@ MYPANEL = "inbounstockpanel";
  * @author Victor Wong
  * @since 28/08/2015
  * @notes
+ * "POST IN-STOCK" button accessible by authorized person only. It will populate StockList which is the main inventory table
 */
 import java.util.*;
 import java.text.*;
@@ -52,6 +53,7 @@ guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
 NEWSTOCKITEM_BACKGROUND = "background:#77902F";
+MPFPOP_BACKGROUND = "background:#3B8BB2";
 WORKAREA_BACKGROUND = "background:#208EC7";
 
 // stock-master-details global vars
@@ -104,6 +106,21 @@ void doFunc(String iwhat)
 		if(iwhat.equals("setvtoday_b")) // reset voucher to today's date
 		{
 			sqlstm = "update tblStockInMaster set EntryDate='" + todaydate + "' where Id=" + glob_stkin_id + ";";
+		}
+
+		if(iwhat.equals("setdraft_b")) // set stock-in entry to draft - admin function
+		{
+			sqlstm = "update tblStockInMaster set status='DRAFT' where Id=" + glob_stkin_id + ";";
+			workarea.setVisible(false);
+		}
+
+		if(iwhat.equals("commitstkin_b")) // commit stock-in entry - not equiv to post-stock-in - just freeze entry
+		{
+			if(Messagebox.show("Commiting this entry will freeze against modification", "Are you sure?",
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+			sqlstm = "update tblStockInMaster set status='COMMIT' where Id=" + glob_stkin_id + ";";
+			workarea.setVisible(false);
 		}
 	}
 
@@ -169,8 +186,75 @@ void itemFunc(String iwhat)
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
 }
 
+/**
+ * Multi-purpose function dispenser - uses captureitemcodes_holder and "itemcodes_lb". ITEM_QTY_POS, ITEM_COST_POS defi in itemsfunc.zs
+ * @param iwhat button ID
+ */
+void mpfFunc(String iwhat)
+{
+	newlb = captureitemcodes_holder.getFellowIfAny("itemcodes_lb");
+	if(newlb == null) return;
+	ts = newlb.getSelectedItems().toArray();
+	if(ts.length == 0) return;
+
+	sqty = ""; try { sqty = Integer.parseInt(mpf_quantity_tb.getValue()).toString(); } catch (Exception e) {}
+	scost = ""; try { scost = Float.parseFloat(mpf_cost_tb.getValue()).toString(); } catch (Exception e) {}
+	errflag = false; errmsg = ""; updcolumn = -1; updstr = "";
+
+	if(iwhat.equals("mpfupdqty_b") && sqty.equals("")) // empty qty
+	{
+		errflag = true; errmsg = "ERR: must enter a number for quantity";
+	}
+
+	if(iwhat.equals("mpfupdcst_b") && scost.equals("")) // empty cost
+	{
+		errflag = true; errmsg = "ERR: must enter a proper cost";
+	}
+
+	if(errflag)
+	{
+		guihand.showMessageBox(errmsg); return;
+	}
+
+	if(iwhat.equals("mpfupdqty_b"))
+	{
+		updcolumn = ITEM_QTY_POS;
+		updstr = sqty;
+	}
+
+	if(iwhat.equals("mpfupdcst_b"))
+	{
+		updcolumn = ITEM_COST_POS;
+		updstr = scost;
+	}
+
+	for(i=0; i<ts.length; i++)
+	{
+		lbhand.setListcellItemLabel(ts[i],updcolumn,updstr);
+	}
+}
+
 ]]>
 </zscript>
+
+<popup id="itemsmpf_pop">
+	<div sclass="shadowbox" style="${MPFPOP_BACKGROUND}" width="300px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${MPFPOP_BACKGROUND}">
+					<label value="Quantity" sclass="k9b" />
+					<textbox id="mpf_quantity_tb" sclass="k9" width="40%" />
+					<button id="mpfupdqty_b" label="Update" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row style="${MPFPOP_BACKGROUND}">
+					<label value="Cost" sclass="k9b" />
+					<textbox id="mpf_cost_tb" sclass="k9" width="40%" />
+					<button id="mpfupdcst_b" label="Update" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
 
 <popup id="edititem_pop">
 	<div sclass="shadowbox" style="${NEWSTOCKITEM_BACKGROUND}" width="300px">
@@ -282,6 +366,7 @@ void itemFunc(String iwhat)
 <popup id="adminpop">
 	<div sclass="shadowbox" style="background:#D21616" >
 		<button id="setvtoday_b" label="Set today date" sclass="k9mo" onClick="doFunc(self.getId())" />
+		<button id="setdraft_b" label="Set to DRAFT" sclass="k9mo" onClick="doFunc(self.getId())" />
 	</div>
 </popup>
 
@@ -302,8 +387,8 @@ void itemFunc(String iwhat)
 		<hbox>
 			<button label="List stock-in vouchers" sclass="k9mo" onClick="listout_pop.open(self)" />
 			<button id="newstockin_b" label="New stock-in" sclass="k9mo" onClick="doFunc(self.getId())" />
-			<button id="commitstkin_b" label="COMMIT" sclass="k9mo" />
-			<button id="poststock_b" label="POST IN STOCK" sclass="k9mo" />
+			<button id="commitstkin_b" label="COMMIT" sclass="k9mo" onClick="doFunc(self.getId())" />
+			<button id="poststock_b" label="POST IN-STOCK" sclass="k9mo" onClick="doFunc(self.getId())" visible="true" />
 			<separator width="10px" />
 			<button label="ADMIN" sclass="k9mo" style="color:#EE1D1D" onClick="adminpop.open(self)" />
 		</hbox>
@@ -322,18 +407,19 @@ void itemFunc(String iwhat)
 							<label id="w_id_lbl" style="color:#ffffff;font-weight:bold" />
 						</row>
 						<row style="${WORKAREA_BACKGROUND}">
-							<label value="Reference" sclass="wbo" />
+							<button id="digpo_b" label="Reference" sclass="k9mo" />
 							<textbox id="w_reference_tb" sclass="k9" width="98%" />
 						</row>
 						<row style="${WORKAREA_BACKGROUND}">
-							<label value="Supplier / Description" sclass="wbo" />
+							<button id="digsupplier_b" label="Supplier / Description" sclass="k9mo" />
 							<textbox id="w_description_tb" sclass="k9" width="98%" />
 						</row>
 						<row style="${WORKAREA_BACKGROUND}">
-							<button label="Stock code" sclass="k9mo" onClick="liststkmaster_pop.open(self)" />
+							<button id="digstockcode_b" label="Stock code" sclass="k9mo" onClick="liststkmaster_pop.open(self)" />
 							<textbox id="w_stock_code_tb" sclass="k9" width="98%" disabled="true" />
 						</row>
-						<row style="${WORKAREA_BACKGROUND}" spans="2">
+						<row style="${WORKAREA_BACKGROUND}">
+							<separator />
 							<hbox>
 								<button id="updstkin_b" label="Update stock-in metadata" sclass="k9mo" onClick="doFunc(self.getId())" />
 							</hbox>
@@ -350,6 +436,7 @@ void itemFunc(String iwhat)
 			</vbox>
 			<vbox>
 				<hbox>
+					<button id="mpfthing_b" label="MPF" sclass="k9mo" onClick="itemsmpf_pop.open(self)" />
 					<button id="chkdupitem_b" label="Check duplicate" sclass="k9mo" onClick="itemFunc(self.getId())" />
 					<button id="saveitem_b" label="Save" sclass="k9mo" onClick="itemFunc(self.getId())" />
 					<button id="remvitem_b" label="Remove" sclass="k9mo" onClick="itemFunc(self.getId())" />

@@ -28,6 +28,24 @@ void renumberListbox(Listbox tlb, int icolumn, int istartn, boolean iwithdot)
 	} catch (Exception e) {}
 }
 
+/**
+ * Toggle working buttons by stock-in entry status
+ * @param istatus the status string
+ */
+void togMainButtons(String istatus)
+{
+	Component[] tbutts = { updstkin_b, w_reference_tb, w_description_tb, w_stock_code_tb, scanitemcode_tb,
+	 capitemcode_b, mpfthing_b, chkdupitem_b, saveitem_b, remvitem_b, mpfupdqty_b, mpfupdcst_b, upditem_b,
+	 digpo_b, digsupplier_b, digstockcode_b };
+
+	tg = (istatus.equals("DRAFT")) ? false : true;
+
+	for(i=0; i<tbutts.length; i++)
+	{
+		tbutts[i].setDisabled(tg);
+	}
+}
+
 Object[] stkinhds =
 {
 	new listboxHeaderWidthObj("STKIN",true,"80px"),
@@ -46,6 +64,7 @@ STKIN_REF_POS = 2;
 STKIN_DESC_POS = 3;
 STKIN_STOCKNAME_POS = 4;
 STKIN_USER_POS = 6;
+STKIN_STATUS_POS = 7;
 STKID_POS = 9;
 
 class stkinclik implements org.zkoss.zk.ui.event.EventListener
@@ -66,6 +85,8 @@ class stkinclik implements org.zkoss.zk.ui.event.EventListener
 		w_stock_code_tb.setValue( glob_stkin_stockcode ); // stock-code display name only - real linking in stk_id
 
 		showItemcodes(glob_stkin_id, captureitemcodes_holder, "itemcodes_lb");
+		togMainButtons( lbhand.getListcellItemLabel(isel,STKIN_STATUS_POS) );
+		workarea.setVisible(true);
 	}
 }
 stockinclicker = new stkinclik();
@@ -83,7 +104,7 @@ class stkindobuleclik implements org.zkoss.zk.ui.event.EventListener
 stkindoublecliker = new stkindobuleclik();
 
 /**
- * [listStockIn description]
+ * List stock-in entries - the items quantity uses a sub-select-count into tblStockInDetail by parent_id
  * @param itype listing type - check switch statement
  */
 void listStockIn(int itype)
@@ -96,7 +117,12 @@ void listStockIn(int itype)
 	edate = kiboo.getDateFromDatebox(enddate);
 
 	Listbox newlb = lbhand.makeVWListbox_Width(stockins_holder, stkinhds, "stockin_lb", 3);
-	sqlstm = "select Id,Reference,Description, (select Stock_Code from StockMasterDetails where ID=stk_id) as stock_code,Quantity,Posted,username,stk_id,EntryDate,status from tblStockInMaster where EntryDate between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' ";
+
+	sqlstm = "select tm.Id,tm.Reference,tm.Description, (select Stock_Code from StockMasterDetails where ID=stk_id) as stock_code," +
+	"FLOOR((select count(*) from tblStockInDetail where parent_id = tm.Id)) as childqty," +
+	"tm.Posted,tm.username,tm.stk_id,tm.EntryDate,tm.status from tblStockInMaster tm " +
+	"where EntryDate between '" + sdate + " 00:00:00' and '" + edate + " 23:59:00' ";
+
 	if(!st.equals(""))
 		sqlstm += " and (Reference like '%" + st + "%' or Description like '%" + st + "%');";
 
@@ -105,7 +131,7 @@ void listStockIn(int itype)
 	newlb.setRows(20); newlb.setMold("paging"); // newlb.setMultiple(true); newlb.setCheckmark(true); 
 	newlb.addEventListener("onSelect", stockinclicker);
 
-	String[] fl = { "Id", "EntryDate", "Reference", "Description", "stock_code", "Quantity", "username", "status", "Posted","stk_id" };
+	String[] fl = { "Id", "EntryDate", "Reference", "Description", "stock_code", "childqty", "username", "status", "Posted","stk_id" };
 	ArrayList kabom = new ArrayList();
 
 	for(d : r)
