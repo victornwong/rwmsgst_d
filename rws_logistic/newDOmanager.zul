@@ -26,6 +26,7 @@ Uses rwsdb2.DeliveryOrder and DeliveryOrderMaster
 
 31/12/2014: Lai req, add serial-numbers col
 12/03/2015: FC6 DO injection codes added
+04/09/2015: inject into F012 working nicely with pre-def bookno . test inject to 0J1
 
 */
 import java.util.*;
@@ -40,6 +41,8 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
+TESTING_VERSION = true;
+
 RWDO_PREFIX = "RDO";
 PROD_PALLET_STR = "PROD";
 OUT_PALLET = "3"; // hardcoded pallet-id - used by minusAddFocus_Stock()
@@ -52,7 +55,7 @@ global_selected_customername = "";
 
 last_showdo_type = 0;
 glob_sel_do = glob_sel_do_stat = glob_sel_do_jobid = glob_sel_picklist = "";
-glob_sel_fc6_code = "";
+glob_sel_fc6_code = glob_sel_fcdo = "";
 
 String JN_linkcode()
 {
@@ -241,21 +244,29 @@ void doFunc(String itype)
 
 	if(itype.equals("uploaddo_b")) // 25/08/2015: upload DO to FC6 - cautious
 	{
-		//alert(glob_sel_do_jobid + " :: " + glob_sel_picklist + " :: " + glob_sel_fc6_code);
-
 		if(glob_sel_do_jobid.equals("") || glob_sel_picklist.equals("")) // make sure got pick-list and link to job
 		{
-			msgtext = "ERR: DO not link to a job or job without a pick-list";
+			msgtext = "ERR: delivery-order is not link to a job or a job without a pick-list";
 		}
 		else
 		{
 			if(glob_sel_fc6_code.equals(""))
 			{
-				msgtext = "ERR: DO not link to a valid customer";
+				msgtext = "ERR: delivery-order is not link to a valid customer";
 			}
 			else
 			{
-				processInjectFC6DO(glob_sel_fc6_code, glob_sel_do, glob_sel_picklist);
+				if(!glob_sel_fcdo.equals(""))
+				{
+					msgtext = "ERR: delivery-order already uploaded to FOCUS, if you want to re-upload, please contact technical support";
+				}
+				else
+				{
+					if(Messagebox.show("This will upload the RDO to FOCUS Delivery-Notes..", "Are you sure?",
+						Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+					processInjectFC6DO(glob_sel_fc6_code, glob_sel_do, glob_sel_picklist);
+				}
 			}
 		}
 	}
@@ -294,26 +305,62 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 			kg = testatg.split("\n");
 			for(j=0; j<kg.length; j++)
 			{
-				try { 
+				try
+				{
 					stg = kg[j].trim();
-					//ks += "put aset: " + stg + "\n";
-					pil.put(stg,1);
-
+					pil.put(stg,1); //ks += "put aset: " + stg + "\n";
 				 } catch (Exception e) {}
 			}
 		}
 		else
-		{ // no asset-tag items .. error-msg pop when delete DO - "automation object revoke"
-			/*
+		{ // no asset-tag items .. error-msg pop when delete DO - "automation object revoke" - found out not this causing
+			// the pop-up. If user re-save the injected DO in FOCUS, then delete, things will be fine
 			iqty = 0;
 			try { iqty = Integer.parseInt(qtys[i]); } catch (Exception e) {}
-			pil.put(itms[i],iqty);
-			*/
-			//ks += itms[i] + " :: " + qtys[i] + "\n";
+			pil.put(itms[i],iqty); //ks += itms[i] + " :: " + qtys[i] + "\n";
 		}
 	}
 	//debugbox.setValue(ks);
-	inject_FC6DO(ifc6,pil);
+	fdono = inject_FC6DO(ifc6,pil);
+
+	if(!fdono.equals("")) // insert DO into FOCUS successful, update DeliveryOrderMaster.DONo
+	{
+		rdo = getnewDO_rec(ido); // get rec from deliveryordermaster
+		sqlstm = "select top 1 extraheaderoff from data where voucherno='" + fdono + "' and vouchertype=6144";
+
+		fxr = f30_gpSqlFirstRow(sqlstm);
+		if(fxr == null)
+		{
+			guihand.showMessageBox("ERR: problems detected in FOCUS integration. Please contact technical");
+			return;
+		}
+		else
+		{
+			shipaddress =
+			kiboo.checkNullString(rdo.get("ShipAddress1")) + " " + kiboo.checkNullString(rdo.get("ShipAddress2")) + " " +
+			kiboo.checkNullString(rdo.get("ShipAddress3")) + " - " +
+			kiboo.checkNullString(rdo.get("ShippingContact")) + " (" + kiboo.checkNullString(rdo.get("ShippingPhone")) + ")";
+
+			referenceyh = (rdo.get("job_id") == null) ? "" : "JOB " + rdo.get("job_id").toString();
+			transporter = kiboo.checkNullString(rdo.get("transporter"));
+
+			extraid = fxr.get("extraheaderoff").toString();
+
+			// update deliveryaddressYH, deliverystatusYH, transporterYH, referenceYH in u001c (DO extra-fields)
+			sqlstm = "update u001c set DeliveryAddressYH='" + shipaddress + "', ReferenceYH='" + referenceyh + "', " +
+			"DeliveryStatusYH='PENDING', TransporterYH='" + transporter + "' where extraid=" + extraid;
+
+			f30_gpSqlExecuter(sqlstm);
+
+			// update Focus DO into deliveryordermaster.DONo
+			sqlstm = "update deliveryordermaster set dono='" + fdono + "' where ID=" + ido +";";
+			sqlhand.gpSqlExecuter(sqlstm);
+
+			add_RWAuditLog(JN_linkcode(), "", "Upload to FOCUS6", useraccessobj.username);
+			showDOList(last_showdo_type); // refresh RDO list
+			glob_sel_fcdo = fdono; // to make sure, no double upload
+		}
+	}
 }
 
 Object[] plisthds =
@@ -403,6 +450,11 @@ void adminFunc(String itype)
 	if(itype.equals("clrrefpackstat_b")) // clear refurb/packing stat
 	{
 		sqlstm = "update deliveryordermaster set packing_flag=0, packing_remarks=null where id=" + glob_sel_do;
+	}
+
+	if(itype.equals("clrfcdo_b")) // clear FC DO , deliveryordermaster.dono
+	{
+		sqlstm = "update deliveryordermaster set dono='' where id=" + glob_sel_do;
 	}
 
 	if(itype.equals("clrjobid_b")) // clear linking job-id
@@ -540,19 +592,20 @@ void closePanel()
 		<vbox>
 			<button id="setdate_b" label="Set today" sclass="k9mo" onClick="adminFunc(self.getId())" />
 			<button id="setdraft_b" label="Set DRAFT" sclass="k9mo" onClick="adminFunc(self.getId())" />
+			<button id="clrfcdo_b" label="Clear FC DO" sclass="k9mo" onClick="adminFunc(self.getId())" />
 			<button id="clrjobid_b" label="Clear job-id" sclass="k9mo" onClick="adminFunc(self.getId())" />
 			<button id="clrdelstat_b" label="Clear delivery stat" sclass="k9mo" onClick="adminFunc(self.getId())" />
 			<button id="clrrefpackstat_b" label="Clear refurb/packing stat" sclass="k9mo" onClick="adminFunc(self.getId())" />
 			<button id="postinvt_b" label="POST INVENTORY" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" />
 		</vbox>
 	</div>
-</popup> <!-- ENDOF adminPop -->
+</popup>
 
 <popup id="impjobshet_pop">
 	<div style="background:#9EB446;padding:3px" width="500px">
 		<div id="jobsdolb_holder" />
 	</div>
-</popup> <!-- ENDOF impjobshet_pop -->
+</popup>
 
 <popup id="deliverystat_pop">
 	<div sclass="shadowbox" style="background:#3853D0;padding:3px" width="145px">
@@ -580,9 +633,7 @@ void closePanel()
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" onClose="closePanel()">
 <panelchildren style="background:#60718A">
-	
 	<label id="debugbox" multiline="true" />
-
 	<div sclass="shadowbox" style="background:#444D6A">
 		<hbox>
 			<label value="Start date" sclass="k9mo" style="color:#ffffff" />
@@ -596,7 +647,6 @@ void closePanel()
 			<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" onClick="adminPop.open(self)" visible="false" />
 		</hbox>
 	</div>
-
 	<div sclass="shadowbox" style="background:#8CBA1C">
 		<hbox>
 			<button id="insnewdo_b" label="New DO" sclass="k9mo" onClick="doFunc(self.getId())" />
@@ -607,6 +657,8 @@ void closePanel()
 			<separator width="10px" />
 			<button label="Refurb/packing" sclass="k9mo" onClick="refurb_pop.open(self)" />
 			<button label="Delivery status" sclass="k9mo" onClick="deliverystat_pop.open(self)" />
+			<separator width="10px" />
+			<button id="uploaddo_b" label="UPLOAD TO FOCUS" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" visible="false" />
 			<separator width="10px" />
 			<button id="shwauditlogs_b" label="AuditLog" sclass="k9mo" onClick="doFunc(self.getId())" />
 		</hbox>
@@ -646,7 +698,6 @@ void closePanel()
 			</div>
 
 			<div sclass="shadowbox" style="background:#89AC4F">
-				<button id="uploaddo_b" label="UPLOAD TO FOCUS" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" />
 				<hbox>
 					<button id="additem_b" label="Add item" sclass="k9mo" onClick="doFunc(self.getId())" />
 					<button id="delitem_b" label="Delete" sclass="k9mo" onClick="doFunc(self.getId())" />
@@ -666,9 +717,12 @@ void closePanel()
 
 dometa_form = dynamicForm(dometaform_holder, "do_metaform", "38");
 
+// TODO security-check for users able to "upload to focus"
+
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
+	uploaddo_b.setVisible(true);
 }
 
 ]]>

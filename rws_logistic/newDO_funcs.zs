@@ -164,6 +164,7 @@ Object[] dolbhds =
 	new listboxHeaderWidthObj("DelDate",true,"70px"),
 	new listboxHeaderWidthObj("JobId",true,"80px"), // 9
 	new listboxHeaderWidthObj("P.List",true,"80px"),
+	new listboxHeaderWidthObj("FC6.DO",true,"80px"),
 };
 RDO_POS = 0;
 RDO_CUSTNAME_POS = 2;
@@ -171,6 +172,7 @@ RDO_STAT_POS = 3;
 RDO_DELSTAT_POS = 6;
 RDO_JOBID_POS = 9;
 RDO_PICKLIST_POS = 10;
+RDO_FC6DO_POS = 11;
 
 class dolbClick implements org.zkoss.zk.ui.event.EventListener
 {
@@ -182,6 +184,7 @@ class dolbClick implements org.zkoss.zk.ui.event.EventListener
 		glob_sel_do_jobid = lbhand.getListcellItemLabel(isel,RDO_JOBID_POS);
 		global_selected_customername = lbhand.getListcellItemLabel(isel,RDO_CUSTNAME_POS);
 		glob_sel_picklist = lbhand.getListcellItemLabel(isel,RDO_PICKLIST_POS);
+		glob_sel_fcdo = lbhand.getListcellItemLabel(isel,RDO_FC6DO_POS);
 
 		showDO_meta(glob_sel_do);
 	}
@@ -198,7 +201,7 @@ void showDOList(int itype)
 	edate = kiboo.getDateFromDatebox(enddate);
 	doid = kiboo.replaceSingleQuotes(doid_tb.getValue().trim());
 
-	sqlstm = "select top 200 id,entrydate,name,user1,job_id,status,del_status,transporter,deliverydate, packing_flag, " +
+	sqlstm = "select top 200 id,entrydate,name,user1,job_id,status,del_status,transporter,deliverydate, packing_flag, dono, " +
 	"(select origid from rw_jobpicklist where parent_job=job_id) as picklist " +
 	"from DeliveryOrderMaster ";
 
@@ -223,7 +226,7 @@ void showDOList(int itype)
 	newlb.addEventListener("onSelect", dolbclkier);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "id", "entrydate", "name", "status", "user1", "packing_flag", "transporter",
-	"del_status", "deliverydate", "job_id", "picklist" };
+	"del_status", "deliverydate", "job_id", "picklist", "dono" };
 	for(d : rcs)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);

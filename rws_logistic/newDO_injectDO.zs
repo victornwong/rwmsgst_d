@@ -1,6 +1,9 @@
 import org.victor.*;
-// Inject DO into FC6. Codes copied over from adminmodules/injectFCtest.zul
-// 21/07/2015: Modification for OJ1 database
+/**
+ * Inject DO into FC6. Codes copied over from adminmodules/injectFCtest.zul
+ * 21/07/2015: Modification for OJ1 database - abit kik-hand
+ * 04/09/2015: check for TESTING_VERSION defn in main-file, call the appropriate funcs
+ */
 
 DO_EXTRAHEADEROFF = "u001c";
 DO_EXTRAOFF = "u011c";
@@ -28,7 +31,6 @@ void inject_DO_Headers(String[] hdv)
 	DO_VOUCHERTYPE + ", @domaxid, 30, 0, 0 );";
 
 	f30_gpSqlExecuter(sqlstm1);
-	//alert(sqlstm1); return;
 
 	sqlstm2 = "select headerid,voucherno from header where login='" + lgn + "';"; // get inserted header.headerid
 	r = f30_gpSqlFirstRow(sqlstm2);
@@ -67,16 +69,19 @@ void inject_DO_Headers(String[] hdv)
 }
 
 /**
- * [inject_FC6DO description]
+ * [inject_FC6DO description] , TESTING_VERSION defn in main-file
  * @param bookno FC6 account-no.
+ * @param kpx the asset-tags for stock-name to put into Focus DO
+ * @return inserted Focus DO number, error return ""
  * 
  * headvals[0] = headerid, headvals[1] = DO_EXTRAHEADEROFF, headvals[2] = DO_EXTRAOFF, headvals[3] = voucherno
 	*	kk = "headerid=" + headvals[0] + "\nu001c.extraid=" + headvals[1] + "\nu011c.extraid=" + headvals[2] + "\nvoucherno=" + headvals[3];
 	*	debugbox.setValue(kk);
 	*	headerid=116938 u001c.extraid=2754 u011c.extraid=2241 voucherno=5267
 	*	headvals[0] = "116932"; headvals[1] = "2754";	headvals[2] = "2240";	headvals[3] = "5267";
+	*	atgs = "'A0012230','A0015149','A0015223','A0015014','N0001075'";
  */
-void inject_FC6DO(String bookno, HashMap kpx)
+String inject_FC6DO(String bookno, HashMap kpx)
 {
 	kdate = calcFocusDate(kiboo.todayISODateString());
 	String[] headvals = new String[4];
@@ -95,10 +100,8 @@ void inject_FC6DO(String bookno, HashMap kpx)
 	if(atgs.equals(""))
 	{
 		guihand.showMessageBox("ERR: no asset-tag or inventory-item in pick-list");
-		return;
+		return "";
 	}
-
-	//atgs = "'A0012230','A0015149','A0015223','A0015014','N0001075'";
 
 	mainsqlstm = "declare @dmaxid int; declare @imaxid int; ";
 
@@ -108,27 +111,31 @@ void inject_FC6DO(String bookno, HashMap kpx)
 
 	rx = f30_gpSqlGetRows(sqlstm1);
 
-	//alert(kdate + " :: " + sqlstm1 + " :: " + rx);
-	// TODO have to check how recs found based on asset-tags, if not equal, error-return
 	linecount = 0;
+
+	if(TESTING_VERSION)
+	{
+		// 1251 = bookno (chg to use parameter bookno), 1078=code
+		bookno = "2476"; // techno craft computer in F5012
+	}
 
 	for(d : rx)
 	{
 		prodcode = (d.get("pcode") == null) ? "0" : d.get("pcode").toString();
 		tags6 = (d.get("tags6v") == null) ? "0" : d.get("tags6v").toString();
 
+		itemqty = -1;
+		try { itemqty = kpx.get(d.get("assettag")) * -1; } catch (Exception e) { itemqty = -1; }
+
 		// data.salesoff = indta.salesid
 		mainsqlstm += "set @imaxid = (select max(salesid)+1 from indta); " +
 		"insert into indta (salesid,quantity,stockvalue,rate,gross,qty2,subprocess,unit," +
 		"input0,output0,input1,output1,input2,output2,input3,output3," +
 		"input4,output4,input5,output5,input6,output6,input7,output7," +
-		"input8,output8,input9,output9) values ( @imaxid,-1,0,0,0,-1,0,0x00, " +
+		"input8,output8,input9,output9) values ( @imaxid," + itemqty.toString() + ",0,0,0," + itemqty.toString() + ",0,0x00, " +
 		"0,0,0,0,0,0,0,0," +
 		"0,0,0,0,0,0,0,0," +
 		"0,0,0,0);";
-
-		// 1251 = bookno (chg to use parameter bookno), 1078=code
-		bookno = "1251";
 
 		mainsqlstm += "set @dmaxid = (select max(bodyid)+1 from data); " +
 		"insert into data (" +
@@ -150,6 +157,5 @@ void inject_FC6DO(String bookno, HashMap kpx)
 	" where headerid=" + headvals[0] + ";"; // update no. lines in header
 
 	f30_gpSqlExecuter(mainsqlstm);
-	alert("boom..");
+	return headvals[3]; // FOCUS DO voucher no. return by inject_DO_Headers() . Note the index
 }
-
