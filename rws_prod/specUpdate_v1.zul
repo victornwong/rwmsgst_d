@@ -13,17 +13,17 @@
 <zscript src="../rws_warehouse/goodsreceive/goodsrecv_funcs.zs" />
 <zscript src="../rws_warehouse/goodsreceive/injtest.zs" />
 <zscript src="./specUpdate_funcs.zs" />
+<zscript src="./injectTempGRN.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "Items Spec Update";
 MYVERSION = "v0.1";
 MYPANEL = "itmspecupdpanl";
-/*
-@Title Inventory items spec update - like in FOCUS
-@Author Victor Wong
-@Since 30/09/2014
-@Notes
-*/
+/**
+ * @title Inventory items spec update - like in FOCUS
+ * @author Victor Wong
+ * @since  30/09/2014
+ */
 import java.util.*;
 import java.text.*;
 import org.victor.*;
@@ -35,6 +35,8 @@ if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
 kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+TESTING_MODE = true;
 
 String[] scanitems_colws = { "30px","250px","90px","90px",
 "80px",
@@ -81,28 +83,32 @@ String[] scanitems_collb = { "","Item name","Asset tag","Serial",
 
 String[] specs_fields = {
 "grade","Brand", "Item", "Model", "Processor", "MonitorSize", "MonitorType",
-"colour", "casing", "COA", "COA2", "RAM", "HDD", "Cdrom1", "Comment" };
+"colour", "casing", "COA", "COA2", "RAM", "HDD", "Cdrom1", "Comment",
+"Webcam","B.Tooth","F.Print","C.Reader" };
 
 String[] specs_sql_fields = {
 "GradeYH","BrandYH","ItemTypeYH","ModelYH","ProcessorYH","MonitorSizeYH","MonitorTypeYH",
-"ColourYH","CasingYH","COA1YH","COA2YH","RAMSizeYH","HDDSizeYH","CD1YH","CommentsYH" };
+"ColourYH","CasingYH","COA1YH","COA2YH","RAMSizeYH","HDDSizeYH","CD1YH","CommentsYH",
+"WebcamYH","BluetoothYH","FingerPrintYH","CardReaderYH" };
 
 String[] specs_field_type = {
-"lb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb" };
+"lb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb","tb", "tb","tb","tb","tb",
+"tb","tb","tb","tb"
+};
 
 String[] specs_mpf_names = {
 	"m_grd", "m_brand", "m_type", "m_model", "m_processor", "m_msize", "m_mtype",
-	"m_color", "m_case", "m_coa", "m_coa2", "m_ram", "m_hdd", "m_cdrom1", "m_comment"
+	"m_color", "m_case", "m_coa", "m_coa2", "m_ram", "m_hdd", "m_cdrom1", "m_comment",
+	"m_webcam", "m_btooth", "m_fprint", "m_creader"
 };
-// m_webcam, m_btooth, m_fprint, m_creader
 
 GRN_PREFIX = "GRN";
 
 last_showgrn_type = 1;
 glob_sel_grn = glob_sel_stat = glob_sel_auditstat = "";
 
-showgrn_extra_sql = " and status='STKIN' "; // use in goodsrecv_funcs.showGRN() to filter
-//showgrn_extra_sql = "";
+//showgrn_extra_sql = " and status='STKIN' "; // use in goodsrecv_funcs.showGRN() to filter
+showgrn_extra_sql = "";
 grn_show_meta = false; // used in goodsrecv_funcs.grnclicker to show grn-metadata or not
 
 void grn_Selected_Callback() // call-back in goodsrecv_funcs.grnclicker
@@ -115,6 +121,73 @@ String JN_linkcode()
 {
 	if(glob_sel_grn.equals("")) return "";
 	return GRN_PREFIX + glob_sel_grn;
+}
+
+void sumbatStockName(String istockname, String itype)
+{
+	checkstock_pop.close();
+	try
+	{
+		jk = grn_rows.getChildren().toArray();
+		for(i=0;i<jk.length;i++)
+		{
+			ki = jk[i].getChildren().toArray();
+			if(ki[0].isChecked())
+			{
+				ki[1].setValue(istockname);
+				ki[6].setValue(itype);
+			}
+		}
+	} catch (Exception e) {}
+}
+
+class itmdoubleclik implements org.zkoss.zk.ui.event.EventListener
+{
+	// update item-name and item-type in mel_inventory when user ddclick the stock-item
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		ifnd = lbhand.getListcellItemLabel(isel,1);
+		ityp = lbhand.getListcellItemLabel(isel,2);
+		sumbatStockName(ifnd,ityp);
+	}
+}
+checkitems_doubleclicker = new itmdoubleclik();
+
+void showCheckstock_win(Div idiv) // knockoff from jobsheet_funcs.zs but modified
+{
+	Object[] cstkhds1 =
+	{
+		new listboxHeaderWidthObj("No.",true,"40px"),
+		new listboxHeaderWidthObj("Items found",true,""),
+		new listboxHeaderWidthObj("Type",true,"40px"),
+	};
+	String[] fl_t1 = { "name", "item" };
+
+	kn = kiboo.replaceSingleQuotes( chkstkname_tb.getValue().trim() );
+	if(kn.equals("")) return;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, cstkhds1, "chkstock_lb", 3);
+
+	csqlstm = "select distinct name,item from partsall_0 " +
+	"where name like '%" + kn + "%' group by name,item order by item,name";
+
+	r = sqlhand.rws_gpSqlGetRows(csqlstm);
+	if(r.size() == 0) return;
+	newlb.setMold("paging"); newlb.setRows(20);
+	ArrayList kabom = new ArrayList();
+	lnc = 1;
+	for(d : r)
+	{
+		kabom.add(lnc.toString() + "." );
+		ngfun.popuListitems_Data(kabom,fl_t1,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+		lnc++;
+	}
+
+	if(checkitems_doubleclicker != null) // set double-cliker if available
+		lbhand.setDoubleClick_ListItems(newlb, checkitems_doubleclicker);
 }
 
 void grnFunc(String itype)
@@ -160,22 +233,31 @@ void itemFunc(String itype)
 		}
 	}
 
-	if(itype.equals("postspecs_b")) // post SPECS into u0001
+	// TODO need to check whether already uploaded tempGRN !!
+	if(itype.equals("postspecs_b")) // post SPECS into u0001 and upload tempGRN
 	{
 		if(glob_sel_grn.equals("")) return;
 
-		if(Messagebox.show("Posting specs into database, you cannot change anything after this..", "Are you sure?",
-			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+		if(Messagebox.show("Posting specs and insert Temp.GRN into FOCUS, you cannot change anything after this..", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
 
-		saveSpecs(); // save to rw_grn before posting into u0001
+		pasettags = updateInventory_AuditItems();
 
-		if(postSpecs()) // post-specs and if ok, update other things
+		if(!pasettags.equals("")) // got some asset-tags returned for further processing
 		{
-			msgtext = "OK: Specs posted..";
-			// update the rw_grn.audit* fields accordingly
-			sqlstm = "update rw_grn set audit_date='" + todaydate + "', audit_stat='POST', audit_user='" + unm + "' where origid=" + glob_sel_grn;
-			toggButts_specupdate(true); // disable 'em butts
-			add_RWAuditLog(JN_linkcode(),"", "Posted specs-update", useraccessobj.username);
+			if(postSpecs()) // post-specs and if ok inject Temp.GRN
+			{
+				tempgrn = inject_FC6GRN(pasettags);
+
+				if(!tempgrn.equals("")) // temp.grn inserted into FOCUS
+				{
+					toggButts_specupdate(true);
+					add_RWAuditLog(JN_linkcode(),"", "Posted specs-update and upload FOCUS TempGRN " + tempgrn, useraccessobj.username);
+
+					sqlstm = "update rw_grn set audit_date='" + todaydate + "', audit_stat='POST', audit_user='" + unm + "',fc_tempgrn='" + tempgrn + "' where origid=" + glob_sel_grn; // update the rw_grn.audit* fields
+					msgtext = "OK: Specs posted and TempGRN : " + tempgrn + " uploaded into FOCUS.";
+				}
+			}
 		}
 	}
 
@@ -197,9 +279,10 @@ void adminFunc(String itype)
 	if(glob_sel_grn.equals("")) return;
 
 	if(itype.equals("clearaudit_b"))
-	{
 		sqlstm = "update rw_grn set audit_date=null, audit_stat=null, audit_user=null where origid=" + glob_sel_grn;
-	}
+
+	if(itype.equals("cleartmpgrn_b"))
+		sqlstm = "update rw_grn set fc_tempgrn=null where origid=" + glob_sel_grn;
 
 	if(!sqlstm.equals(""))
 	{
@@ -323,23 +406,35 @@ void adminFunc(String itype)
 	<div sclass="shadowbox" style="background:#E2241C">
 		<vbox>
 			<button id="clearaudit_b" label="Clear specs-post" sclass="k9mo" onClick="adminFunc(self.getId())" />
+			<button id="cleartmpgrn_b" label="Clear Temp.GRN" sclass="k9mo" onClick="adminFunc(self.getId())" />
 		</vbox>
+	</div>
+</popup>
+
+<popup id="checkstock_pop">
+	<div sclass="shadowbox" style="background:#ABC11B" width="500px">
+		<hbox>
+			<label value="Item" sclass="k9" />
+			<textbox id="chkstkname_tb" sclass="k9" />
+			<button label="Check stock-name" sclass="k9" onClick="showCheckstock_win(stkname_holder)" />
+		</hbox>
+		<separator height="2px" />
+		<div id="stkname_holder" />
 	</div>
 </popup>
 
 <style src="/real-world.css" />
 <style>
-.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
-{
-border: none; overflow: hidden; zoom: 1;
-border-top: none; border-left: none; border-right: none; border-bottom: none;
-} 
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+	border: none; overflow: hidden; zoom: 1;
+	border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
 </style>
 
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" onClose="panel_Close()">
 <panelchildren style="background:#356AAC">
-
 	<div sclass="shadowbox" style="background:#7F0850">
 		<hbox style="padding:3px">
 			<label value="Start date" sclass="k9b" />
@@ -376,19 +471,19 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 
 	<separator height="3px" />
 
-	<div sclass="shadowbox" style="background:#4B7F08">
+	<div id="workarea" sclass="shadowbox" style="background:#4B7F08" visible="false">
 		<hbox>
+			<button id="getstkname_b" label="Get stock-name" sclass="k9mo" onClick="checkstock_pop.open(self)" />
 			<button id="savespecs_b" label="SAVE specs" sclass="k9mo" onClick="itemFunc(self.getId())" />
 			<button id="sourcepecs_b" label="Source previous" sclass="k9mo" onClick="itemFunc(self.getId())" />
 			<button id="mpfbutt" label="MPF" sclass="k9mo" onClick="mpf_pop.open(self)" />
 			<separator width="10px" />
-			<button id="postspecs_b" label="POST specs" sclass="k9mo" style="color:#CD3A3A" onClick="itemFunc(self.getId())" />
+			<button id="postspecs_b" label="POST specs / Upload Temp.GRN" sclass="k9mo" style="color:#CD3A3A" onClick="itemFunc(self.getId())" />
 		</hbox>
-	</div>
-	<separator height="3px" />
-
-	<div sclass="shadowbox" style="background:#36427F;overflow:auto;overflow-y:hidden" >
-		<div id="scanitems_holder" width="1500px" />
+		<separator height="3px" />
+		<div sclass="shadowbox" style="background:#36427F;overflow:auto;overflow-y:hidden" >
+			<div id="scanitems_holder" width="1500px" />
+		</div>
 	</div>
 
 <zscript>

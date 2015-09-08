@@ -2,7 +2,7 @@ import org.victor.*;
 /**
  * Inject DO into FC6. Codes copied over from adminmodules/injectFCtest.zul
  * 21/07/2015: Modification for OJ1 database - abit kik-hand
- * 04/09/2015: check for TESTING_VERSION defn in main-file, call the appropriate funcs
+ * 04/09/2015: check for TESTING_MODE defn in main-file, call the appropriate funcs
  */
 
 DO_EXTRAHEADEROFF = "u001c";
@@ -30,46 +30,52 @@ void inject_DO_Headers(String[] hdv)
 	"0x0027, 6208, 0x00," +
 	DO_VOUCHERTYPE + ", @domaxid, 30, 0, 0 );";
 
-	f30_gpSqlExecuter(sqlstm1);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm1);
+	else sqlhand.rws_gpSqlExecuter(sqlstm1);
 
 	sqlstm2 = "select headerid,voucherno from header where login='" + lgn + "';"; // get inserted header.headerid
-	r = f30_gpSqlFirstRow(sqlstm2);
+	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm2) : sqlhand.rws_gpSqlFirstRow(sqlstm2);
 	hdv[0] = r.get("headerid").toString();
 	hdv[3] = r.get("voucherno");
 
 	sqlstm3 = "update header set login='su' where headerid=" + hdv[0];
-	f30_gpSqlExecuter(sqlstm3);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm3);
+	else sqlhand.rws_gpSqlExecuter(sqlstm3);
 
 	// data.DO_EXTRAHEADEROFF - u001c.extraid
 	sqlstm4 = "declare @maxid int; set @maxid = (select max(extraid)+1 from " + DO_EXTRAHEADEROFF + "); " +
 	"insert into " + DO_EXTRAHEADEROFF + " (extraid,deliverymethodyh,transporteryh,deliveryrefyh,deliverystatusyh,narrationyh,deliveryaddressyh," +
 	"referenceyh,dorefyh) values (@maxid, '', '', '', '', '', '', '', '" + lgn + "');";
 
-	f30_gpSqlExecuter(sqlstm4);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm4);
+	else sqlhand.rws_gpSqlExecuter(sqlstm4);
 
 	sqlstm5 = "select extraid from " + DO_EXTRAHEADEROFF + " where dorefyh='" + lgn + "';";
-	r = f30_gpSqlFirstRow(sqlstm5);
+	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm5) : sqlhand.rws_gpSqlFirstRow(sqlstm5);
 	hdv[1] = r.get("extraid").toString();
 
 	sqlstm6 = "update " + DO_EXTRAHEADEROFF + " set dorefyh='' where extraid=" + hdv[1];
-	f30_gpSqlExecuter(sqlstm6);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm6);
+	else sqlhand.rws_gpSqlExecuter(sqlstm6);
 
 	// data.DO_EXTRAOFF = u011c.extraid
 	sqlstm7 = "declare @maxid int; set @maxid = (select max(extraid)+1 from " + DO_EXTRAOFF + ");" +
 	"insert into " + DO_EXTRAOFF + " (extraid,remarksyh) values (@maxid,'" + lgn + "');";
 
-	f30_gpSqlExecuter(sqlstm7);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm7);
+	else sqlhand.rws_gpSqlExecuter(sqlstm7);
 
 	sqlstm8 = "select extraid from " + DO_EXTRAOFF + " where remarksyh='" + lgn + "';";
-	r = f30_gpSqlFirstRow(sqlstm8);
+	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm8) : sqlhand.rws_gpSqlFirstRow(sqlstm8);
 	hdv[2] = r.get("extraid").toString();
 
 	sqlstm9 = "update " + DO_EXTRAOFF + " set remarksyh='' where extraid=" + hdv[2];
-	f30_gpSqlExecuter(sqlstm9);
+	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm9);
+	else sqlhand.rws_gpSqlExecuter(sqlstm9);
 }
 
 /**
- * [inject_FC6DO description] , TESTING_VERSION defn in main-file
+ * [inject_FC6DO description] , TESTING_MODE defn in main-file
  * @param bookno FC6 account-no.
  * @param kpx the asset-tags for stock-name to put into Focus DO
  * @return inserted Focus DO number, error return ""
@@ -109,11 +115,11 @@ String inject_FC6DO(String bookno, HashMap kpx)
 	"dbo.u0001 AS u ON m.Eoff = u.ExtraId INNER JOIN dbo.mr008 AS p ON u.ProductNameYH = p.MasterId " +
 	"where m.code2 in (" + atgs + ");";
 
-	rx = f30_gpSqlGetRows(sqlstm1);
+	rx = (TESTING_MODE) ? f30_gpSqlGetRows(sqlstm1) : sqlhand.rws_gpSqlGetRows(sqlstm1);
 
 	linecount = 0;
 
-	if(TESTING_VERSION)
+	if(TESTING_MODE)
 	{
 		// 1251 = bookno (chg to use parameter bookno), 1078=code
 		bookno = "2476"; // techno craft computer in F5012
@@ -156,6 +162,8 @@ String inject_FC6DO(String bookno, HashMap kpx)
 	mainsqlstm += "update header set noentries=" + linecount.toString() + ", tnoentries=" + linecount.toString() +
 	" where headerid=" + headvals[0] + ";"; // update no. lines in header
 
-	f30_gpSqlExecuter(mainsqlstm);
+	if(TESTING_MODE) f30_gpSqlExecuter(mainsqlstm);
+	else sqlhand.rws_gpSqlExecuter(mainsqlstm);
+
 	return headvals[3]; // FOCUS DO voucher no. return by inject_DO_Headers() . Note the index
 }

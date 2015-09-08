@@ -91,7 +91,7 @@ All codes written by Victor Wong
 	{
 	padding: 0 0;
 	background-color:#2e3436;
-	background: url('rwimg/rwmsgst1.jpg') no-repeat center center fixed ;
+	background: url('rwimg/vintage2w.jpg') no-repeat center center fixed ;
 	-webkit-background-size: cover;
 	-moz-background-size: cover;
 	-o-background-size: cover;

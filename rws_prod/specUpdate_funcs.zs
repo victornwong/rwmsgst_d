@@ -5,10 +5,11 @@ Object glob_focus6_grades = null;
 
 void toggButts_specupdate(boolean iwhat)
 {
-	savespecs_b.setDisabled(iwhat);
-	sourcepecs_b.setDisabled(iwhat);
-	postspecs_b.setDisabled(iwhat);
-	mpfbutt.setDisabled(iwhat);
+	Object[] butts = { savespecs_b, sourcepecs_b, postspecs_b, mpfbutt, getstkname_b };
+	for(i=0; i<butts.length; i++)
+	{
+		butts[i].setDisabled(iwhat);
+	}
 }
 
 // Get Focus6 available inventory grades
@@ -67,21 +68,23 @@ org.zkoss.zul.Row makeItemRow_specup(Component irows, String iname, String iatg,
 	return nrw;
 }
 
-void showGRN_things(String iwhat) // knockoff from goodsrecv_funcs.showGRN_meta()
+/**
+ * knockoff from goodsrecv_funcs.showGRN_meta() with some modif
+ * @param iwhat the selected GRN
+ */
+void showGRN_things(String iwhat)
 {
 	r = getGRN_rec_NEW(iwhat);
 	if(r == null) return;
 
 	if(glob_focus6_grades == null) glob_focus6_grades = getFocus_StockGrades(); // reload if null
 
-/*
-	String[] fl = { "ourpo", "vendor", "vendor_do", "vendor_inv", "shipmentcode", "grn_remarks","origid" };
-	Object[] jkl = { g_ourpo, g_vendor, g_vendor_do, g_vendor_inv, g_shipmentcode, g_grn_remarks, g_origid };
-	ngfun.populateUI_Data(jkl,fl,r);
-
-	fillDocumentsList(documents_holder,GRN_PREFIX,iwhat);
-*/
-	// show 'em grn items
+	/*
+		String[] fl = { "ourpo", "vendor", "vendor_do", "vendor_inv", "shipmentcode", "grn_remarks","origid" };
+		Object[] jkl = { g_ourpo, g_vendor, g_vendor_do, g_vendor_inv, g_shipmentcode, g_grn_remarks, g_origid };
+		ngfun.populateUI_Data(jkl,fl,r);
+		fillDocumentsList(documents_holder,GRN_PREFIX,iwhat);
+	*/
 	itms = sqlhand.clobToString(r.get("item_names")).split("~");
 	atgs = sqlhand.clobToString(r.get("asset_tags")).split("~");
 	srls = sqlhand.clobToString(r.get("serials")).split("~");
@@ -91,37 +94,35 @@ void showGRN_things(String iwhat) // knockoff from goodsrecv_funcs.showGRN_meta(
 	if(scanitems_holder.getFellowIfAny("grn_grid") != null) grn_grid.setParent(null);
 	ngfun.checkMakeGrid(scanitems_colws, scanitems_collb, scanitems_holder, "grn_grid", "grn_rows", "", "", false);
 
-	for(i=0;i<itms.length; i++)
+	for(i=0;i<itms.length; i++) // show 'em grn items
 	{
-		p1 = ""; try { p1 = itms[i]; } catch (Exception e) {}
-		p2 = ""; try { p2 = atgs[i]; } catch (Exception e) {}
-		p3 = ""; try { p3 = srls[i]; } catch (Exception e) {}
-		p4 = ""; try { p4 = qtys[i]; } catch (Exception e) {}
+		p1 = ""; try { p1 = itms[i]; } catch (java.lang.ArrayIndexOutOfBoundsException e) {}
+		p2 = ""; try { p2 = atgs[i]; } catch (java.lang.ArrayIndexOutOfBoundsException e) {}
+		p3 = ""; try { p3 = srls[i]; } catch (java.lang.ArrayIndexOutOfBoundsException e) {}
+		p4 = ""; try { p4 = qtys[i]; } catch (java.lang.ArrayIndexOutOfBoundsException e) {}
 
 		nrw = makeItemRow_specup(grn_rows,p1,p2,p3,p4,r.get("status"));
 
 		js = null;
-		if(specs[i] != null) js = specs[i].split("\n");
+		try { if(specs[i] != null) js = specs[i].split("\n"); } catch (java.lang.ArrayIndexOutOfBoundsException e) {}
 
 		ki = nrw.getChildren().toArray();
 
 		for(k=0;k<specs_fields.length;k++)
 		{
-			try
+			if(js != null)
 			{
-				if(js != null)
-				{
-					cix = k + 4;
-					if(ki[cix] instanceof Listbox)
-						lbhand.matchListboxItems(ki[cix], js[k]);
-					else
-						ki[cix].setValue(js[k]);
-				}
-
-			} catch (java.lang.ArrayIndexOutOfBoundsException e) {}
+				cix = k + 4;
+				try {
+				if(ki[cix] instanceof Listbox)
+					lbhand.matchListboxItems(ki[cix], js[k]);
+				else
+					ki[cix].setValue(js[k]);
+				} catch (java.lang.ArrayIndexOutOfBoundsException e) {}
+			}
 		}
-
 	}
+	workarea.setVisible(true);
 	//grnmeta_holder.setVisible(true);
 	//grnitems_workarea.setVisible(true);
 }
@@ -156,24 +157,32 @@ boolean postSpecs()
 				sqlstm += fql + " where extraid=(select eoff from mr001 where code2='" + atg + "');";
 			}
 		}
-		sqlhand.rws_gpSqlExecuter(sqlstm);
-		//f30_gpSqlExecuter(sqlstm);
+
+		if(TESTING_MODE)
+			f30_gpSqlExecuter(sqlstm);
+		else
+			sqlhand.rws_gpSqlExecuter(sqlstm);
 
 		return true;
 
 	} catch (Exception e) { return false; }
 }
 
-// Save the specs into rw_grn ONLY -- not posting to Focus
+/**
+ * Save the specs into rw_grn ONLY -- not posting to Focus
+ * 08/09/2015: need to save item-name too for use later to inject into FOCUS
+ * @return save is successful = true
+ */
 boolean saveSpecs()
 {
 	try
 	{
 		jk = grn_rows.getChildren().toArray();
-		spc = "";
+		spc = itnms = "";
 		for(i=0;i<jk.length;i++)
 		{
 			ki = jk[i].getChildren().toArray();
+			itnms += ki[1].getValue() + "~"; // save them item-names for FOCUS injection
 			for(k=0; k<specs_fields.length;k++)
 			{
 				cix = k + 4;
@@ -190,7 +199,7 @@ boolean saveSpecs()
 			spc += "::";
 		}
 
-		sqlstm = "update rw_grn set specs='" + spc + "' where origid=" + glob_sel_grn;
+		sqlstm = "update rw_grn set item_names='" + itnms + "', specs='" + spc + "' where origid=" + glob_sel_grn;
 		sqlhand.gpSqlExecuter(sqlstm);
 		return true;
 

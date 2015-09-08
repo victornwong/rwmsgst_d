@@ -41,7 +41,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-TESTING_VERSION = true;
+TESTING_MODE = false;
 
 RWDO_PREFIX = "RDO";
 PROD_PALLET_STR = "PROD";
@@ -328,7 +328,7 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 		rdo = getnewDO_rec(ido); // get rec from deliveryordermaster
 		sqlstm = "select top 1 extraheaderoff from data where voucherno='" + fdono + "' and vouchertype=6144";
 
-		fxr = f30_gpSqlFirstRow(sqlstm);
+		fxr = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm) : sqlhand.rws_gpSqlFirstRow(sqlstm);
 		if(fxr == null)
 		{
 			guihand.showMessageBox("ERR: problems detected in FOCUS integration. Please contact technical");
@@ -350,7 +350,8 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 			sqlstm = "update u001c set DeliveryAddressYH='" + shipaddress + "', ReferenceYH='" + referenceyh + "', " +
 			"DeliveryStatusYH='PENDING', TransporterYH='" + transporter + "' where extraid=" + extraid;
 
-			f30_gpSqlExecuter(sqlstm);
+			if(TESTING_MODE) f30_gpSqlExecuter(sqlstm);
+			else sqlhand.rws_gpSqlExecuter(sqlstm);
 
 			// update Focus DO into deliveryordermaster.DONo
 			sqlstm = "update deliveryordermaster set dono='" + fdono + "' where ID=" + ido +";";
@@ -359,6 +360,7 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 			add_RWAuditLog(JN_linkcode(), "", "Upload to FOCUS6", useraccessobj.username);
 			showDOList(last_showdo_type); // refresh RDO list
 			glob_sel_fcdo = fdono; // to make sure, no double upload
+			guihand.showMessageBox("OK: Delivery note: " + fdono + " uploaded to FOCUS6..enjoy");
 		}
 	}
 }

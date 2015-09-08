@@ -2,7 +2,8 @@
 <?page id="suppliermodu"?>
 <zk>
 <zscript src="../rwglobal/rwglobaldefs.zs" />
-<zscript src="rlmsql.zs" />
+<zscript src="rglobal/formMaker_v1.zs" />
+<zscript src="rglobal/rlmsql.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "Supplier Management";
@@ -24,6 +25,7 @@ luhand = new LookupFuncs(); NGfuncs ngfun = new NGfuncs(); RWMS_sql rwsqlfun = n
 
 SUPP_FORM_STYLE = "background:#D77272";
 SUPP_FORM_STYLE2 = "background:#DE3E0E";
+MAINBUTT_WIDTH = "100px";
 
 ]]>
 </zscript>
@@ -40,13 +42,13 @@ SUPP_FORM_STYLE2 = "background:#DE3E0E";
 
 <window id="${MY_ID}" width="800px" title="${MYTITLE} ${MYVERSION}" position="center" mode="overlapped" border="normal" closable="true">
 <div style="background:#79A995;padding:3px">
-
 	<hbox>
 		<vbox>
-			<button label="Load supplier record" sclass="k9mo" width="80px" />
-			<button label="Update" sclass="k9mo" width="80px" />
-			<button label="Suspend" sclass="k9mo" width="80px" />
-			<button label="Delete" sclass="k9mo" style="color:#ED2020" width="80px" />
+			<button label="Load supplier" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
+			<button label="Update" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
+			<button label="Suspend" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
+			<button label="Delete" sclass="k9mo" style="color:#ED2020" width="${MAINBUTT_WIDTH}" />
+			<button label="ADMIN" sclass="k9mo" style="color:#ED2020" width="${MAINBUTT_WIDTH}" />
 		</vbox>
 
 		<grid sclass="GridLayoutNoBorder">

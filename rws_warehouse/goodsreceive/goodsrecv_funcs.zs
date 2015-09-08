@@ -6,6 +6,12 @@ import org.victor.*;
 String[] scanitems_colws = { "30px", "",          "180px",     "100px", "40px" };
 String[] scanitems_collb = { "",     "Item name", "Asset tag", "Serial","Qty" };
 
+/**
+ * Get specs by asset-tag passed
+ * 07/09/2015: modif to get from 0J0 database if not found in 0J1
+ * @param  iatg asset-tag to search for
+ * @return      db record
+ */
 Object getExisting_inventoryRec(String iatg)
 {
 	/*
@@ -20,9 +26,9 @@ Object getExisting_inventoryRec(String iatg)
 	"dbo.mr003 AS pl ON u.PalletNoYH = pl.MasterId " +
 	"where m.Code2='" + iatg + "';";
 	return f30_gpSqlFirstRow(sqlstm);
-	*/
 
-	// TODO Focus5012 got more fields - bluetooth etc
+	TODO Focus5012 got more fields - bluetooth etc
+	*/
 	sqlstm = "SELECT top 1 m.masterid, p.Name, m.Code2 AS AssetTag, m.Code AS serial, b.QtyBal AS Qty, u.ShipmentCodeYH AS ShipmentCode, u.GradeYH AS grade, pl.Name AS pallet, " +
 	"pl.MasterId AS plmasterid, u.BrandYH AS Brand, u.ItemTypeYH AS Item, u.ModelYH AS Model, u.ProcessorYH AS Processor, u.MonitorSizeYH AS MonitorSize, " +
 	"u.MonitorTypeYH AS MonitorType, u.ColourYH AS colour, u.CasingYH AS casing, u.COA1YH AS COA, u.COA2YH AS COA2, u.RAMSizeYH AS RAM, " +
@@ -34,7 +40,12 @@ Object getExisting_inventoryRec(String iatg)
 	"dbo.mr003 AS pl ON u.PalletNoYH = pl.MasterId " +
 	"where m.Code2='" + iatg + "';";
 
-	return sqlhand.rws_gpSqlFirstRow(sqlstm);
+	retval = sqlhand.rws_gpSqlFirstRow(sqlstm);
+	if(retval == null) // cannot source from default 0J1, source from 0J0
+	{
+		retval = fj0_gpSqlFirstRow(sqlstm); // in rws_warehouse/goodsreceive/injtest.zs
+	}
+	return retval;
 }
 
 void hidereset_workarea()
@@ -282,6 +293,7 @@ Object[] grnhds =
 	new listboxHeaderWidthObj("A.Date",true,"70px"),
 	new listboxHeaderWidthObj("A.Stat",true,"60px"), // 11
 	new listboxHeaderWidthObj("A.User",true,"70px"),
+	new listboxHeaderWidthObj("FC6 T.GRN",true,"80px"),
 };
 GRNSTAT_POS = 3;
 AUDITSTAT_POS = 11;
@@ -314,7 +326,7 @@ void showGRN(int itype)
 
 	Listbox newlb = lbhand.makeVWListbox_Width(grnheaders_holder, grnhds, "grnheader_lb", 3);
 	sqlstm = "select origid,datecreated,ourpo,status,vendor,vendor_do,vendor_inv,username," +
-	"commitdate,audit_date,audit_user,audit_stat,gcn_id from rw_grn ";
+	"commitdate,audit_date,audit_user,audit_stat,gcn_id,fc_tempgrn from rw_grn ";
 	switch(itype)
 	{
 		case 1 :
@@ -332,20 +344,17 @@ void showGRN(int itype)
 			break;
 	}
 
-	try
-	{
-		if(!showgrn_extra_sql.equals("")) sqlstm += showgrn_extra_sql;
-	} catch (Exception e) {}
-
+	try { if(!showgrn_extra_sql.equals("")) sqlstm += showgrn_extra_sql; } catch (Exception e) {}
 	sqlstm += " order by origid desc";
 
 	rcs = sqlhand.gpSqlGetRows(sqlstm);
 	if(rcs.size() == 0) return;
+
 	newlb.setRows(10); newlb.setMold("paging");
 	newlb.addEventListener("onSelect", grnclik);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid","datecreated","ourpo","status","username","commitdate",
-	"vendor","vendor_do","vendor_inv","gcn_id","audit_date","audit_stat","audit_user"};
+	"vendor","vendor_do","vendor_inv","gcn_id","audit_date","audit_stat","audit_user","fc_tempgrn"};
 	for(d : rcs)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);

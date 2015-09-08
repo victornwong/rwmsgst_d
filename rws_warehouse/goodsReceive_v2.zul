@@ -637,12 +637,12 @@ unm = useraccessobj.username;
 // only these users can see the update inventory butt
 if(unm.equals("padmin"))
 {
-	uptstock_b.setVisible(true);
 }
 
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
+	uptstock_b.setVisible(true);
 }
 
 ]]>
