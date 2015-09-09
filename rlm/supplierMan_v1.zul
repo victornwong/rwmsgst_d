@@ -27,8 +27,179 @@ SUPP_FORM_STYLE = "background:#D77272";
 SUPP_FORM_STYLE2 = "background:#DE3E0E";
 MAINBUTT_WIDTH = "100px";
 
+glob_sel_apcode = glob_sel_supplierid = "";
+
+Object[] ldsuphds =
+{
+	new listboxHeaderWidthObj("id",false,""),
+	new listboxHeaderWidthObj("APCode",true,""),
+	new listboxHeaderWidthObj("Supplier",true,""),
+};
+
+class ldsupplierclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getReference();
+		//glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
+		loadSupplier_callback(isel);
+	}
+}
+loadsupplclick = new ldsupplierclik();
+
+class loadsupplirdclick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		try
+		{
+			loadSupplier_callback(isel);
+		} catch (Exception e) {}
+	}
+}
+loadsuppr_doubclik = new loadsupplirdclick();
+
+/**
+ * Load suppliers list from SupplierDetail. Listbox id = "loadsuppliers_lb"
+ * @param iwhat search string
+ */
+void loadSupplier(String iwhat, Div idiv)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, ldsuphds, "loadsuppliers_lb", 10);
+
+	sqlstm = "select ID,APCode,SupplierName from SupplierDetail where APCode like '%" + iwhat + "%' or SupplierName like '%" + iwhat + "%';";
+	r = gpWMS_GetRows(sqlstm);
+	
+	if(r.size() == 0) return;
+	newlb.addEventListener("onSelect", loadsupplclick);
+
+	String[] fl = { "ID","APCode","SupplierName" };
+	ArrayList kabom = new ArrayList();
+
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, loadsuppr_doubclik);
+}
+
+/**
+ * [supplierExist description]
+ * @param  iapcode APCode to check
+ * @return         true=exist, false=not
+ */
+boolean supplierExist(String iapcode)
+{
+	if(iapcode.equals("")) return false;
+	sqlstm = "select APCode from SupplierDetail where APCode='" + iapcode + "' limit 1;";
+	return (gpWMS_FirstRow(sqlstm) == null) ? false : true;
+}
+
+/**
+ * call-back from ldsupplierclik() and loadsupplirdclick() event handler - loadSupplier()
+ * @param isel [description]
+ */
+void loadSupplier_callback(Object isel)
+{
+	loadsupplier_pop.close();
+	glob_sel_supplierid = lbhand.getListcellItemLabel(isel,0);
+	glob_sel_apcode = lbhand.getListcellItemLabel(isel,1);
+
+	sqlstm = "select APCode,SupplierName,Supadd1,Supadd2,Supadd3,Phone,Fax,Email,web," +
+	"CPerson1,Designation1,Handphone1,CPerson2,Designation2,Handphone2,CreditLimit,Terms,CurCode from SupplierDetail where ID=" + glob_sel_supplierid;
+
+	r = gpWMS_FirstRow(sqlstm);
+	if(r != null)
+	{
+		String[] fl = { "APCode","SupplierName","Supadd1","Supadd2","Supadd3","Phone","Fax","Email","web",
+		"CPerson1","Designation1","Handphone1","CPerson2","Designation2","Handphone2","CreditLimit","Terms","CurCode" };
+
+		ngfun.populateUI_Data(maininputs,fl,r);
+		maininputs[0].setDisabled(true); // when load from db, disabled apcode textbox
+	}
+}
+
+void supplierFunc(String iwhat)
+{
+	sqlstm = msgtext = "";
+	todaydate =  kiboo.todayISODateTimeString();
+
+	Object[] maininputs = {
+		m_apcode_tb, m_suppliername_tb, m_supadd1_tb, m_supadd2_tb, m_supadd3_tb,
+		m_phone_tb, m_fax_tb, m_email_tb, m_web_tb,
+		m_cperson1_tb, m_designation1_tb, m_handphone1_tb,
+		m_cperson2_tb, m_designation2_tb, m_handphone2_tb,
+		m_creditlimit_tb, m_terms_tb, m_curcode_tb
+	};
+
+	if(iwhat.equals("clearthings_b")) // clear whatever in boxes and also reset glob_sel_apcode
+	{
+		for(i=0;i<maininputs.length;i++) { maininputs[i].setValue(""); }
+		glob_sel_apcode = glob_sel_supplierid = "";
+		maininputs[0].setDisabled(false); // enable apcode textbox
+	}
+
+	if(iwhat.equals("updsave_b")) // update or insert
+	{
+		dt = ngfun.getString_fromUI(maininputs);
+		crdlimit = 0.0;
+		try { crdlimit = Float.parseFloat(dt[15]); } catch (Exception e) {} // make sure it's a numba
+
+		if(glob_sel_apcode.equals("")) // insert into DB
+		{
+			if(dt[1].equals("")) // supplier-name cannot blank
+			{
+				msgtext = "ERR: supplier name is mandatory";
+			}
+			else
+			{
+				if(supplierExist(dt[0])) // check if supplier-code exist
+				{
+					msgtext = "ERR: APCODE exist in database..";
+				}
+				else
+				{
+					sqlstm = "insert into SupplierDetail (APCode,SupplierName,Supadd1,Supadd2,Supadd3,Phone,Fax,Email,web," +
+					"CPerson1,Designation1,Handphone1,CPerson2,Designation2,Handphone2,CreditLimit,Terms,CurCode) values (" +
+					"'" + dt[0] + "','" + dt[1] + "','" + dt[2] + "','" + dt[3] + "','" + dt[4] + "','" + dt[5] + "'," +
+					"'" +	dt[6] + "','" + dt[7] + "','" + dt[8] + "','" + dt[9] + "','" + dt[10] + "','" + dt[11] + "'," +
+					"'" +	dt[12] + "','" + dt[13] + "','" + dt[14] + "'," + crdlimit.toString() + ",'" + dt[16] + "','" + dt[17] + "');";
+				}
+			}
+		}
+		else
+		{
+			sqlstm = "update SupplierDetail set SupplierName='" + dt[1] + "',Supadd1='" + dt[2] + "',Supadd2='" + dt[3] + "',Supadd3='" + dt[4] + "'," +
+			"Phone='" + dt[5] + "',Fax='" + dt[6] + "',Email='" + dt[7] + "',web='" + dt[8] + "',CPerson1='" + dt[9] + "',Designation1='" + dt[10] + "',Handphone1='" + dt[11] + "'," +
+			"CPerson2='" + dt[12] + "',Designation2='" + dt[13] + "',Handphone2='" + dt[14] + "',CreditLimit=" + crdlimit.toString() + ",Terms='" + dt[16] + "',Curcode='" + dt[17] + "' " +
+			"where APCode='" + dt[0] + "';";
+		}
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		gpWMS_execute(sqlstm);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
 ]]>
 </zscript>
+
+<popup id="loadsupplier_pop">
+	<div sclass="shadowbox" style="background:#4182C0" width="400px">
+		<hbox>
+			<label value="Search" sclass="wbo" />
+			<textbox id="ldsupsearch_tb" sclass="k9" />
+			<button label="Find" sclass="k9mo" onClick="loadSupplier(ldsupsearch_tb.getValue(),loadsupplier_holder)" />
+		</hbox>
+		<separator height="3px" />
+		<div id="loadsupplier_holder" />
+	</div>
+</popup>
 
 <style src="/real-world.css" />
 <style>
@@ -44,8 +215,9 @@ MAINBUTT_WIDTH = "100px";
 <div style="background:#79A995;padding:3px">
 	<hbox>
 		<vbox>
-			<button label="Load supplier" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
-			<button label="Update" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
+			<button id="clearthings_b" label="Clear" sclass="k9mo" width="${MAINBUTT_WIDTH}" onClick="supplierFunc(self.getId())" />
+			<button label="Load supplier" sclass="k9mo" width="${MAINBUTT_WIDTH}" onClick="loadsupplier_pop.open(self)" />
+			<button id="updsave_b" label="Update" sclass="k9mo" width="${MAINBUTT_WIDTH}" onClick="supplierFunc(self.getId())" />
 			<button label="Suspend" sclass="k9mo" width="${MAINBUTT_WIDTH}" />
 			<button label="Delete" sclass="k9mo" style="color:#ED2020" width="${MAINBUTT_WIDTH}" />
 			<button label="ADMIN" sclass="k9mo" style="color:#ED2020" width="${MAINBUTT_WIDTH}" />
@@ -121,5 +293,20 @@ MAINBUTT_WIDTH = "100px";
 		</grid>
 	</hbox>
 </div>
+
+<zscript>
+<![CDATA[
+
+	Object[] maininputs = {
+		m_apcode_tb, m_suppliername_tb, m_supadd1_tb, m_supadd2_tb, m_supadd3_tb,
+		m_phone_tb, m_fax_tb, m_email_tb, m_web_tb,
+		m_cperson1_tb, m_designation1_tb, m_handphone1_tb,
+		m_cperson2_tb, m_designation2_tb, m_handphone2_tb,
+		m_creditlimit_tb, m_terms_tb, m_curcode_tb
+	};
+
+]]>
+</zscript>
+
 </window>
 </zk>

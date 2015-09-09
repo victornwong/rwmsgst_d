@@ -393,7 +393,8 @@ void generateExcelSOA2(int itype)
 
 		currentrow = pgadder + rowcounter;
 
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,wop[VOUCHER_POS]),wfont,true,"");
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,wop[VOUCHER_POS]),wfont,true,"");
+		excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,wop[VOUCHER_POS]);
 
 		invdstr = "";
 		if(!wop[INVOICE_DATE].equals("") && wop[INVOICE_DATE] != null)
@@ -413,7 +414,8 @@ void generateExcelSOA2(int itype)
 		} catch (Exception e) {}
 
 		kstr = duedstr; // default to invoice-due-date
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr),wfont,true,"");
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr),wfont,true,"");
+		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
 
 		for(j=INVOICE_AMNT;j<=BALANCE_POS;j++) // inv-amt, receipt, balance
 		{
@@ -426,8 +428,8 @@ void generateExcelSOA2(int itype)
 			//debugbox.setValue(debugbox.getValue() + "\n" + wop[j]);
 			// problem -- 
 			//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,j-3,wop[j]),wfont,true,"");
-			POI_CellSetAllBorders(wwb, excelInsertString(wsheet,currentrow,j-3,wop[j]), wfont, true, "");
-
+			//POI_CellSetAllBorders(wwb, excelInsertString(wsheet,currentrow,j-3,wop[j]), wfont, true, "");
+			excelInsertString(wsheet,currentrow,j-3,wop[j]);
 		}
 
 		dydff = calcDayDiff(duedate,statement_date.getValue()) - 14; // 11/09/2013: grace period 14 days for any aging
@@ -450,7 +452,8 @@ void generateExcelSOA2(int itype)
 			}
 		}
 		//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,WK_LATEPAYMENT_COL,intrcs),wfont,true,""); // interest - put into worksheet
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_LATEPAYMENT_COL,intrcs), wfont,true,""); // interest - put into worksheet
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_LATEPAYMENT_COL,intrcs), wfont,true,""); // interest - put into worksheet
+		excelInsertString(wsheet,currentrow,WK_LATEPAYMENT_COL,intrcs); // interest - put into worksheet
 
 		agestr = "";
 		if(dydff > 0) // difference-days to make age
@@ -460,7 +463,8 @@ void generateExcelSOA2(int itype)
 				agestr = dydff.toString();
 		}
 		//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,WK_AGE_COL,agestr),wfont,true,"###"); // age - put into worksheet
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_AGE_COL,agestr),wfont,true,"###"); // age - put into worksheet
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_AGE_COL,agestr),wfont,true,"###"); // age - put into worksheet
+		excelInsertString(wsheet,currentrow,WK_AGE_COL,agestr); // age - put into worksheet
 
 		ttos = "";
 
@@ -469,7 +473,8 @@ void generateExcelSOA2(int itype)
 			whtstr = wop[REMARKS_POS];
 
 		if(itype == 2) whtstr = ""; // no-narration type
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_NARRATION_COL,whtstr),nfont,false,""); // narration - put into worksheet
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_NARRATION_COL,whtstr),nfont,false,""); // narration - put into worksheet
+		excelInsertString(wsheet,currentrow,WK_NARRATION_COL,whtstr); // narration - put into worksheet
 
 		if(wop[VOUCHER_POS].indexOf("SI") != -1 || wop[VOUCHER_POS].indexOf("RWP") != -1 || wop[VOUCHER_POS].indexOf("RWI") != -1 || wop[VOUCHER_POS].indexOf("DNT") != -1)
 			if(!wop[INVOICE_AMNT].equals("")) ttos = nf2.format( Float.parseFloat(wop[INVOICE_AMNT]) + intrc );
@@ -478,7 +483,8 @@ void generateExcelSOA2(int itype)
 			if(!wop[RECEIPT_POS].equals("")) ttos = nf2.format( Float.parseFloat(wop[RECEIPT_POS]) * -1 );
 
 		//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,currentrow,WK_OS_COL,ttos),wfont,true,""); // O/S column
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_OS_COL,ttos),wfont,true,""); // O/S column
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_OS_COL,ttos),wfont,true,""); // O/S column
+		excelInsertString(wsheet,currentrow,WK_OS_COL,ttos); // O/S column
 
 		rowcounter++;
 
@@ -578,14 +584,23 @@ void generateExcelSOA2(int itype)
 	CellRangeAddress region = CellRangeAddress.valueOf(mergs);
 	wsheet.addMergedRegion(region);
 
-	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,0,"TOTAL"),tfont,true,"");
-	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,1,""),tfont,true,"");
+	/*
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,0,"TOTAL"),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,1,""),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_INVAMT_COL, tt_invamnt.toString()),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_OS_COL, tt_totalos.toString()),tfont,true,"");
+		//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_BALANCE_COL, tt_balance.toString()),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_LATEPAYMENT_COL, tt_latepayment.toString()),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_RECEIPT_COL, tt_receipt.toString()),tfont,true,"");
+	*/
 
-	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_INVAMT_COL, tt_invamnt.toString()),tfont,true,"");
-	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_OS_COL, tt_totalos.toString()),tfont,true,"");
+	excelInsertString(wsheet,totalrw,0,"TOTAL");
+	excelInsertString(wsheet,totalrw,1,"");
+	excelInsertNumber(wsheet,totalrw, WK_INVAMT_COL, tt_invamnt.toString());
+	excelInsertNumber(wsheet,totalrw, WK_OS_COL, tt_totalos.toString());
 	//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_BALANCE_COL, tt_balance.toString()),tfont,true,"");
-	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_LATEPAYMENT_COL, tt_latepayment.toString()),tfont,true,"");
-	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,totalrw, WK_RECEIPT_COL, tt_receipt.toString()),tfont,true,"");
+	excelInsertNumber(wsheet,totalrw, WK_LATEPAYMENT_COL, tt_latepayment.toString());
+	excelInsertNumber(wsheet,totalrw, WK_RECEIPT_COL, tt_receipt.toString());
 
 	/*
 		dbg = "0_30: " + sum0_30.toString() + " 31_60: " + sum31_60.toString() + " 61_90: " + sum61_90.toString() + " 91_120: " + sum91_120.toString() + " 121_150: " + sum121_150;
@@ -608,15 +623,21 @@ void generateExcelSOA2(int itype)
 
 	for(j=0; j<7; j++)
 	{
-		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,j,ageheaders[j]),tfont,true,"");
+		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,j,ageheaders[j]),tfont,true,"");
+		excelInsertString(wsheet,totalrw,j,ageheaders[j]);
 
 		kval = (j == 0) ? nf2.format( agevars[j] * -1) : agevars[j].toString();
-		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,j,kval),tfont,true,"");
+		//POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,j,kval),tfont,true,"");
+		excelInsertNumber(wsheet,nxttotalrw,j,kval);
 	}
 
 	kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on) - unadjcred;
-	POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL"),tfont,true,"");
-	POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+7,kktot.toString()),tfont,true,"");
+	/*
+		POI_CellSetAllBorders(wwb,excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL"),tfont,true,"");
+		POI_CellSetAllBorders(wwb,excelInsertNumber(wsheet,nxttotalrw,dyclm+7,kktot.toString()),tfont,true,"");
+	*/
+	excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL");
+	excelInsertNumber(wsheet,nxttotalrw,dyclm+7,kktot.toString());
 
 	duetotal = sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on;
 	duestr = "REMINDER:\nWe would like to bring to your attention that your account of RM" + nf3.format(duetotal) +
