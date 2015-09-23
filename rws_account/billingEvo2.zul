@@ -12,6 +12,8 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript src="../rws_customer/contractBillingTrack_funcs.zs" />
 <zscript src="../rws_customer/contBill_assets.zs" />
+<zscript src="../rws_warehouse/goodsreceive/injtest.zs" />
+<zscript src="./billass/injectInvoice.zs" />
 <zscript src="./rentalSlots_func.zs" />
 <zscript>
 <![CDATA[
@@ -24,7 +26,20 @@ MYPANEL = "billnevo2";
  * @since 14/05/2015
  * @notes
  * A new design to keep track of each rental installment - rental book thing
- * 
+ *
+ * HARD-CODED invoice item to use for extension and inertia billing in Focus6 on both 0J0 and 0J1
+ * 91484 EXTENSION RENTAL CHARGES DT
+ * 91485 EXTENSION RENTAL CHARGES MT
+ * 91486 EXTENSION RENTAL CHARGES NB
+ * 91487 EXTENSION RENTAL CHARGES SPT
+ * 91488 EXTENSION RENTAL CHARGES SW
+ * 91489 EXTENSION RENTAL CHARGES OTH
+ * 91490 INERTIA RENTAL CHARGES DT
+ * 91491 INERTIA RENTAL CHARGES MT
+ * 91492 INERTIA RENTAL CHARGES NB
+ * 91493 INERTIA RENTAL CHARGES SPT
+ * 91494 INERTIA RENTAL CHARGES SW
+ * 91495 INERTIA RENTAL CHARGES OTH
 */
 import java.util.*;
 import java.text.*;
@@ -36,6 +51,8 @@ if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
 kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+TESTING_MODE = true;
 
 SLOTS_GRID_ID = "theslots";
 SLOTS_GRID_ROWS_ID = "slot_rows";
@@ -112,30 +129,40 @@ void showRentalSlots(String ilco)
 }
 
 /**
+ * Call-back from lcrentlOnC
+ * @param isel selected list-item
+ */
+void LClist_callBack(Object isel)
+{
+	if(!glob_selected_lc.equals("")) // got prev selected LC, auto-save 'em slots if any
+	{
+		saveSlots();
+	}
+
+	isel = event.getReference();
+	glob_selected_lc = lbhand.getListcellItemLabel(isel,0);
+	glob_sel_lcnumber = lbhand.getListcellItemLabel(isel,1);
+	glob_sel_customer = lbhand.getListcellItemLabel(isel,2);
+
+	cgd = slotsholder.getFellowIfAny(SLOTS_GRID_ID); // if got prev grid, remove it
+	if(cgd != null) cgd.setParent(null);
+
+	selectedlc_lbl.setValue(glob_sel_lcnumber + " : " + glob_sel_customer);
+	checkCreateSlotsGrid(slotsholder,SLOTS_GRID_ID);
+	showRentalSlots(glob_selected_lc);
+
+	showLCMetadata(glob_selected_lc);
+}
+
+/**
  * onClick event listener for listbox in billingShowLC()
  */
 class lcrentlOnC implements org.zkoss.zk.ui.event.EventListener
 {
 	public void onEvent(Event event) throws UiException
 	{
-		if(!glob_selected_lc.equals("")) // got prev selected LC, auto-save 'em slots if any
-		{
-			saveSlots();
-		}
-
 		isel = event.getReference();
-		glob_selected_lc = lbhand.getListcellItemLabel(isel,0);
-		glob_sel_lcnumber = lbhand.getListcellItemLabel(isel,1);
-		glob_sel_customer = lbhand.getListcellItemLabel(isel,2);
-
-		cgd = slotsholder.getFellowIfAny(SLOTS_GRID_ID); // if got prev grid, remove it
-		if(cgd != null) cgd.setParent(null);
-
-		selectedlc_lbl.setValue(glob_sel_lcnumber + " : " + glob_sel_customer);
-		checkCreateSlotsGrid(slotsholder,SLOTS_GRID_ID);
-		showRentalSlots(glob_selected_lc);
-
-		showLCMetadata(glob_selected_lc);
+		LClist_callBack(isel);
 	}
 }
 lcrentalclk = new lcrentlOnC();
@@ -151,7 +178,7 @@ Object[] lccols_headers =
 };
 /**
  * Billing punya show LC. Only list LC with certain status(active,inertia)
- * @param itype listing type (later usage)
+ * @param itype listing type - 1: normal by date and search text, 2: show backlogs to bill
  */
 void billingShowLC(int itype)
 {
@@ -168,21 +195,57 @@ void billingShowLC(int itype)
 	Listbox newlb = lbhand.makeVWListbox_Width(lcholder, lccols_headers, "lc_lb", 20);
 
 	sqlstm = "select origid,lc_id,username,customer_name,lenddate,order_type from rw_lc_records " +
-	"where lenddate <= getdate() and lstatus in ('active','inertia')" + bysearchtext + " order by lenddate;";
+	"where lenddate <= getdate() and lstatus in ('active','inertia','extension')" + bysearchtext + " order by lenddate;";
 
 	screcs = sqlhand.gpSqlGetRows(sqlstm);
 	if(screcs.size() == 0) return;
-	newlb.setRows(21); newlb.setMold("paging");
-	newlb.addEventListener("onSelect", lcrentalclk );
+	newlb.setRows(21); newlb.setMold("paging"); newlb.addEventListener("onSelect", lcrentalclk );
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid","lc_id","customer_name","username","lenddate","order_type" };
-
 	for(d : screcs)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);
 		ki = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
 		kabom.clear();
 	}
+}
+
+/**
+ * Upload rental-invoice, need to do some pre-processing before calling injectinvoice.zs
+ * @param  ibutt button object, use to activate popup
+ */
+void uploadInvoice(Object ibutt)
+{
+	String[] headvals = new String[4];
+
+	// get extraheaderoff from previous rental-invoice
+	sqlstm = "select extraheaderoff from data where vouchertype=3329 and voucherno='RW13925';";
+	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm) : sqlhand.rws_gpSqlFirstRow(sqlstm);
+	
+	if(r != null) // got the previous rental-invoice extraheaderoff
+	{
+		prw_extraheaderoff = r.get("extraheaderoff").toString();
+		inject_Invoice_Headers(headvals); // inject rental invoice header
+		debugbox.setValue(headvals[0] + " :: " + headvals[1] + " :: " + headvals[2] + " :: " + headvals[3]);
+
+		// dup invoice details from previous invoice
+		sqlstm = "update u001b set RemarksYH = i.RemarksYH, CustomerRefYH = i.CustomerRefYH, ROCNoYH = i.ROCNoYH, DORefYH = i.DORefYH," +
+		"ETAYH = i.ETAYH, ETDYH = i.ETDYH, OPSNoteYH = i.OPSNoteYH, PrepaidRentalYH = i.PrepaidRentalYH, RentalPaidYH = i.RentalPaidYH, " +
+		"OrderTypeYH = i.OrderTypeYH, DepositAmtYH = i.DepositAmtYH, DepositRemarksYH = i.DepositRemarksYH, DeliveryToYH = i.DeliveryToYH, " +
+		"InstTypeYH = i.InstTypeYH, LCNoYH = i.LCNoYH, WitnessYH = i.WitnessYH, Signatory1YH = i.Signatory1YH, Designation1YH = i.Designation1YH, " +
+		"Designation2YH = i.Designation2YH, ReservationNoYH = i.ReservationNoYH, LCStatusYH = i.LCStatusYH, DeliveryDtYH = i.DeliveryDtYH, " +
+		"NoofInstallmentYH = i.NoofInstallmentYH, FinancePICYH = i.FinancePICYH, ProjectPICYH = i.ProjectPICYH, ProjectSiteYH = i.ProjectSiteYH " +
+		"from (select RemarksYH,CustomerRefYH,ROCNoYH,DORefYH,ETAYH,ETDYH,OPSNoteYH,PrepaidRentalYH,RentalPaidYH, " +
+		"OrderTypeYH,DepositAmtYH,DepositRemarksYH,DeliveryToYH,InstTypeYH,LCNoYH,WitnessYH,Signatory1YH,Designation1YH, " +
+		"Designation2YH,ReservationNoYH,LCStatusYH,DeliveryDtYH,NoofInstallmentYH,FinancePICYH,ProjectPICYH,ProjectSiteYH " +
+		"from u001b where extraid=" + prw_extraheaderoff + ") i where extraid=" + headvals[1];
+
+		if(TESTING_MODE) f30_gpSqlExecuter(sqlstm);
+		else sqlhand.rws_gpSqlExecuter(sqlstm);
+
+	}
+
+// dup invoice items from previous invoice
 }
 
 ]]>
@@ -223,8 +286,9 @@ void billingShowLC(int itype)
 <popup id="slotsfunc_pop">
 	<div sclass="shadowbox" style="background:#7AC320;" >
 		<vbox>
-			<button id="ins1slot_b" label="Insert 1 month" sclass="k9mo" onClick="slotsFunc(self.getId())" />
-			<button id="ins12slot_b" label="Insert 12 months" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+			<button id="insslot_b_1" label="Insert 1 slot" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+			<button id="insslot_b_3" label="Insert 3" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+			<button id="insslot_b_12" label="Insert 12" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 		</vbox>
 	</div>
 </popup>
@@ -300,22 +364,27 @@ Asgn = assigned/non-assigned asset
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
 	{
-	border: none; overflow: hidden; zoom: 1;
-	border-top: none; border-left: none; border-right: none; border-bottom: none;
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
 	}
 </style>
 
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#0C203E">
-
+	<label id="debugbox" multiline="true" style="color:#ffffff" />
 	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
-		<label value="LC-END-DATE Start" sclass="k9b" visible="false" />
-		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" visible="false" />
-		<label value="End" sclass="k9b" visible="false" />
-		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" visible="false" />
-		<textbox id="searhtxt_tb" width="180px" sclass="k9" />
-		<button label="Load/Find billable" sclass="k9mo" onClick="billingShowLC(1)" />
+		<hbox>
+			<label value="LC-END-DATE Start" sclass="k9b" visible="false" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" visible="false" />
+			<label value="End" sclass="k9b" visible="false" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" visible="false" />
+
+			<textbox id="searhtxt_tb" width="180px" sclass="k9" />
+			<button label="Load/Find billable" sclass="k9mo" onClick="billingShowLC(1)" />
+			<separator width="10px" />
+			<button label="Show today pending billing" sclass="k9mo" onClick="billingShowLC(2)" />
+		</hbox>
 	</div>
 	<separator height="3px" />
 	<div id="lcholder" />
@@ -324,7 +393,6 @@ Asgn = assigned/non-assigned asset
 	<div sclass="shadowbox" style="background:#4A71A4" id="mainworkarea">
 		<label id="recnum_lbl" style="font-size:9px" visible="false" />
 		<label id="selectedlc_lbl" sclass="subhead1" />
-
 		<tabbox> <!-- WORKAREA accordion chopped from contractBillingTrack_v1 -->
 			<tabs>
 				<tab id="tab0" label="BILLING" />
@@ -335,13 +403,13 @@ Asgn = assigned/non-assigned asset
 			<tabpanels>
 				<tabpanel> <!-- billing panel -->
 					<hbox>
-						<button id="untick_b" label="Untick" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+						<button id="untick_b" label="Ticker" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<button label="Slots" sclass="k9mo" onClick="slotsfunc_pop.open(self)" />
 						<button id="remslot_b" label="Remove" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<separator width="10px" />
 						<button label="Save slots" sclass="k9mo" onClick='saveSlots(); guihand.showMessageBox("Rental slots saved..");' />
 						<button id="viewpdfinv_b" label="View PDF invoice" sclass="k9mo" onClick="slotsFunc(self.getId())" />
-						<button label="Upload billing" sclass="k9mo" style="color:#8454B7" />
+						<button id="uplbilling_b" label="Upload billing" sclass="k9mo" style="color:#8454B7" onClick="uploadInvoice(self)" />
 					</hbox>
 					<separator height="5px" />
 					<div id="slotsholder" />

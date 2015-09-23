@@ -512,6 +512,7 @@ Object[] sm_lb_headers = {
 void doFunc(Object iwhat)
 {
 	itype = iwhat.getId();
+	adminpop.close();
 
 	if(itype.equals("chgbranch_btn"))
 	{

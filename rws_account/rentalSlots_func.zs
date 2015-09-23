@@ -25,15 +25,11 @@ void slotsFunc(String itype)
 	sqlstm = msgtext = "";
 	refresh = false;
 
-	if(itype.equals("ins1slot_b")) // insert 1 slot
+	if(itype.indexOf("insslot") != -1) // insert slots buttons activated
 	{
-		insert_BlankSlot(1);
-		refresh = true;
-	}
-
-	if(itype.equals("ins12slot_b")) // insert 12 slots
-	{
-		insert_BlankSlot(12);
+		kbt = 1;
+		try {	kbt = Integer.parseInt(itype.replaceAll("insslot_b_","")); } catch (Exception e) {}
+		insert_BlankSlot(kbt);
 		refresh = true;
 	}
 
@@ -68,8 +64,10 @@ void saveSlots()
 	if(glob_selected_lc.equals("")) return;
 	slt = slotsholder.getFellowIfAny(SLOTS_GRID_ROWS_ID);
 	if(slt == null) return;
+
 	hx = slt.getChildren().toArray();
 	if(hx.length == 0) return;
+
 	sqlstm = "delete from rw_rentalbook where parent_lc=" + glob_selected_lc + ";";
 	for(i=0; i<hx.length; i++)
 	{
@@ -78,7 +76,6 @@ void saveSlots()
 		"(" + glob_selected_lc + "," + jk[G_SLOT_NO].getValue() + ",'" + jk[G_NEXT_BILL].getValue() + "','" + jk[G_INV_NO].getValue() + "','" +
 		jk[G_INV_DATE].getValue() + "','" + jk[G_REMARKS].getValue() + "');";
 	}
-
 	sqlhand.gpSqlExecuter(sqlstm);
 }
 
@@ -130,7 +127,7 @@ void iterateSlots(Object irows, int itype)
 				break;
 
 			case 2: // untick checkboxes
-				cx[G_TICKER].setChecked(false);
+				cx[G_TICKER].setChecked( (cx[G_TICKER].isChecked()) ? false : true);
 				break;
 
 			case 3: // view PDF invoice if any

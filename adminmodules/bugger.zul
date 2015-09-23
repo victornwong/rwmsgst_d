@@ -260,14 +260,67 @@ void procInvoicePDF()
 */
 }
 
+moduleCounter = 1;
+
+void loadExternal()
+{
+	newid = iwhat+moduleCounter.toString();
+	moduleCounter++;
+	//activateModule(mainPlayground,"workbox","",newid,"",useraccessobj);
+
+	Include newinclude = new Include();
+	newinclude.setId(newid);
+	includepath = "http://52.74.172.88:8080/rlm/rlm/workOrderMan_v1.zul" + "?myid=" + newid; //+ "&" + uParams;
+	newinclude.setSrc(includepath);
+	sechand.setUserAccessObj(newinclude, useraccessobj); // securityfuncs.zs
+	newinclude.setParent(externalworkbox);
+}
+//indexworker.zul
+
+void relodIrframe()
+{
+	if(ifraholder.getFellowIfAny("thingthong") != null) thingthong.setParent(null);
+	kk = new Iframe(); kk.setId("thingthong");
+	//kk.setSrc("http://52.74.172.88:8080/rlm/rlm/outboundReq_v1.zul");
+	kk.setSrc("http://mcpm.biz.tm:8080/rlm/rlm/workOrderMan_v1.zul");
+	kk.setStyle("width:99%;height:600px");
+	kk.setParent(ifraholder);
+}
+
 ]]>
 </zscript>
 
 <?component name="tipcolor" macroURI="/macros/macrocomp1.zul" ?>
 
-<div width="1200px">
+<div width="1500px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
-<panelchildren>
+<panelchildren style="background:#094D7F">
+
+<button label="Billing checker - TESTING" onClick="relodIrframe()" />
+<div id="ifraholder"  />
+
+<zscript>
+<![CDATA[
+//<script src="/adminmodules/go-debug.js" />
+//imgthing();
+
+class divdropp implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(org.zkoss.zk.ui.event.Event event) throws UiException
+	{
+		alert(event.getTarget());
+	}
+}
+//kamage.addEventListener("onDrop", new divdropp());
+
+/*
+<!-- <image id="frogmap" src="../rwimg/1331F960A12F-12D5.jpg" droppable="true" width="800px" /> -->
+<!-- <button label="testme" onClick="testme()" /> -->
+<!-- <button label="test mysql" onClick="testMysql()" /> -->
+<!-- <include src="adminmodules/helloprocessing.html" /> -->
+*/
+
+/*
 
 <button label="Proc pdf invoice" onClick="procInvoicePDF()" />
 <separator height="5px" />
@@ -318,27 +371,9 @@ void procInvoicePDF()
 
 <div id="frogholder" droppable="true" />
 -->
-
-<zscript>
-<![CDATA[
-//<script src="/adminmodules/go-debug.js" />
-//imgthing();
-
-class divdropp implements org.zkoss.zk.ui.event.EventListener
-{
-	public void onEvent(org.zkoss.zk.ui.event.Event event) throws UiException
-	{
-		alert(event.getTarget());
-	}
-}
-//kamage.addEventListener("onDrop", new divdropp());
-
-/*
-<!-- <image id="frogmap" src="../rwimg/1331F960A12F-12D5.jpg" droppable="true" width="800px" /> -->
-<!-- <button label="testme" onClick="testme()" /> -->
-<!-- <button label="test mysql" onClick="testMysql()" /> -->
-<!-- <include src="adminmodules/helloprocessing.html" /> -->
+<div id="externalworkbox" />
 */
+
 
 ]]>
 </zscript>

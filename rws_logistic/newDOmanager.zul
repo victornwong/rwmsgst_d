@@ -654,7 +654,7 @@ void closePanel()
 			<button id="insnewdo_b" label="New DO" sclass="k9mo" onClick="doFunc(self.getId())" />
 			<button id="remdo_b" label="Remove" sclass="k9mo" onClick="doFunc(self.getId())" />
 			<button id="commitdo_b" label="COMMIT" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" />
-			<button id="printdo_b" label="PRINT" sclass="k9mo" onClick="doFunc(self.getId())" />
+			<button id="printdo_b" label="PRINT" sclass="k9mo" onClick="doFunc(self.getId())" visible="false" />
 			<button id="canceldo_b" label="CANCEL" sclass="k9mo" onClick="doFunc(self.getId())" />
 			<separator width="10px" />
 			<button label="Refurb/packing" sclass="k9mo" onClick="refurb_pop.open(self)" />
