@@ -52,6 +52,7 @@ CRITICAL_BACKGROUND = "background:#ef2929;";
 URGENT_BACKGROUND = "background:#fcaf3e;";
 
 TEMPFILEFOLDER = "tmp/";
+TEMPTAXINVOICE_FOLDER = "tmp/taxinvoices/";
 
 mainPlayground = "//als_portal_main/";
 
@@ -110,6 +111,8 @@ public class reportModulesObj
 	}
 }
 
+SimpleDateFormat usdtf = new SimpleDateFormat("MM-dd-yyyy");
+SimpleDateFormat mydtf = new SimpleDateFormat("dd-MM-yyyy");
 SimpleDateFormat dtf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 SimpleDateFormat dtf2 = new SimpleDateFormat("yyyy-MM-dd");
 SimpleDateFormat yearonly = new SimpleDateFormat("yyyy");

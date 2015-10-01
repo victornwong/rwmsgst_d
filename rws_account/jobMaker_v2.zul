@@ -745,11 +745,11 @@ void trytask()
 
 <style src="/real-world.css" />
 <style>
-.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
-{
-border: none; overflow: hidden; zoom: 1;
-border-top: none; border-left: none; border-right: none; border-bottom: none;
-}
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
 </style>
 
 <div width="1200px">

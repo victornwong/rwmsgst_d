@@ -258,6 +258,7 @@ void genColdCallDump()
 
 	String[] rhds = { "REC","Dated","User","Customer","Grade","Potential","Contact","Designation",
 	"Address1","Address2","Address3","Address4","Tel","Fax","Email","Industry","Division",
+	"CustomerGrade","GradeReq","GradeRemarks",
 	"Total No PC","DT","NB","Tech.Level","OS","Brand","Specs","Warranty",
 	"Server brand","Server count", "MS-Off Ver", "MS-Off License",
 	"ERP", "PABX Brand", "PC/Server remarks",
@@ -267,12 +268,14 @@ void genColdCallDump()
 	"Contact2", "Designation2", "Email2",
 	"Contact3", "Designation3", "Email3",
 	"Contact4", "Designation4", "Email4",
-	"Customer remarks"
+	"Customer remarks",
 	 };
 
 	String[] flsd = { "username","cust_name","customer_grade","potential","contact_person","designation",
 	"cust_address1","cust_address2","cust_address3","cust_address4",
-	"cust_tel","cust_fax","cust_email","industry","call_div" };
+	"cust_tel","cust_fax","cust_email","industry","call_div",
+	"customer_grade","grade_req","grading_remarks"
+	};
 
 	String[] hsds = {
 	"s_totpc","s_dtperc","s_nbperc","s_techlvl","s_ostype","s_brand","s_specs","s_warranty",
@@ -299,7 +302,9 @@ void genColdCallDump()
 		excelInsertString(sheet,rowcount,1, dtf2.format(d.get("datecreated")) );
 		for(k=0;k<flsd.length;k++)
 		{
-			excelInsertString(sheet,rowcount,k+2, kiboo.checkNullString(d.get(flsd[k])) );
+			bb = "";
+			try { bb = kiboo.checkNullString(d.get(flsd[k]).toString()); } catch (Exception e) { }
+			excelInsertString(sheet,rowcount,k+2, bb );
 		}
 
 		myhmp = null;

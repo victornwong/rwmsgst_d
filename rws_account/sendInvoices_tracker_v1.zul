@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Tax Invoice Emailer - Tracker";
-MYVERSION = "v0.2.1";
+MYVERSION = "v0.2.2";
 MYPANEL = "emailsendinvt";
 /**
  * @title Tax invoice emailer - tracker thing
@@ -29,6 +29,7 @@ MYPANEL = "emailsendinvt";
  *  01/06/2105: Auto attach Reissuance.pdf as requested to every email
  *  04/06/2015: move DELETE button outside to allow user to delete a tracker - do system audit-log
  *  30/07/2015: button/popup to generate sent-out summary via BIRT . invsentoutSummary_v1.rptdesign
+ *  30/09/2015: Leanne/Mahes req to send email using rentwise.com, using notification@rentwise.com. Used in customer-support module too
 */
 import java.util.*;
 import java.text.*;
@@ -49,8 +50,14 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-DEBUGGING = 0;
-DEBUGGING_EMAIL = "creditcontrol@rentwise.com,billing@rentwise.com";
+DEBUGGING = false;
+//DEBUGGING_EMAIL = "creditcontrol@rentwise.com,billing@rentwise.com";
+DEBUGGING_EMAIL = "victor@rentwise.com";
+
+if(DEBUGGING && !useraccessobj.username.equals("padmin"))
+{
+	Executions.sendRedirect(MAINLOGIN_PAGE);
+}
 
 EMAILINVOICE_PREFIX = "EMLINV";
 TAXINVOICES_FOLDER = "tmp/taxinvoices";
@@ -254,12 +261,12 @@ void procImportTaxInvoices(File[] flist)
 						if(oldfile.renameTo(newfile)) // make sure file can be renamed..
 						{
 							topeople = DEBUGGING_EMAIL;
-							if(DEBUGGING == 0) topeople = invmeta[3]; // non-debugging, set real TO addr
-							// { alert("no debugging"); }
+							if(!DEBUGGING) topeople = invmeta[3]; // non-debugging, set real TO addr
 							subj = "RE: Electronic TAX INVOICE - " + invmeta[0];
 
 							if( gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 								topeople, subj, EMAILMSG, attchfn, GMAIL_rwms_username) )
+							//if( MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,topeople,subj,EMAILMSG,attchfn) )
 							{
 								sqlstm += "insert into rw_email_invoice (datecreated,invoice_no,invoice_date,customer_name,email,filename,username,sentdate,roc_no) values " +
 								"('" + todaydate + "','" + invmeta[0] + "','" + invmeta[1] + "','" + invmeta[2] + "','" + invmeta[3] + "','" + 
@@ -387,10 +394,11 @@ void singleEmailTaxInvoice(String itk)
 		attchfn[0] = session.getWebApp().getRealPath(TAXINVOICES_FOLDER) + "/" + glob_sel_pdffilename;
 		attchfn[1] = reissfn;
 		topeople = DEBUGGING_EMAIL;
-		if(DEBUGGING == 0) topeople = glob_sel_email; // non-debugging, set real TO addr
+		if(!DEBUGGING) topeople = glob_sel_email; // non-debugging, set real TO addr
 
 		if( gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 			topeople, subj, EMAILMSG, attchfn, GMAIL_rwms_username) )
+		//if( MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,topeople,subj,EMAILMSG,attchfn) )
 		{
 			msgtext = "Original tax-invoice re-sent..";
 		}
@@ -524,10 +532,11 @@ void resendTaxInvoices()
 		attchfn[0] = waterfn; attchfn[1] = reissfn;
 		subj = "RE: RESEND Electronic TAX INVOICE - " + invn;
 		topeople = DEBUGGING_EMAIL; // debugging email addr
-		if(DEBUGGING == 0) topeople = eml; // non-debugging, set real TO addr
+		if(!DEBUGGING) topeople = eml; // non-debugging, set real TO addr
 
 		if(gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 			topeople, subj, RESEND_EMAILMSG, attchfn, GMAIL_rwms_username) )
+		//if( MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,topeople,subj,RESEND_EMAILMSG,attchfn) )
 		{
 			sqlstm += "update rw_email_invoice set resenddate='" + todaydate + "', username='" + useraccessobj.username + "' where origid=" + origd + ";";
 			lgstr = "Resend tax-invoice " + glob_sel_invoiceno + " , customer: " + glob_sel_customer_name;
@@ -593,10 +602,11 @@ void resendTaxInvoices_ver2()
 	attchfn[0] = waterfn; attchfn[1] = reissfn;
 	subj = "RE: RESEND Electronic TAX INVOICE - " + invn;
 	topeople = DEBUGGING_EMAIL; // debugging email addr
-	if(DEBUGGING == 0) topeople = eml; // non-debugging, set real TO addr
+	if(!DEBUGGING) topeople = eml; // non-debugging, set real TO addr
 
 	if(gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 		topeople, subj, RESEND_EMAILMSG, attchfn, GMAIL_rwms_username) )
+	//if( MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,topeople,subj, RESEND_EMAILMSG, attchfn) )
 	{
 		sqlstm += "update rw_email_invoice set resenddate='" + todaydate + "', username='" + useraccessobj.username + "' where origid=" + origd + ";";
 		lgstr = "Resend tax-invoice " + glob_sel_invoiceno + " , customer: " + glob_sel_customer_name;
@@ -692,7 +702,7 @@ void emailMultiTaxInvoices()
 
 	kx = sentinvoices_lb.getSelectedItems().toArray();
 
-	if(DEBUGGING == 0) // If no debugging, do this check, else allow user to send multi-invoices from different customers
+	if(DEBUGGING) // If no debugging, do this check, else allow user to send multi-invoices from different customers
 	{
 		for(j=0; j<kx.length; j++) // check got selected non-same customer tax-invoices
 		{
@@ -712,6 +722,8 @@ void emailMultiTaxInvoices()
 
 	invtable = "<p>Tax-invoices attached in this email</p><table border=\"1\" style=\"width:100%\">";
 	invtable += "<tr><th>Tax Invoice No.</th><th>Invoice Date</th><th>ROC/LC No.</th></tr>";
+
+	kss = "";
 
 	for(j=0; j<kx.length; j++)
 	{
@@ -737,9 +749,18 @@ void emailMultiTaxInvoices()
 			if(oldfile.renameTo(newfile)) // make sure file can be renamed..
 			{
 				thefiles.add(rnfn);
+				kss += "\nsele: " + rnfn;
 				sqlstm += "update rw_email_invoice set sentdate='" + todaydate + "', filename='" + kfn + "' where origid=" + orig + ";";
 			}
 		}
+
+			if(DEBUGGING)
+			{
+				thefiles.add(rnfn);
+				kss += "\nsele: " + rnfn;
+				debugflag_lbl.setValue( ( debugflag_lbl.getValue() + kss) );
+			}
+
 		invtable += "</tr>";
 	}
 
@@ -749,15 +770,26 @@ void emailMultiTaxInvoices()
 	reissfn = session.getWebApp().getRealPath("rwimg/REISSUANCE.pdf");
 	thefiles.add(reissfn);
 
-	if(DEBUGGING == 1) topeople = DEBUGGING_EMAIL; // debugging, set tester TO addr
+	if(DEBUGGING) topeople = DEBUGGING_EMAIL; // debugging, set tester TO addr
 	subj = "RE: Electronic TAX INVOICES (MULTI)";
 
 	String[] attaxhments = thefiles.toArray(new String[thefiles.size()]);
+
+	if(DEBUGGING)
+	{
+		for(k=0;k<attaxhments.length;k++)
+		{
+			kss += "\nwop: " + attaxhments[k];
+		}
+		debugflag_lbl.setValue(kss);
+	}
 
 	if(attaxhments.length > 0)
 	{
 		if( gmail_sendEmailWithAttachment_2("", GMAIL_rwms_username, GMAIL_rwms_password, GMAIL_rwms_username,
 			topeople, subj, EMAILMSG + invtable, attaxhments, GMAIL_rwms_username) )
+		
+		//if( MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,topeople,subj, EMAILMSG + invtable, attaxhments) )
 		{
 		}
 
@@ -802,6 +834,31 @@ void exportSentoutSummary()
 	newiframe.setSrc(thesrc);
 	newiframe.setParent(expass_div);
 	expasspop.open(sumaryend);
+}
+
+/**
+ * 
+ * @param iwho  [description]
+ * @param imsgb [description]
+ */
+void email_invoicebymsexchange(String iwho, String imsgb)
+{
+	fncm = "RWI_19940-KOTRA_PHARMA.pdf";
+	String[] fnms = { 
+		session.getWebApp().getRealPath(TEMPTAXINVOICE_FOLDER + fncm)
+	};
+
+	subj = "Re: TESTING tax invoice";
+	tmsgb = "testing testing testing";
+
+	MS_sendEmailWithAttachment(SYS_SMTPSERVER,SYS_EMAILUSER,SYS_EMAILPWD,SYS_EMAIL,iwho,subj,tmsgb,fnms);
+
+	alert("shoot...");
+}
+
+void testme()
+{
+	email_invoicebymsexchange("victor@rentwise.com","");
 }
 
 ]]>
@@ -905,7 +962,8 @@ void exportSentoutSummary()
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#4A71A4">
-	<label id="debugflag_lbl" sclass="k9" />
+	<button label="testme" onClick="testme()" visible="${DEBUGGING}" />
+	<label id="debugflag_lbl" sclass="k9" multiline="true" />
 	<separator height="5px" />
 	<hbox>
 		<separator width="5px" />
@@ -961,8 +1019,8 @@ if(useraccessobj.accesslevel >= 9)
 }
 
 ddg = Executions.getCurrent().getParameter("dbg");
-if(ddg != null) DEBUGGING = Integer.parseInt(ddg); // set debugging flag if any
-if(DEBUGGING == 1) debugflag_lbl.setValue("(debugging on)");
+if(ddg != null) DEBUGGING = (Integer.parseInt(ddg) == 1) ? true : false; // set debugging flag if any
+if(DEBUGGING) debugflag_lbl.setValue("(debugging on)");
 
 ]]>
 </zscript>

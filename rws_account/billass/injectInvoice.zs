@@ -1,28 +1,45 @@
 /**
  * Inject invoice into FOCUS6 - knockoff some codes from inject-DO , headers and other house-keeping
+ * Take note of the hard-coded column names in all tables
+ * Knock-up by Victor Wong
+ * 
+ * 	"select @domaxid=Max(VoucherNo)+1 from header with (ReadUnCommitted) " +
+ *	"where VoucherType=" + DO_VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
+ *	"with (ReadUnCommitted) where VoucherType=" + DO_VOUCHERTYPE + ");" +
  */
 
-DO_EXTRAHEADEROFF = "u001b"; // same in 0J0 and OJ1
-DO_EXTRAOFF = "u011b"; // u011c = DO only !!
-DO_VOUCHERTYPE = "3329"; // Rental invoice RWI type same in both 0J0 and 0J1
-FCVOUCHER_PREFIX = "'RW'";
+// Can customized these for other type of voucher, must check against vtypes and custflds
 
-// Inject headers and other things
-/*
-	"select @domaxid=Max(VoucherNo)+1 from header with (ReadUnCommitted) " +
-	"where VoucherType=" + DO_VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
-	"with (ReadUnCommitted) where VoucherType=" + DO_VOUCHERTYPE + ");" +
-*/
+// FCVOUCHER_PREFIX = "'RW'"; // 0J0 only got prefix
+FCVOUCHER_PREFIX = "";
+VOUCHERTYPE = "3329"; // rental-invoice voucher type as defn in vtypes
+EXTRAHEADEROFF_TBL = "u001b"; // rental-invoice extra header details table
+EXTRAOFF_TBL = "u011b"; // rental-invoice extra item details table
+
+/**
+ * Inject rental-invoice header into FOCUS6
+ * @param hdv hold return rec numbers from sql insert
+ * hdv[0] = header.headerid
+ * hdv[1] = EXTRAHEADEROFF_TBL.extraid = voucher header details offset
+ * hdv[3] = the inserted rental-invoice voucher no. eg: RW12345
+ */
 void inject_Invoice_Headers(String[] hdv)
 {
 	kdate = calcFocusDate(kiboo.todayISODateString());
 	lgn = "upload" + Math.round(Math.random() * 100).toString();
 
-	// data.headeroff = header.headerid
-	sqlstm1 = "declare @domaxid varchar(20);" +
+	grabnextno = "declare @domaxid varchar(20);" +
+	"select @domaxid=Max(VoucherNo)+1 from header with (ReadUnCommitted) " +
+ 	"where VoucherType=" + VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
+ 	"with (ReadUnCommitted) where VoucherType=" + VOUCHERTYPE + ");";
+
+	if(TESTING_MODE) grabnextno = "declare @domaxid varchar(20);" +
 	"select @domaxid=" + FCVOUCHER_PREFIX + " + cast( (cast(substring((select Max(VoucherNo) from header with (ReadUnCommitted) " +
-	"where VoucherType=" + DO_VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
-	"with (ReadUnCommitted) where VoucherType=" + DO_VOUCHERTYPE + ")),3,10) as integer)+1) as varchar);" +
+	"where VoucherType=" + VOUCHERTYPE + " and len(VoucherNo) = (select Max(len(VoucherNo)) from header " +
+	"with (ReadUnCommitted) where VoucherType=" + VOUCHERTYPE + ")),3,10) as integer)+1) as varchar);";
+
+	// data.headeroff = header.headerid
+	sqlstm1 = grabnextno +
 
 	"insert into header (" +
 	"id, version, noentries, tnoentries, login, date_, time_," +
@@ -30,7 +47,7 @@ void inject_Invoice_Headers(String[] hdv)
 	"vouchertype, voucherno, approvedby0, approvedby1, approvedby2) values (" +
 	"0x0000, 0x5b, 0, 0, '" + lgn + "', " + kdate + ", 0x0a3b00," +
 	"0x0027, 6208, 0x00," +
-	DO_VOUCHERTYPE + ", @domaxid, 30, 0, 0 );";
+	VOUCHERTYPE + ", @domaxid, 30, 0, 0 );";
 
 	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm1);
 	else sqlhand.rws_gpSqlExecuter(sqlstm1);
@@ -44,138 +61,151 @@ void inject_Invoice_Headers(String[] hdv)
 	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm3);
 	else sqlhand.rws_gpSqlExecuter(sqlstm3);
 
-
-	// data.DO_EXTRAHEADEROFF - u001c.extraid
-	sqlstm4 = "declare @maxid int; set @maxid = (select max(extraid)+1 from " + DO_EXTRAHEADEROFF + "); " +
-	"insert into " + DO_EXTRAHEADEROFF + " (extraid,RemarksYH,CustomerRefYH,ROCNoYH,DORefYH) " +
+	sqlstm4 = "declare @maxid int; set @maxid = (select max(extraid)+1 from " + EXTRAHEADEROFF_TBL + "); " +
+	"insert into " + EXTRAHEADEROFF_TBL + " (extraid,RemarksYH,CustomerRefYH,ROCNoYH,DORefYH) " +
 	"values (@maxid,'" + lgn + "','','','');";
-
-//(extraid,deliverymethodyh,transporteryh,deliveryrefyh,deliverystatusyh,narrationyh,deliveryaddressyh," +
-//"referenceyh,dorefyh) values (@maxid, '', '', '', '', '', '', '', '" + lgn + "');";
 
 	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm4);
 	else sqlhand.rws_gpSqlExecuter(sqlstm4);
 
-	sqlstm5 = "select extraid from " + DO_EXTRAHEADEROFF + " where RemarksYH='" + lgn + "';";
+	sqlstm5 = "select extraid from " + EXTRAHEADEROFF_TBL + " where RemarksYH='" + lgn + "';";
 	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm5) : sqlhand.rws_gpSqlFirstRow(sqlstm5);
 	hdv[1] = r.get("extraid").toString();
 
-	/*
-	sqlstm6 = "update " + DO_EXTRAHEADEROFF + " set RemarksYH='' where extraid=" + hdv[1];
-	if(TESTING_MODE) f30_gpSqlExecuter(sqlstm6);
-	else sqlhand.rws_gpSqlExecuter(sqlstm6);
-	*/
-
-	/* not used for Rental Invoice
-		// data.DO_EXTRAOFF = u011c.extraid
-		sqlstm7 = "declare @maxid int; set @maxid = (select max(extraid)+1 from " + DO_EXTRAOFF + ");" +
-		"insert into " + DO_EXTRAOFF + " (extraid,remarksyh) values (@maxid,'" + lgn + "');";
-
-		if(TESTING_MODE) f30_gpSqlExecuter(sqlstm7);
-		else sqlhand.rws_gpSqlExecuter(sqlstm7);
-
-		sqlstm8 = "select extraid from " + DO_EXTRAOFF + " where remarksyh='" + lgn + "';";
-		r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm8) : sqlhand.rws_gpSqlFirstRow(sqlstm8);
-		hdv[2] = r.get("extraid").toString();
-
-		sqlstm9 = "update " + DO_EXTRAOFF + " set remarksyh='' where extraid=" + hdv[2];
-		if(TESTING_MODE) f30_gpSqlExecuter(sqlstm9);
-		else sqlhand.rws_gpSqlExecuter(sqlstm9);
-	*/
 }
 
 /**
- * [inject_FC6DO description] , TESTING_MODE defn in main-file
- * @param bookno FC6 account-no.
- * @param kpx the asset-tags for stock-name to put into Focus DO
- * @return inserted Focus DO number, error return ""
- * 
- * headvals[0] = headerid, headvals[1] = DO_EXTRAHEADEROFF, headvals[2] = DO_EXTRAOFF, headvals[3] = voucherno
-	*	kk = "headerid=" + headvals[0] + "\nu001c.extraid=" + headvals[1] + "\nu011c.extraid=" + headvals[2] + "\nvoucherno=" + headvals[3];
-	*	debugbox.setValue(kk);
-	*	headerid=116938 u001c.extraid=2754 u011c.extraid=2241 voucherno=5267
-	*	headvals[0] = "116932"; headvals[1] = "2754";	headvals[2] = "2240";	headvals[3] = "5267";
-	*	atgs = "'A0012230','A0015149','A0015223','A0015014','N0001075'";
+ * Inject rental-invoice, uses previous rental-invoice for header-details and items duplication
+ * @param  prev_invoice previous rental-invoice to dup them items
+ * @return              rental-invoice voucher no. or "ERROR" if cannot find previous rental-invoice
  */
-String inject_FC6DO(String bookno, HashMap kpx)
+String inject_RentalInvoice(String prev_invoice)
 {
 	kdate = calcFocusDate(kiboo.todayISODateString());
 	String[] headvals = new String[4];
-	inject_DO_Headers(headvals);
 
-	atgs = "";
-
-	SortedSet keys = new TreeSet(kpx.keySet());
-	for( key : keys)
+	// get extraheaderoff from previous rental-invoice
+	sqlstm = "select extraheaderoff from data where vouchertype=" + VOUCHERTYPE + " and voucherno='" + prev_invoice + "';";
+	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm) : sqlhand.rws_gpSqlFirstRow(sqlstm);
+	
+	if(r != null) // got the previous rental-invoice extraheaderoff
 	{
-		value = kpx.get(key).toString();
-		atgs += "'" + key + "',";
+		prw_extraheaderoff = r.get("extraheaderoff").toString();
+		inject_Invoice_Headers(headvals); // inject rental invoice header
+
+		if(TESTING_MODE) debugbox.setValue(headvals[0] + " :: " + headvals[1] + " :: " + headvals[2] + " :: " + headvals[3]);
+
+		// dup invoice header details from previous invoice
+		sqlstm = "update " + EXTRAHEADEROFF_TBL + " set RemarksYH = i.RemarksYH, CustomerRefYH = i.CustomerRefYH, ROCNoYH = i.ROCNoYH, DORefYH = i.DORefYH," +
+		"ETAYH = i.ETAYH, ETDYH = i.ETDYH, OPSNoteYH = i.OPSNoteYH, PrepaidRentalYH = i.PrepaidRentalYH, RentalPaidYH = i.RentalPaidYH, " +
+		"OrderTypeYH = i.OrderTypeYH, DepositAmtYH = i.DepositAmtYH, DepositRemarksYH = i.DepositRemarksYH, DeliveryToYH = i.DeliveryToYH, " +
+		"InstTypeYH = i.InstTypeYH, LCNoYH = i.LCNoYH, WitnessYH = i.WitnessYH, Signatory1YH = i.Signatory1YH, Designation1YH = i.Designation1YH, " +
+		"Designation2YH = i.Designation2YH, ReservationNoYH = i.ReservationNoYH, LCStatusYH = i.LCStatusYH, DeliveryDtYH = i.DeliveryDtYH, " +
+		"NoofInstallmentYH = i.NoofInstallmentYH, FinancePICYH = i.FinancePICYH, ProjectPICYH = i.ProjectPICYH, ProjectSiteYH = i.ProjectSiteYH " +
+		"from (select RemarksYH,CustomerRefYH,ROCNoYH,DORefYH,ETAYH,ETDYH,OPSNoteYH,PrepaidRentalYH,RentalPaidYH, " +
+		"OrderTypeYH,DepositAmtYH,DepositRemarksYH,DeliveryToYH,InstTypeYH,LCNoYH,WitnessYH,Signatory1YH,Designation1YH, " +
+		"Designation2YH,ReservationNoYH,LCStatusYH,DeliveryDtYH,NoofInstallmentYH,FinancePICYH,ProjectPICYH,ProjectSiteYH " +
+		"from " + EXTRAHEADEROFF_TBL + " where extraid=" + prw_extraheaderoff + ") i where extraid=" + headvals[1];
+
+		if(TESTING_MODE) f30_gpSqlExecuter(sqlstm);
+		else sqlhand.rws_gpSqlExecuter(sqlstm);
+
+		sqlstm2 = "select * from data where vouchertype=" + VOUCHERTYPE + " and voucherno='" + prev_invoice + "';"; // get entries from prev invoice
+		prevdata = (TESTING_MODE) ? f30_gpSqlGetRows(sqlstm2) : sqlhand.rws_gpSqlGetRows(sqlstm2);
+
+		if(prevdata.size() > 0) // got some rec from previous invoice - can work on them
+		{
+			indatasql = "";
+			linecount = 0;
+			for(pd : prevdata)
+			{
+
+				if(pd.get("SalesOff") == null) continue; // continue to next line item
+
+				kksql = "";
+				try { kksql = "select * from indta where salesid=" + pd.get("SalesOff").toString(); } // get prev indta rec
+				catch (Exception e) { alert("tostring1"); }
+
+				p = (TESTING_MODE) ? f30_gpSqlFirstRow(kksql) : sqlhand.rws_gpSqlFirstRow(kksql);
+				if(p != null) // got prev indta rec
+				{
+					kksql = "select max(salesid)+1 as nextsalesid from indta;"; // get next indta.salesid no.
+					n = (TESTING_MODE) ? f30_gpSqlFirstRow(kksql) : sqlhand.rws_gpSqlFirstRow(kksql);
+
+					nextsalesid = "";
+					try {	nextsalesid = n.get("nextsalesid").toString(); } catch (Exception e) { alert("tostring2"); }
+
+					sqlstm3 = "insert into indta (" +
+					"SalesId,Quantity,StockValue,Rate,Gross,Qty2,SubProcess,Unit," +
+					"Input0,Output0,Input1,Output1,Input2,Output2,Input3,Output3,Input4,Output4,Input5,Output5," +
+					"Input6,Output6,Input7,Output7,Input8,Output8,Input9,Output9,Input10,Output10,Input11,Output11," +
+					"Input12,Output12,Input13,Output13,Input14,Output14,Input15,Output15,Input16,Output16,Input17,Output17," +
+					"Input18,Output18,Input19,Output19) values (" +
+					nextsalesid + "," + p.get("Quantity") + "," + p.get("StockValue") + "," + p.get("Rate") + "," + p.get("Gross") + "," + p.get("Qty2") + "," + p.get("SubProcess") + ",0x00," +
+					p.get("Input0") + "," + p.get("Output0") + "," + p.get("Input1") + "," + p.get("Output1") + "," + p.get("Input2") + "," + p.get("Output2") + "," +
+					p.get("Input3") + "," + p.get("Output3") + "," + p.get("Input4") + "," + p.get("Output4") + "," + p.get("Input5") + "," + p.get("Output5") + "," +
+					p.get("Input6") + "," + p.get("Output6") + "," + p.get("Input7") + "," + p.get("Output7") + "," + p.get("Input8") + "," + p.get("Output8") + "," +
+					p.get("Input9") + "," + p.get("Output9") + "," + p.get("Input10") + "," + p.get("Output10") + "," + p.get("Input11") + "," + p.get("Output11") + "," +
+					p.get("Input12") + "," + p.get("Output12") + "," + p.get("Input13") + "," + p.get("Output13") + "," + p.get("Input14") + "," + p.get("Output14") + "," +
+					p.get("Input15") + "," + p.get("Output15") + "," + p.get("Input16") + "," + p.get("Output16") + "," + p.get("Input17") + "," + p.get("Output17") + "," +
+					p.get("Input18") + "," + p.get("Output18") + "," + p.get("Input19") + "," + p.get("Output19") + ");";
+
+					// insert new indta(data.salesoff) rec by copying from prev invoice indta
+					if(TESTING_MODE) f30_gpSqlExecuter(sqlstm3);
+					else sqlhand.rws_gpSqlExecuter(sqlstm3);
+					
+					nextextraoff = "0";
+					kksql = "select * from " + EXTRAOFF_TBL + " where extraid=" + pd.get("ExtraOff");
+					er = (TESTING_MODE) ? f30_gpSqlFirstRow(kksql) : sqlhand.rws_gpSqlFirstRow(kksql);
+					if(er != null)
+					{
+						kksql = "select max(extraid)+1 as nextextraid from " + EXTRAOFF_TBL;
+						nid = (TESTING_MODE) ? f30_gpSqlFirstRow(kksql) : sqlhand.rws_gpSqlFirstRow(kksql);
+
+						nextextraoff = "";
+						try { nextextraoff = nid.get("nextextraid").toString(); } catch (Exception e) { alert("tostring3"); }
+
+						// insert new data.extraoff record with data copied from prev invoice, rental-invoice = u011b
+						sqlstm4 = "insert into " + EXTRAOFF_TBL + " (ExtraId,Spec1YH,Spec2YH,ContractStartYH,DiemStartYH,SplRemarksYH,ContractEndYH,TotalDiffDaysYH,DaysYH) values (" +
+						nextextraoff + ",'" + er.get("Spec1YH") + "','" + er.get("Spec2YH") + "'," + er.get("ContractStartYH") + ",'" + er.get("DiemStartYH") + "','" +
+						er.get("SplRemarksYH") + "'," + er.get("ContractEndYH") + "," + er.get("TotalDiffDaysYH") + "," + er.get("DaysYH") + ");";
+
+						if(TESTING_MODE) f30_gpSqlExecuter(sqlstm4);
+						else sqlhand.rws_gpSqlExecuter(sqlstm4);
+					}
+
+					// dup invoice items from previous invoice
+					insql = "declare @dmaxid int; set @dmaxid = (select max(bodyid)+1 from data); " +
+					"insert into data (" +
+					"bodyid, date_, vouchertype, voucherno, bookno, productcode," +
+					"tags0, tags1, tags2, tags3, amount1, amount2, originalamount, flags, billwiseoff, links0, tags6," +
+					"headeroff, extraoff, extraheaderoff, salesoff," +
+					"code, duedate, sizeofrec, links1, links2, links3, linktoprbatch, exchgrate, tags4, tags5, tags7, " +
+					"binnoentries, reserveno, reservetype) values (" +
+					"@dmaxid," + kdate + "," + VOUCHERTYPE + ",'" + headvals[3] + "'," + pd.get("BookNo") + "," + pd.get("ProductCode") + "," +
+					pd.get("Tags0") + "," + pd.get("Tags1") + "," + pd.get("Tags2") + "," + pd.get("Tags3") + "," +
+					pd.get("Amount1") + "," + pd.get("Amount2") + "," + pd.get("OriginalAmount") + ",2622464,0,0," + pd.get("Tags6") + "," +
+					headvals[0] + "," + nextextraoff + "," + headvals[1] + "," + nextsalesid + "," +
+					pd.get("Code") + "," + kdate + "," + pd.get("SizeofRec") + "," + pd.get("Links1") + "," + pd.get("Links2") + "," +
+					pd.get("Links3") + "," + pd.get("LinkToPrBatch") + "," + pd.get("ExchgRate") + "," +
+					pd.get("Tags4") + "," + pd.get("Tags5") + "," + pd.get("Tags7") + "," +
+					pd.get("BinNoEntries") + "," + pd.get("ReserveNo") + "," + pd.get("ReserveType") + ");";
+
+					// insert new invoice row using headers returned by inject_Invoice_Headers and salesoff from newly inserted
+					if(TESTING_MODE) f30_gpSqlExecuter(insql);
+					else sqlhand.rws_gpSqlExecuter(insql);
+
+					linecount++;
+				}
+			}
+
+			updsql = "update header set noentries=" + linecount.toString() + ", tnoentries=" + linecount.toString() +
+			" where headerid=" + headvals[0] + ";"; // update no. lines in header
+
+			if(TESTING_MODE) f30_gpSqlExecuter(updsql);
+			else sqlhand.rws_gpSqlExecuter(updsql);
+		}
+		return headvals[3]; // FOCUS rental-invoice voucher no. Note the index
 	}
-	try { atgs = atgs.substring(0,atgs.length()-1); } catch (Exception e) {}
-
-	if(atgs.equals(""))
-	{
-		guihand.showMessageBox("ERR: no asset-tag or inventory-item in pick-list");
-		return "";
-	}
-
-	mainsqlstm = "declare @dmaxid int; declare @imaxid int; ";
-
-	sqlstm1 = "select m.masterid as pcode, p.masterid as tags6v, m.code2 as assettag from mr001 AS m INNER JOIN " +
-	"dbo.u0001 AS u ON m.Eoff = u.ExtraId INNER JOIN dbo.mr008 AS p ON u.ProductNameYH = p.MasterId " +
-	"where m.code2 in (" + atgs + ");";
-
-	rx = (TESTING_MODE) ? f30_gpSqlGetRows(sqlstm1) : sqlhand.rws_gpSqlGetRows(sqlstm1);
-
-	linecount = 0;
-
-	if(TESTING_MODE)
-	{
-		// 1251 = bookno (chg to use parameter bookno), 1078=code
-		bookno = "2476"; // techno craft computer in F5012
-	}
-
-	for(d : rx)
-	{
-		prodcode = (d.get("pcode") == null) ? "0" : d.get("pcode").toString();
-		tags6 = (d.get("tags6v") == null) ? "0" : d.get("tags6v").toString();
-
-		itemqty = -1;
-		try { itemqty = kpx.get(d.get("assettag")) * -1; } catch (Exception e) { itemqty = -1; }
-
-		// data.salesoff = indta.salesid
-		mainsqlstm += "set @imaxid = (select max(salesid)+1 from indta); " +
-		"insert into indta (salesid,quantity,stockvalue,rate,gross,qty2,subprocess,unit," +
-		"input0,output0,input1,output1,input2,output2,input3,output3," +
-		"input4,output4,input5,output5,input6,output6,input7,output7," +
-		"input8,output8,input9,output9) values ( @imaxid," + itemqty.toString() + ",0,0,0," + itemqty.toString() + ",0,0x00, " +
-		"0,0,0,0,0,0,0,0," +
-		"0,0,0,0,0,0,0,0," +
-		"0,0,0,0);";
-
-		mainsqlstm += "set @dmaxid = (select max(bodyid)+1 from data); " +
-		"insert into data (" +
-		"bodyid, date_, vouchertype, voucherno, bookno, productcode," +
-		"tags0, tags1, tags2, tags3, amount1, amount2, originalamount, flags, billwiseoff, links0, tags6," +
-		"headeroff, extraoff, extraheaderoff, salesoff," +
-		"code, duedate, sizeofrec, links1, links2, links3, linktoprbatch, exchgrate, tags4, tags5, tags7, " +
-		"binnoentries, reserveno, reservetype) values (" +
-		"@dmaxid, " + kdate + "," + DO_VOUCHERTYPE + ", '" + headvals[3] +"', " + bookno + ", " + prodcode + "," +
-		"3, 3, 0, 9, 0, 0, 0, 2622464, 0, 0, " + tags6 + ", " +
-		// DO-injector: headvals[0] + "," + headvals[2] + "," + headvals[1] + ",@imaxid," +
-		// headvals[2] = DO_EXTRAOFF, not used in Rental Invoice
-		headvals[0] + ",0," + headvals[1] + ",@imaxid," +
-		"1078," + kdate + ",240, 0, 0, 0, 0, 1, 0, 0, 0," +
-		"0, 0, 0);";
-
-		linecount++;
-	}
-
-	mainsqlstm += "update header set noentries=" + linecount.toString() + ", tnoentries=" + linecount.toString() +
-	" where headerid=" + headvals[0] + ";"; // update no. lines in header
-
-	if(TESTING_MODE) f30_gpSqlExecuter(mainsqlstm);
-	else sqlhand.rws_gpSqlExecuter(mainsqlstm);
-
-	return headvals[3]; // FOCUS DO voucher no. return by inject_DO_Headers() . Note the index
+	return "ERROR";
 }

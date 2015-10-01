@@ -39,7 +39,7 @@ boolean impFC6_SOROC_items(String ivn, String ijob, int itype)
 		rpunit += d.get("perunit").toString() + "::";
 	}
 
-	sqlstm = "update rw_jobs set items='" + itms + "', qtys='" + qtys + "', rental_periods='" + 
+	sqlstm = "update rw_jobs set items='" + kiboo.replaceSingleQuotes(itms) + "', qtys='" + qtys + "', rental_periods='" + 
 	rperiod + "', rent_perunits='" + rpunit + "', colors='' where origid=" + ijob;
 
 	sqlhand.gpSqlExecuter(sqlstm);

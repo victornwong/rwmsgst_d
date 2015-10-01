@@ -7,12 +7,7 @@
 import org.victor.*;
 
 // Slots grid column posisi
-G_TICKER = 0;
-G_SLOT_NO = 1;
-G_NEXT_BILL = 2;
-G_INV_NO = 3;
-G_INV_DATE = 4;
-G_REMARKS = 5;
+G_TICKER = 0; G_SLOT_NO = 1; G_NEXT_BILL = 2; G_INV_NO = 3; G_INV_DATE = 4; G_REMARKS = 5;
 G_PDFFILENAME = 6;
 
 /**
@@ -49,10 +44,69 @@ void slotsFunc(String itype)
 		iterateSlots(slot_rows,3);
 	}
 
+	if(itype.equals("clearslot_b")) // clear slot details ONLY
+	{
+		iterateSlots(slot_rows,4);
+	}
+
 	if(refresh)
 	{
 		refreshSlot_Num();
 	}
+}
+
+/**
+ * Abit hardcoded to iterate over grid-rows and perform some func
+ * @param irows the grid ROWS id
+ * @param itype what func
+ */
+void iterateSlots(Object irows, int itype)
+{
+	cds = irows.getChildren().toArray();
+	ks = "";
+	for(i=0; i<cds.length; i++)
+	{
+		cx = cds[i].getChildren().toArray();
+
+		if(itype == 2) // checkboxes toggler
+		{
+			cx[G_TICKER].setChecked( (cx[G_TICKER].isChecked()) ? false : true);
+		}
+		else
+		{
+			if(cx[G_TICKER].isChecked())
+			{
+				switch(itype)
+				{
+					case 1: // remove ticked slots
+						inv = cx[G_INV_NO].getValue().trim();
+						// check if there's already invoice, not allow to remove
+						if(inv.equals("")) cds[i].setParent(null);
+						else ks += "Slot: " + cx[G_SLOT_NO].getValue() + " has InvoiceNo: " + inv + ", cannot remove\n";
+						break;
+
+					case 3: // view PDF invoice if any
+						fncm = cx[G_PDFFILENAME].getValue(); // tax-invoice pdf filename
+						if(!fncm.equals(""))
+						{
+							//outfn = session.getWebApp().getRealPath(TEMPFILEFOLDER + fncm);
+							theparam = "pfn=/taxinvoices/" + fncm;
+							uniqid = kiboo.makeRandomId("lvf");
+							guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/viewfile_Local_v1.zul", uniqid, theparam, useraccessobj);
+						}
+						break;
+
+					case 4: // clear slot details ONLY starting from invoice-no. onwards
+						for(k=G_INV_NO; k<G_PDFFILENAME+1; k++)
+						{
+							try { cx[k].setValue(""); } catch (Exception e) {}
+						}
+						break;
+				}
+			}
+		}
+	}
+	if(!ks.equals("")) guihand.showMessageBox(ks);
 }
 
 /**
@@ -82,69 +136,34 @@ void saveSlots()
 /**
  * Update input fields into slot's fields. Called in slotsedit_pop button
  * glob_sel_slot_obj set in slotdclik listener
+ * 
+ * @param itype 1=update all, 2=upd only next-billing-date
  */
-void updSlotDetails()
+void updSlotDetails(int itype)
 {
 	if(glob_sel_slot_obj == null) return;
-	kd = kiboo.dtf2.format(i_notif_date_dt.getValue());
-	kr = kiboo.replaceSingleQuotes(i_remarks_tb.getValue().trim());
-
 	hx = glob_sel_slot_obj.getChildren().toArray();
-	hx[G_NEXT_BILL].setValue(kd);
-	hx[G_REMARKS].setValue(kr);
+	kd = kiboo.dtf2.format(i_notif_date_dt.getValue());
 
-	// when required, can allow user to modif invoice no and date grabbed from FC6
-	// unhide rows in popup /*
-	inv = kiboo.replaceSingleQuotes(i_fc_invoice_tb.getValue().trim());
-	hx[G_INV_NO].setValue(inv);
-	invd = kiboo.dtf2.format(i_invoice_date_dt.getValue());
-	hx[G_INV_DATE].setValue(invd);
-}
-
-/**
- * Abit hardcoded to iterate over grid-rows and perform some func
- * @param irows the grid ROWS id
- * @param itype what func
- */
-void iterateSlots(Object irows, int itype)
-{
-	cds = irows.getChildren().toArray();
-	ks = "";
-	for(i=0; i<cds.length; i++)
+	switch(itype)
 	{
-		cx = cds[i].getChildren().toArray();
+		case 1: // update all
+			kr = kiboo.replaceSingleQuotes(i_remarks_tb.getValue().trim());
+			hx[G_NEXT_BILL].setValue(kd);
+			hx[G_REMARKS].setValue(kr);
 
-		switch(itype)
-		{
-			case 1: // remove ticked slots
-				if(cx[G_TICKER].isChecked())
-				{
-					inv = cx[G_INV_NO].getValue().trim();
-					// check if there's already invoice, not allow to remove
-					if(inv.equals("")) cds[i].setParent(null);
-					else ks += "Slot: " + cx[G_SLOT_NO].getValue() + " has InvoiceNo: " + inv + ", cannot remove\n";
-				}
-				break;
+			// when required, can allow user to modif invoice no and date grabbed from FC6
+			// unhide rows in popup
+			inv = kiboo.replaceSingleQuotes(i_fc_invoice_tb.getValue().trim());
+			hx[G_INV_NO].setValue(inv);
+			invd = kiboo.dtf2.format(i_invoice_date_dt.getValue());
+			hx[G_INV_DATE].setValue(invd);
+			break;
 
-			case 2: // untick checkboxes
-				cx[G_TICKER].setChecked( (cx[G_TICKER].isChecked()) ? false : true);
-				break;
-
-			case 3: // view PDF invoice if any
-				if(cx[G_TICKER].isChecked())
-				{
-					fncm = cx[G_PDFFILENAME].getValue(); // tax-invoice pdf filename
-					if(!fncm.equals(""))
-					{
-						//outfn = session.getWebApp().getRealPath(TEMPFILEFOLDER + fncm);
-						theparam = "pfn=/taxinvoices/" + fncm;
-						uniqid = kiboo.makeRandomId("lvf");
-						guihand.globalActivateWindow(mainPlayground,"miscwindows","documents/viewfile_Local_v1.zul", uniqid, theparam, useraccessobj);
-					}
-				}
-		}
+		case 2: // update next-billing date notif
+			hx[G_NEXT_BILL].setValue(kd);
+			break;
 	}
-	if(!ks.equals("")) guihand.showMessageBox(ks);
 }
 
 /**
@@ -154,12 +173,40 @@ class slotdclik implements org.zkoss.zk.ui.event.EventListener
 {
 	public void onEvent(Event event) throws UiException
 	{
-		glob_sel_slot_obj = event.getTarget();
-		slotsedit_pop.open(glob_sel_slot_obj);
-		//alert(seli.getChildren());
+		isel = event.getTarget();
+		try
+		{
+			invoiceSlot_dclick_callback(isel);
+		} catch (Exception e) {}
 	}
 }
 slotdclicker = new slotdclik(); // pre-def global event listener
+
+/**
+ * Call-back from slot d-clicker - can be customized for other modu
+ * @param isel [description]
+ */
+void invoiceSlot_dclick_callback(Object isel)
+{
+	glob_sel_slot_obj = isel;
+	cx = isel.getChildren().toArray();
+	
+	nrd = cx[G_NEXT_BILL].getValue().trim();
+	if(!nrd.equals(""))
+	{
+		i_notif_date_dt.setValue( kiboo.dtf2.parse(nrd) );
+	}
+
+	i_fc_invoice_tb.setValue(cx[G_INV_NO].getValue().trim()); // textboxes in popup
+	ivd = cx[G_INV_DATE].getValue().trim();
+	if(!ivd.equals(""))
+	{
+		i_invoice_date_dt.setValue( kiboo.dtf2.parse(ivd) );
+	}
+
+	i_remarks_tb.setValue(cx[G_REMARKS].getValue().trim());
+	slotsedit_pop.open(glob_sel_slot_obj);
+}
 
 /** 
  * Insert blank slots/rows into grid. Hardcoded according to required columns
@@ -215,8 +262,77 @@ void refreshSlot_Num()
  */
 void checkCreateSlotsGrid(Div iholder, String islotid)
 {
+	/*
 	String[] colhed = { "","No.","Next bill","Inv No","Inv Date","Remarks","PDF","Emailed","Resend" };
 	String[] colwds = { "20px", "30px", "80px", "100px", "80px", "", "", "80px", "80px" };
+	*/
+	String[] colhed = { "","No.","Next bill","Inv No","Inv Date","Remarks" };
+	String[] colwds = { "20px", "30px", "80px", "100px", "80px", "" };
+
 	ngfun.checkMakeGrid(colwds, colhed, iholder, islotid, SLOTS_GRID_ROWS_ID, "", "800px", true);
+}
+
+/**
+ * Insert string to next empty slot - can cater for other modu
+ * @param irows GRID ROWS
+ * @param icol  which column to check and update
+ * @param iwhat string to put into empty slot
+ */
+Object insertIntoNextEmptySlot(Object irows, int icol, String iwhat)
+{
+	cx = null;
+	cds = irows.getChildren().toArray();
+	for(i=0; i<cds.length; i++)
+	{
+		cx = cds[i].getChildren().toArray();
+		kk = cx[icol].getValue().trim();
+		if(kk.equals("")) // found empty slot
+		{
+			cx[icol].setValue(iwhat);
+			break;
+		}
+	}
+	return cx;
+}
+
+String getSlotValue_byEmptySlot(Object irows, int icheckcol, int iretcol)
+{
+	cx = null;
+	retval = "";
+	cds = irows.getChildren().toArray();
+	for(i=0; i<cds.length; i++)
+	{
+		cx = cds[i].getChildren().toArray();
+		kk = cx[icheckcol].getValue().trim();
+		if(kk.equals("")) // found empty slot
+		{
+			retval = cx[iretcol].getValue();
+			break;
+		}
+	}
+	return retval;
+}
+
+/**
+ * Get last lastest rental-invoice in the slots - sorted descending
+ */
+String getLastRentalInvoice_inslot()
+{
+	retval = "";
+	try
+	{
+		cds = slot_rows.getChildren().toArray();
+		ArrayList inva = new ArrayList();
+		for(i=0; i<cds.length; i++)
+		{
+			cx = cds[i].getChildren().toArray();
+			inv = cx[G_INV_NO].getValue().trim();
+			if(!inv.equals("")) inva.add(inv);
+		}
+		Collections.sort(inva);
+		Collections.reverse(inva);
+		retval = inva.get(0);
+	} catch (Exception e) {}
+	return retval;
 }
 

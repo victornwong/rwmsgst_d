@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Sales/Marketing Activities";
-MYVERSION = "v0.1.7";
+MYVERSION = "v0.1.8";
 MYPANEL = "salcolcla";
 /**
  * @author Victor Wong
@@ -28,6 +28,7 @@ MYPANEL = "salcolcla";
  * 03/06/2015: Tham req to show Customer-grading on screen. Add button to send notif email when grading done
  * 26/06/2015: Mandy req to add customer-grade into dump-list Excel
  * 21/07/2015: remove "Go check" email notif by James request
+ * 28/09/2015: Tham req - add customer-grading and etc in dumb-list
  */
 import java.util.*;
 import java.text.*;
@@ -348,7 +349,7 @@ void sendNotifEmail_aftergrading(String iwhat)
 <style src="/real-world.css" />
 
 <div width="1200px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#ea7724">
 
 <div sclass="shadowbox" style="background:#2e3436;" >
@@ -483,7 +484,7 @@ if(sechand.allowedUser(useraccessobj.username,"CAN_UPDATE_GRADE"))
 	notifaftergrade_b.setDisabled(false);
 }
 
-if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james")) // 10/03/2014
+if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james") || useraccessobj.username.equals("tham")) // 10/03/2014. 28/09/2015: add Tham KL
 {
 	expdump_b.setDisabled(false);
 }

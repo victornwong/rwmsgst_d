@@ -196,23 +196,8 @@ void doregex(String istring, String ipattern)
 	// "Issue To(.*?)PO No"
 	Pattern pattern = Pattern.compile(ipattern);
 	Matcher matcher = pattern.matcher(istring);
-	
-	if(matcher.find())
-	{
-		resul.setValue(resul.getValue() + "\n" + matcher.group(1).trim());
-	}
-	else
-		resul.setValue("Nada...");
-}
-
-int calcFocusDate(String dstr)
-{
-	java.util.Calendar thedate = Calendar.getInstance();
-	thedate.setTime(GlobalDefs.dtf2.parse(dstr));
-	// ((2014-1950)*416) + ((9*32)+1) + (18 - 1);
-	retval = ((thedate.get(Calendar.YEAR)-1950)*416) + ((thedate.get(Calendar.MONTH)*32)+1) + (thedate.get(Calendar.DAY_OF_MONTH)-1);
-	alert(thedate);
-	return retval;
+	if(matcher.find()) resul.setValue(resul.getValue() + "\n" + matcher.group(1).trim());
+	else resul.setValue("Nada...");
 }
 
 void procInvoicePDF()
@@ -282,9 +267,15 @@ void relodIrframe()
 	if(ifraholder.getFellowIfAny("thingthong") != null) thingthong.setParent(null);
 	kk = new Iframe(); kk.setId("thingthong");
 	//kk.setSrc("http://52.74.172.88:8080/rlm/rlm/outboundReq_v1.zul");
-	kk.setSrc("http://mcpm.biz.tm:8080/rlm/rlm/workOrderMan_v1.zul");
-	kk.setStyle("width:99%;height:600px");
+	kk.setSrc("http://mcpm.biz.tm:8080/rlm");
+	kk.setStyle("width:99%;height:1000px");
 	kk.setParent(ifraholder);
+}
+
+void testme()
+{
+	k = sqlhand.rws_gpSqlFirstRow("select top 1 * from data");
+	alert(k);
 }
 
 ]]>
@@ -292,10 +283,12 @@ void relodIrframe()
 
 <?component name="tipcolor" macroURI="/macros/macrocomp1.zul" ?>
 
-<div width="1500px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<div width="1400px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#094D7F">
 
+<tipcolor words="test macro" bstyle="background:#3FADC5" />
+<button label="test me" onClick="testme()" />
 <button label="Billing checker - TESTING" onClick="relodIrframe()" />
 <div id="ifraholder"  />
 
@@ -321,9 +314,7 @@ class divdropp implements org.zkoss.zk.ui.event.EventListener
 */
 
 /*
-
 <button label="Proc pdf invoice" onClick="procInvoicePDF()" />
-<separator height="5px" />
 
 <grid width="600px">
 	<rows>
@@ -344,12 +335,6 @@ class divdropp implements org.zkoss.zk.ui.event.EventListener
 		</row>
 	</rows>
 </grid>
-
-
-<!--
-<textbox id="inputdate" />
-<button label="Parse date" onClick="calcFocusDate(inputdate.getValue())" />
--->
  
  <!--
 <timeline height="300px" width="100%">
@@ -366,14 +351,10 @@ class divdropp implements org.zkoss.zk.ui.event.EventListener
 <!--
 <image id="butt" src="../rwimg/button.png" draggable="true" onDrag="showdropme()" />
 <button label="testDBF" onClick="testDBF()" />
-
 <separator height="3px" />
-
 <div id="frogholder" droppable="true" />
 -->
-<div id="externalworkbox" />
 */
-
 
 ]]>
 </zscript>
