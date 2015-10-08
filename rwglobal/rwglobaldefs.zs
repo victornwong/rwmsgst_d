@@ -7,6 +7,8 @@ import org.zkoss.zk.ui.*;
 Global vars and defs for Rentwise Sdn Bhd
 */
 
+PANEL_WIDTH = "1200px";
+
 // HARDCODED for now -- TODO move into lookup for easier modi
 SYS_SMTPSERVER = "192.168.100.15";
 SYS_EMAIL = "notification@rentwise.com";

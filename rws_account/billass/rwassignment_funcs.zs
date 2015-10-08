@@ -303,6 +303,7 @@ void showAssignmentJuggler()
 
 	r = sqlhand.gpSqlGetRows(sqlstm);
 	if(r.size() == 0) return;
+
 	newlb.setRows(21); newlb.setMold("paging");
 	newlb.setMultiple(true); newlb.setCheckmark(true);
 	newlb.addEventListener("onSelect", asgnCliker);
@@ -313,7 +314,7 @@ void showAssignmentJuggler()
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);
 		sty = "";
-		if(d.get("assigned")) sty = "font-size:9px;background:#3DB9DB";
+		//try { if(d.get("assigned")) sty = "font-size:9px;background:#3DB9DB"; } catch (Exception e) {}
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false",sty);
 		kabom.clear();
 	}

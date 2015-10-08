@@ -867,7 +867,7 @@ void testme()
 <popup id="adminpop">
 	<div sclass="shadowbox" style="background:#D52121">
 		<vbox>
-
+			<button label="Send via MSEXchange" sclass="k9" onClick="testme()" />
 		</vbox>
 	</div>
 </popup>
@@ -954,15 +954,15 @@ void testme()
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
 	{
-	border: none; overflow: hidden; zoom: 1;
-	border-top: none; border-left: none; border-right: none; border-bottom: none;
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
 	}
 </style>
 
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#4A71A4">
-	<button label="testme" onClick="testme()" visible="${DEBUGGING}" />
+	<!-- <button label="testme" onClick="testme()" visible="${DEBUGGING}" /> -->
 	<label id="debugflag_lbl" sclass="k9" multiline="true" />
 	<separator height="5px" />
 	<hbox>
@@ -1014,7 +1014,7 @@ if(useraccessobj.username.equals("mahes"))
 
 if(useraccessobj.accesslevel >= 9)
 {
-	//adminbutt.setVisible(true);
+	adminbutt.setVisible(true);
 	admdelete_rec.setVisible(true);
 }
 

@@ -251,7 +251,7 @@ void doFunc(Object iwhat)
 
 	if(itype.equals("shortinventory_b"))
 	{
-		msgtext = "Bulum lagi..kena pakai DO le";
+		//msgtext = "Bulum lagi..kena pakai DO le";
 	}
 
 	if(itype.equals("confirmcommit_b")) // really commit BOM
@@ -539,7 +539,7 @@ void mpfFunc(String itype)
 		</hbox>
 		<label id="selectcustid" visible="false" />
 	</div>
-</popup> <!-- ENDOF pickcustomer_popup -->
+</popup>
 
 <popup id="impERG_pop">
 	<div sclass="shadowbox" style="background:#611C20;" width="450px">
@@ -583,47 +583,47 @@ void mpfFunc(String itype)
 </popup>
 
 <popup id="bommpfpop">
-<div sclass="shadowbox" style="background:#611C20;">
-	<grid>
-		<rows>
-			<row spans="3">
-				<label value="Others / Remarks" sclass="k9" />
-			</row>
-			<row spans="3">
-				<textbox id="mpf_remarks" multiline="true" width="350px" height="60px" sclass="k9" />
-			</row>
-			<row spans="3">
-				<button id="mpf_others_b" label="Update others/remarks" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-			<row>
-				<label value="Grade" sclass="k9mo" />
-				<listbox id="mpf_grade" mold="select" sclass="k9" />
-				<button id="mpf_grade_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-			<row>
-				<label value="Optical" sclass="k9mo" />
-				<listbox id="mpf_optical" mold="select" sclass="k9" />
-				<button id="mpf_optical_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-			<row>
-				<label value="Webcam" sclass="k9mo" />
-				<listbox id="mpf_webcam" mold="select" sclass="k9" />
-				<button id="mpf_webcam_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-			<row>
-				<label value="Cardreader" sclass="k9mo" />
-				<listbox id="mpf_cardreader" mold="select" sclass="k9" />
-				<button id="mpf_cardreader_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-			<row>
-				<label value="Bluetooth" sclass="k9mo" />
-				<listbox id="mpf_bluetooth" mold="select" sclass="k9" />
-				<button id="mpf_bluetooth_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
-			</row>
-		</rows>
-	</grid>
-	<button id="mpf_updateall_b" label="UPDATE ALL" style="font-size:14px;font-weight:bold" onClick="mpfFunc(self.getId())" />
-</div>
+	<div sclass="shadowbox" style="background:#611C20;">
+		<grid>
+			<rows>
+				<row spans="3">
+					<label value="Others / Remarks" sclass="k9" />
+				</row>
+				<row spans="3">
+					<textbox id="mpf_remarks" multiline="true" width="350px" height="60px" sclass="k9" />
+				</row>
+				<row spans="3">
+					<button id="mpf_others_b" label="Update others/remarks" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row>
+					<label value="Grade" sclass="k9mo" />
+					<listbox id="mpf_grade" mold="select" sclass="k9" />
+					<button id="mpf_grade_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row>
+					<label value="Optical" sclass="k9mo" />
+					<listbox id="mpf_optical" mold="select" sclass="k9" />
+					<button id="mpf_optical_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row>
+					<label value="Webcam" sclass="k9mo" />
+					<listbox id="mpf_webcam" mold="select" sclass="k9" />
+					<button id="mpf_webcam_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row>
+					<label value="Cardreader" sclass="k9mo" />
+					<listbox id="mpf_cardreader" mold="select" sclass="k9" />
+					<button id="mpf_cardreader_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+				<row>
+					<label value="Bluetooth" sclass="k9mo" />
+					<listbox id="mpf_bluetooth" mold="select" sclass="k9" />
+					<button id="mpf_bluetooth_b" label="Chg" sclass="k9" onClick="mpfFunc(self.getId())" />
+				</row>
+			</rows>
+		</grid>
+		<button id="mpf_updateall_b" label="UPDATE ALL" style="font-size:14px;font-weight:bold" onClick="mpfFunc(self.getId())" />
+	</div>
 </popup>
 
 <popup id="updatefiledesc_popup"> <!-- update file description popup -->
@@ -664,8 +664,8 @@ void mpfFunc(String itype)
 
 <style src="/real-world.css" />
 
-<div width="1200px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<div width="${PANEL_WIDTH}">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#69644C">
 
 	<div sclass="shadowbox" style="background:#324544">

@@ -446,8 +446,8 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 <![CDATA[
 
 asgnformthing = dynamicForm(asgnmetaform_holder, "asgnmetaform", "36");
-
 implcform = dynamicForm(implcdetholder, "implc_metagrid", "35");
+
 r_bookno.setVisible(false); // hide
 
 showAssignmentJuggler(); // show assignments juggler list

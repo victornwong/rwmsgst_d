@@ -10,16 +10,14 @@
 MYTITLE = "PROD Jobsheet";
 MYVERSION = "v0.1.1";
 MYPANEL = "jobsheetpanel";
-/*
-<zscript src="../rws_account/jobMaker_funcs.zs" />
-@Title Job sheet thing for production
-@Author Victor Wong
-@Since 27/08/2014
-
-@Notes
-07/08/2015: add button for Production to receive picked items for jobs - req by Satish/Navin
-*/
-
+/**
+ * <zscript src="../rws_account/jobMaker_funcs.zs" />
+ * Job sheet thing for production
+ * @author Victor Wong
+ * @since 27/08/2014
+ *
+ * 07/08/2015: add button for Production to receive picked items for jobs - req by Satish/Navin
+ */
 import java.util.*;
 import java.text.*;
 import java.io.*;
@@ -40,7 +38,9 @@ HashMap pl_itemtypes = new HashMap();
 glob_sel_job = glob_sel_jobsheet = glob_sel_jstat = glob_sel_picklist = "";
 last_joblist_type = 0;
 
-listjobs_extrasql = ""; // set by other modu used in jobsheet_funcs.showJobs()
+// show jobs that're committed and approved ONLY - "and rj.status='COMMIT' and rj.approve=1"
+// 07/10/2015: remove this check for testing
+listjobs_extrasql = ""; // jobsheet_funcs.showJobs() to select only approve jobs or everything
 reqitems_grid_type = 1; // prod-side, req-items grid type - no asset-tags colm
 checkitems_doubleclicker = null;
 
@@ -192,13 +192,12 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 
 <style src="/real-world.css" />
 
-<div width="1200px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<div width="${PANEL_WIDTH}">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#516182">
-
+	<label id="debug" multiline="true" style="color:#ffffff" />
 	<label id="saved_label" value="SAVED.." style="color:#ffffff;text-decoration:blink;font-weight:bold" visible="false" />
 	<button visible="false" id="ji_calc_b" label="Calc" sclass="k9" onClick="jobItems(self)" />
-
 	<hbox style="padding:3px">
 		<label value="Start date" sclass="k9b" />
 		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
@@ -211,7 +210,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 		<textbox id="picklist_tb" width="50px" sclass="k9" visible="false" />
 		<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" onClick="adminPop.open(self)" visible="false" />
 	</hbox>
-
+	<separator height="3px" />
 	<div id="jobs_holder" />
 	<separator height="3px" />
 
@@ -270,8 +269,6 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 			</vbox>
 		</hbox>
 	</vbox>
-
-	<label id="debug" multiline="true" style="color:#ffffff" />
 	<div id="winsholder" visible="false" />
 
 <zscript>
@@ -281,7 +278,7 @@ void pl_DoFunc(String itype) // pick-list functions dispenser
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("2688");
+	jobid_tb.setValue("2745");
 }
 
 ]]>

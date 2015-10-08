@@ -13,27 +13,20 @@ void checkMakeItemsGrid(Div iholder, String igid, String irowsid)
 
 	if(oldg == null) // make new grid if none
 	{
-		igrd = new Grid();
-		igrd.setId(igid);
-		//igrd.setWidth("800px");
-
+		igrd = new Grid(); igrd.setId(igid); //igrd.setWidth("800px");
 		icols = new org.zkoss.zul.Columns();
 		for(i=0;i<colws.length;i++)
 		{
 			ico0 = new org.zkoss.zul.Column();
-			ico0.setWidth(colws[i]);
-			ico0.setLabel(colls[i]);
+			ico0.setWidth(colws[i]); ico0.setLabel(colls[i]);
 			if(i > 1) ico0.setAlign("center");
 			ico0.setStyle("background:#97b83a");
 			ico0.setParent(icols);
 		}
 
 		icols.setParent(igrd);
-
-		irows = new org.zkoss.zul.Rows();
-		irows.setId(irowsid);
-		irows.setParent(igrd);
-		igrd.setParent(iholder);
+		irows = new org.zkoss.zul.Rows(); irows.setId(irowsid);
+		irows.setParent(igrd); igrd.setParent(iholder);
 	}
 }
 
@@ -57,17 +50,17 @@ void showJobItems(Object tjrc, Div iholder, String igid, String irowsid)
 	{
 		cmid = glob_icomponents_counter.toString();
 		irow = gridhand.gridMakeRow("","","",prows);
-		gpMakeLabel(irow, "", cmid + ".", "font-size:14px;font-weight:bold" );
+		ngfun.gpMakeLabel(irow, "", cmid + ".", "font-size:14px;font-weight:bold" );
 		soms = "";
 		try { soms = items[i]; } catch (Exception e) {}
-		dk = gpMakeLabel(irow, "", soms, "font-size:9px;font-weight:bold;" );
+		dk = ngfun.gpMakeLabel(irow, "", soms, "font-size:9px;font-weight:bold;" );
 		dk.setMultiline(true);
 		soms = "";
 		try { soms = colors[i]; } catch (Exception e) {}
-		gpMakeLabel(irow, "", soms, "font-weight:bold;" );
+		ngfun.gpMakeLabel(irow, "", soms, "font-weight:bold;" );
 		soms = "";
 		try { soms = qtys[i]; } catch (Exception e) {}
-		gpMakeLabel(irow, "", soms, "font-weight:bold;" );
+		ngfun.gpMakeLabel(irow, "", soms, "font-weight:bold;" );
 		glob_icomponents_counter++;
 	}
 }
@@ -101,7 +94,7 @@ void showLinkJobs(Object iwhat, String iexjob)
 	//if(global_selected_bom.equals("")) return;
 	if(global_selected_customer.equals("")) return;
 
-	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobslb_headers, "jobs_lb", 5);
+	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobslb_headers, "jobs_lb", 3);
 	linkjob_header.setValue(global_selected_customer + "\nUnassigned jobs");
 
 	excs = "";
@@ -115,14 +108,13 @@ void showLinkJobs(Object iwhat, String iexjob)
 
 	screcs = sqlhand.gpSqlGetRows(sqlstm);
 	if(screcs.size() == 0) return;
-	newlb.setRows(21);
-	newlb.setMold("paging");
+	newlb.setRows(15); newlb.setMold("paging");
 	newlb.addEventListener("onSelect", joblcioekr);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid", "datecreated", "username", "jobtype", "rwroc", "priority" };
 	for(dpi : screcs)
 	{
-		popuListitems_Data(kabom,fl,dpi);
+		ngfun.popuListitems_Data(kabom,fl,dpi);
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","font-weight:bold;font-size:9px");
 		kabom.clear();
 	}
@@ -147,7 +139,7 @@ void showLinkJobsAll(Object iwhat, String iexjob)
 	//if(global_selected_bom.equals("")) return;
 	if(global_selected_customer.equals("")) return;
 
-	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobsalllb_headers, "jobs_lb", 5);
+	Listbox newlb = lbhand.makeVWListbox_Width(jobs_holder, jobsalllb_headers, "jobs_lb", 3);
 	linkjob_header.setValue(global_selected_customer + "\nUnassigned jobs");
 
 	excs = "";
@@ -157,7 +149,7 @@ void showLinkJobsAll(Object iwhat, String iexjob)
 
 	screcs = sqlhand.gpSqlGetRows(sqlstm);
 	if(screcs.size() == 0) return;
-	newlb.setRows(20); newlb.setMold("paging");
+	newlb.setRows(15); newlb.setMold("paging");
 	newlb.addEventListener("onSelect", joblcioekr);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid", "datecreated", "customer_name", "username", "jobtype", "rwroc", "priority" };

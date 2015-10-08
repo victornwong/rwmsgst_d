@@ -48,7 +48,7 @@ last_joblist_type = 0;
 
 // all these used in jobsheet_funcs.zs
 //listjobs_extrasql = " and jpl.pstatus='COMMIT'"; // only list committed items-req
-listjobs_extrasql = ""; // make blank 12/08/2015
+listjobs_extrasql = " and jpl.pstatus='COMMIT'"; // jobsheet_funcs.showJobs() to select only approve jobs or everything
 reqitems_grid_type = 2; // WH side req-items, ada asset-tags colm and boxes
 checkitems_doubleclicker = null;
 
@@ -305,8 +305,8 @@ void reallyTransferItemsToProd()
 
 <style src="/real-world.css" />
 
-<div width="1200px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true">
+<div width="${PANEL_WIDTH}">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true">
 <panelchildren style="background:#516182">
 
 	<label id="saved_label" value="SAVED.." style="color:#ffffff;text-decoration:blink;font-weight:bold" visible="false" />
@@ -403,7 +403,7 @@ void reallyTransferItemsToProd()
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("2688");
+	jobid_tb.setValue("2745");
 	admpalletinp_tb.setVisible(true); // let admin change to pallet.. shortcut
 	admclrcommit_b.setVisible(true);
 }

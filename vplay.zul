@@ -9,7 +9,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Rentwise Management System ";
-MYVERSION = "v0.05.D";
+MYVERSION = "v0.06.D";
 /**
  * New dynamic-menu main screen thing
  * @author Victor Wong
@@ -636,7 +636,7 @@ void doFunc(Object iwhat)
 			<button id="fctranst_b" label="FC-Transactions" sclass="k9" width="150px" onClick="doFunc(self)" />
 			<button id="checkasset_b" label="Contract/Asset check" width="150px" sclass="k9" onClick="doFunc(self)" />
 			<!-- onClick="contractass_pop.open(self)" -->
-			<button id="checkparts_b" label="Parts check" width="150px" sclass="k9" onClick="doFunc(self)" />
+			<button id="checkparts_b" label="Parts check" width="150px" sclass="k9" onClick="doFunc(self)" visible="false" />
 			<separator height="5px" bar="true" />
 			<button id="calcinsura_b" label="Calc insurance" width="150px" sclass="k9" onClick="doFunc(self)" />
 			<button id="calcpartilamt_b" label="Calc partial billing" width="150px" sclass="k9" onClick="doFunc(self)" />
@@ -704,10 +704,10 @@ void doFunc(Object iwhat)
 									<button id="chgpasswd_btn" label="Change login password" sclass="k9" onClick="doFunc(self)" />
 									<!-- <button id="shwusergroup_btn" label="Usergroup" sclass="k9" onClick="doFunc(self)" /> -->
 
-									<button id="dashboard_btn" label="Dashboard" sclass="k9" onClick="doFunc(self)" />
+									<button id="dashboard_btn" label="Dashboard" sclass="k9" onClick="doFunc(self)" visible="false" />
 									<button label="Utilities" sclass="k9" onClick="utilpop.open(self)" />
 
-									<button id="itwinvent_b" label="ITWise inventory" sclass="k9mo" onClick="doFunc(self)" />
+									<button id="itwinvent_b" label="ITWise inventory" sclass="k9mo" onClick="doFunc(self)" visible="false" />
 
 									<separator width="20px" />
 									<button label="Logout" sclass="k9" onClick="logoutSystem()" />
@@ -766,7 +766,7 @@ void doFunc(Object iwhat)
 			style="background:#2e3436;background:url('rwimg/RW1.jpg') no-repeat center center fixed; background-size: cover;"
 			<div sclass="shadowbox" style="background:#2e3436;" width="1200px" >
 			-->
-			<div width="1200px" style="opacity:0.8">
+			<div width="1200px">
 				<div id="workbox" />
 				<div id="worksandbox" />
 			</div>
@@ -837,7 +837,6 @@ if(useraccessobj.username.equals("padmin") || useraccessobj.username.equals("toy
 
 drawMenuBar();
 
-//lbhand.populateDropdownListbox(branch_drd, dd_branches);
 luhand.populateListbox_ByLookup(branch_drd,"dd_branches",2);
 //luhand.populateListbox_ByLookup(i_collected,"YESNO_DEF",2); // LC/asset-tag check popup
 

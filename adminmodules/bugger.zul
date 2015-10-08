@@ -278,6 +278,38 @@ void testme()
 	alert(k);
 }
 
+
+class stkitemdoubelclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		isel = event.getTarget();
+		try
+		{
+		} catch (Exception e) {}
+	}
+}
+stkitem_doubclik = new stkitemdoubelclik();
+
+/**
+ * [fillupIRIS_selector description]
+ * @param tcondition [description]
+ * @param tcode1   AREA code
+ * @param tcode2   TYPE code dropdowns
+ * @param tiris_dd [description]
+ * @param itype    1=init listbox only, 2=set tiris_dd by using tcode1 and tcode2
+ */
+void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Listbox tiris_dd, int itype)
+{
+	if(itype == 1)
+	{
+		luhand.populateListBox_ValueSelection(tcondition,"IRIS_CONDITION_CODES",2,1);
+		luhand.populateListBox_ValueSelection(tcode1,"IRIS_AREA_CODES",2,1);
+		luhand.populateListBox_ValueSelection(tcode2,"IRIS_TYPE_CODES",2,1);
+	}
+
+}
+
 ]]>
 </zscript>
 
@@ -287,13 +319,25 @@ void testme()
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#094D7F">
 
+<hbox>
+	<listbox id="iris_condition" mold="select" style="font-size:9px" width="150px" />
+	<listbox id="iris_code1" mold="select" style="font-size:9px" width="150px" />
+	<listbox id="iris_code2" mold="select" style="font-size:9px" width="150px" />
+	<listbox id="iris_dd" mold="select" style="font-size:9px" width="180px" />
+</hbox>
+
+<zscript>
+<![CDATA[
+
+fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iris_dd,1);
+
+/*
 <tipcolor words="test macro" bstyle="background:#3FADC5" />
 <button label="test me" onClick="testme()" />
 <button label="Billing checker - TESTING" onClick="relodIrframe()" />
 <div id="ifraholder"  />
+*/
 
-<zscript>
-<![CDATA[
 //<script src="/adminmodules/go-debug.js" />
 //imgthing();
 

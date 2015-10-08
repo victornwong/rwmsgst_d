@@ -431,24 +431,27 @@ Object[] bldsdehds =
 	new listboxHeaderWidthObj("cardreader",true,""), new listboxHeaderWidthObj("bluetooth",true,""),
 };
 
+/**
+ * 07/10/2015: updated to use Focus50J1 database
+ */
 void showBuildsLikeExcel()
 {
 	if(global_selected_bom.equals("")) return;
 
 	sqlstm = "select srd.bomtype, srd.asset_tag, " +
-	"(select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.asset_tag) as f_ename, " +
-	"(select top 1 grade from Focus5012.dbo.partsall_0 where assettag=srd.asset_tag) as f_grade, " +
-	"srd.ram, (select top 1  name from Focus5012.dbo.partsall_0 where assettag=srd.ram) as f_ram1, " +
-	"srd.ram2, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.ram2) as f_ram2, " +
-	"srd.ram3, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.ram3) as f_ram3, " +
-	"srd.ram4, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.ram4) as f_ram4, " +
-	"srd.hdd, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.hdd) as f_hdd1, " +
-	"srd.hdd2, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.hdd2) as f_hdd2, " +
-	"srd.hdd3, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.hdd3) as f_hdd3, " +
-	"srd.hdd4, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.hdd4) as f_hdd4, " +
-	"srd.battery, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.battery) as f_battery, " +
-	"srd.poweradaptor, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.poweradaptor) as f_power, " +
-	"srd.gfxcard, (select top 1 name from Focus5012.dbo.partsall_0 where assettag=srd.gfxcard) as f_gfxcard, " +
+	"(select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.asset_tag) as f_ename, " +
+	"(select top 1 grade from Focus50J1.dbo.partsall_0 where assettag=srd.asset_tag) as f_grade, " +
+	"srd.ram, (select top 1  name from Focus50J1.dbo.partsall_0 where assettag=srd.ram) as f_ram1, " +
+	"srd.ram2, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.ram2) as f_ram2, " +
+	"srd.ram3, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.ram3) as f_ram3, " +
+	"srd.ram4, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.ram4) as f_ram4, " +
+	"srd.hdd, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.hdd) as f_hdd1, " +
+	"srd.hdd2, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.hdd2) as f_hdd2, " +
+	"srd.hdd3, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.hdd3) as f_hdd3, " +
+	"srd.hdd4, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.hdd4) as f_hdd4, " +
+	"srd.battery, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.battery) as f_battery, " +
+	"srd.poweradaptor, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.poweradaptor) as f_power, " +
+	"srd.gfxcard, (select top 1 name from Focus50J1.dbo.partsall_0 where assettag=srd.gfxcard) as f_gfxcard, " +
 	"srd.misc, srd.description, srd.osversion, srd.coa1, srd.offapps, srd.coa2, srd.coa3, srd.coa4, " +
 	"srd.optical, srd.webcam, srd.cardreader, srd.bluetooth " +
 	"from stockrentalitems_det srd where parent_id=" + global_selected_bom;

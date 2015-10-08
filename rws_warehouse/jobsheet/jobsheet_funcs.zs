@@ -1,7 +1,11 @@
-// @Title Jobsheet related funcs
-// @Author Victor Wong
-// @Since 10/09/2014
-// @Notes with extra checkings as functions will be used in JobSheetThing.zul, whPlayJobSheet_v1.zul
+/**
+ * Jobsheet related funcs
+ * @author Victor Wong
+ * @since 10/09/2014
+ *
+ * with extra checkings as functions will be used in JobSheetThing.zul, whPlayJobSheet_v1.zul
+ */
+
 import org.victor.*;
 
 String[] pl_colws = { "30px", "40px", ""         ,"40px"};
@@ -12,12 +16,6 @@ String[] wh_pl_colls = { ""    , "No." , "Pick item","Qty",  "Asset tags" };
 
 String[] itm_colws = { "50px","",                "60px" ,"60px" };
 String[] itm_colls = { "No." ,"Item description","Color","Qty"  };
-
-Object getEquipLookup_rec_byname(String iwhat)
-{
-	sqlstm = "select * from rw_equiplookup where name='" + iwhat + "'";
-	return sqlhand.gpSqlFirstRow(sqlstm);
-}
 
 class tbnulldrop implements org.zkoss.zk.ui.event.EventListener
 {
@@ -331,7 +329,7 @@ void showJobs(int itype)
 
 	rcs = sqlhand.gpSqlGetRows(sqlstm);
 	if(rcs.size() == 0) return;
-	newlb.setRows(21); newlb.setMold("paging");
+	newlb.setRows(10); newlb.setMold("paging");
 	newlb.addEventListener("onSelect", jobsclkier);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid","datecreated","customer_name","username","jobtype","order_type","priority","etd","eta",
@@ -349,20 +347,20 @@ void showCheckstock_win(Div idiv, ArrayList titems)
 	Object[] cstkhds1 =
 	{
 		new listboxHeaderWidthObj("No.",true,"40px"),
-		new listboxHeaderWidthObj("Items found",true,""),
+		new listboxHeaderWidthObj("SKU",true,""),
 		//new listboxHeaderWidthObj("Type",true,"40px"),
-		//new listboxHeaderWidthObj("Pallet",true,"60px"),
-		new listboxHeaderWidthObj("Qty",true,"60px"),
+		new listboxHeaderWidthObj("Pallet",true,""),
+		new listboxHeaderWidthObj("Qty",true,""),
 	};
-	String[] fl_t1 = { "name", "instk" }; // "item", "pallet", 
+	String[] fl_t1 = { "name", "pallet", "instk" }; // "item", "pallet", 
 
 	Object[] cstkhds2 =
 	{
 		new listboxHeaderWidthObj("No.",true,"40px"),
-		new listboxHeaderWidthObj("Items found",true,""),
-		new listboxHeaderWidthObj("Type",true,"40px"),
-		new listboxHeaderWidthObj("Pallet",true,"60px"),
-		new listboxHeaderWidthObj("Qty",true,"60px"),
+		new listboxHeaderWidthObj("SKU",true,""),
+		new listboxHeaderWidthObj("Type",true,""),
+		new listboxHeaderWidthObj("Pallet",true,""),
+		new listboxHeaderWidthObj("Qty",true,""),
 	};
 	String[] fl_t2 = { "name", "item", "pallet", "instk" };
 
@@ -373,8 +371,7 @@ void showCheckstock_win(Div idiv, ArrayList titems)
 	}
 
 	mwin = ngfun.vMakeWindow(idiv,"Check + pick item","0","center","500px","");
-	kdiv = new Div();
-	kdiv.setParent(mwin);
+	kdiv = new Div(); kdiv.setParent(mwin);
 	Listbox newlb = lbhand.makeVWListbox_Width(kdiv, lbhds, "chkstock_lb", 3);
 
 	csqlstm = "select distinct name,item,pallet,sum(qty) as instk from partsall_0 " +
@@ -392,9 +389,7 @@ void showCheckstock_win(Div idiv, ArrayList titems)
 	csqlstm += wops + ") and pallet not like 'EIS%' and pallet<>'PROD' and pallet<>'WH PALLET' and pallet<>'OUT'" +
 	"group by name,item,pallet " +
 	"having sum(qty) > 0 " +
-	"order by item,pallet,name";
-
-	//alert(csqlstm); return;
+	"order by name,pallet,item";
 
 	r = sqlhand.rws_gpSqlGetRows(csqlstm);
 	if(r.size() == 0) return;

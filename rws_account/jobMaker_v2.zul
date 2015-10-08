@@ -66,6 +66,8 @@ glob_sel_complete = glob_sel_jobtype = glob_sel_bomid = glob_sel_picklist = glob
 ljob_myname = "";
 ljob_reqnewpurchase = ljob_rmaonly = false;
 
+JOB_SHOW_PRICING = true; // flag to show job pricings or not
+
 // callback from fc6_CustomerSelector.zs
 void pickcustomer_Callback()
 {
@@ -329,8 +331,7 @@ void doFunc(Object iwhat)
 					}
 					wtit += xp[i];
 					kwin = vMakeWindow(windsholder, wtit, "normal", "center", "450px", "");
-					mdv = new Div();
-					mdv.setParent(kwin);
+					mdv = new Div(); mdv.setParent(kwin);
 					switch(wopme)
 					{
 						case 1:
@@ -352,161 +353,6 @@ void doFunc(Object iwhat)
 	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
 	if(refresh) showJobs();
 	if(refreshmeta) showJobMetadata(glob_sel_job);
-	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
-}
-
-void jobItems(Object iwhat)
-{
-	itype = iwhat.getId();
-	todaydate =  kiboo.todayISODateTimeString();
-	msgtext = sqlstm = "";
-	refresh = statflash = false;
-	
-	bstyle = "font-weight:bold;";
-	k9 = "font-size:9px";
-
-	if(itype.equals("ji_insert_b"))
-	{
-		cmid = glob_icomponents_counter.toString();
-
-		checkMakeItemsGrid();
-		irow = gridhand.gridMakeRow("IRW" + cmid ,"","",items_rows);
-
-		gpMakeCheckbox(irow,"CBX" + cmid, cmid + ".",k9);
-
-		desb = gpMakeTextbox(irow,"IDE" + glob_icomponents_counter.toString(),"",bstyle + k9,"99%");
-		desb.setMultiline(true);
-		desb.setHeight("70px");
-		desb.setDroppable("true");
-		desb.addEventListener("onDrop",dropMname);
-
-		gpMakeTextbox(irow,"ICL" + cmid ,"",bstyle,"99%"); // color
-		gpMakeTextbox(irow,"IQT" + cmid,"",bstyle,"99%"); // qty
-		gpMakeTextbox(irow,"IRP" + cmid,"",bstyle,"99%"); // rental-period
-		gpMakeTextbox(irow,"IRU" + cmid,"",bstyle,"99%"); // rental per unit
-
-		gpMakeLabel(irow,"MON" + cmid,"",bstyle); // per month total
-		gpMakeLabel(irow,"RTO" + cmid,"",bstyle); // rental all total
-
-		glob_icomponents_counter++;
-
-		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
-		statflash = false;
-	}
-
-	if(itype.equals("ji_remove_b"))
-	{
-		for(i=1;i<glob_icomponents_counter; i++)
-		{
-			cmi = i.toString();
-			bci = "CBX" + cmi; // HARDCODED checkbox-prefix
-			icb = items_grid.getFellowIfAny(bci);
-			if(icb != null)
-			{
-				if(icb.isChecked())
-				{
-					rwi = "IRW" + cmi;
-					rwo = items_grid.getFellowIfAny(rwi);
-					if(rwo != null) rwo.setParent(null);
-				}
-			}
-		}
-		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
-		statflash = false;
-	}
-
-	if(itype.equals("ji_save_b"))
-	{
-		if(glob_sel_job.equals("")) return;
-		if(glob_icomponents_counter == 1) return; // nothing to do huh..
-
-		items = ""; qtys = "";
-		colors = ""; rental_periods = "";
-		rent_perunits = "";
-
-		for(i=1;i<glob_icomponents_counter; i++)
-		{
-			cmi = i.toString();
-			dsbi = "IDE" + cmi;
-			dsb = items_grid.getFellowIfAny(dsbi);
-			if(dsb != null) // if found desc box, others shud be there
-			{
-				des = kiboo.replaceSingleQuotes( dsb.getValue().trim() ).replaceAll("::"," "); // incase user enter the delimiter
-				items += des + "::";
-
-				cli = items_grid.getFellowIfAny("ICL" + cmi);
-				cls = kiboo.replaceSingleQuotes( cli.getValue().trim() ).replaceAll("::"," ");
-				colors += cls + "::";
-
-				qti = items_grid.getFellowIfAny("IQT" + cmi);
-				qts = kiboo.replaceSingleQuotes( qti.getValue().trim() ).replaceAll("::"," ");
-				qtys += qts + "::";
-
-				rpi = items_grid.getFellowIfAny("IRP" + cmi);
-				rps = kiboo.replaceSingleQuotes( rpi.getValue().trim() );
-				rps = rps.replaceAll("::"," ");
-				rental_periods += rps + "::";
-
-				rpu = items_grid.getFellowIfAny("IRU" + cmi);
-				rus = kiboo.replaceSingleQuotes( rpu.getValue().trim() ).replaceAll("::"," ");
-				rent_perunits += rus + "::";
-			}
-		}
-		
-		try {
-		items = items.substring(0,items.length()-2);
-		colors = colors.substring(0,colors.length()-2);
-		qtys = qtys.substring(0,qtys.length()-2);
-		rental_periods = rental_periods.substring(0,rental_periods.length()-2);
-		rent_perunits = rent_perunits.substring(0,rent_perunits.length()-2);
-		} catch (Exception e) {}
-
-		sqlstm = "update rw_jobs set items='" + items + "',qtys='" + qtys + "',colors='" + colors + "'" + 
-		",rental_periods='" + rental_periods + "',rent_perunits='" + rent_perunits + "' " +
-		"where origid=" + glob_sel_job;
-
-		jobItems(ji_calc_b); // Do items total/rental calcs
-		statflash = true;
-	}
-
-	if(itype.equals("ji_calc_b"))
-	{
-		totmonthly = 0;
-		grandtot = 0;
-
-		for(i=1;i<glob_icomponents_counter; i++)
-		{
-			cmi = i.toString();
-
-			qti = items_grid.getFellowIfAny("IQT" + cmi);
-			qts = qti.getValue();
-
-			rpi = items_grid.getFellowIfAny("IRP" + cmi);
-			rps = rpi.getValue();
-
-			rpu = items_grid.getFellowIfAny("IRU" + cmi);
-			rus = rpu.getValue().trim();
-
-			try { permonth = Float.parseFloat(qts) * Float.parseFloat(rus); } catch (Exception e) { permonth = 0; }
-			try { renttotal = permonth * Float.parseFloat(rps); } catch (Exception e) { renttotal = 0; }
-
-			pmco = items_grid.getFellowIfAny("MON" + cmi);
-			pmco.setValue(nf3.format(permonth));
-			totmonthly += permonth;
-
-			rtot = items_grid.getFellowIfAny("RTO" + cmi);
-			rtot.setValue(nf3.format(renttotal));
-			grandtot += renttotal;
-		}
-
-		grandmonthly.setValue("MYR " + nf3.format(totmonthly));
-		grandtotal.setValue("MYR " + nf3.format(grandtot));
-		grandtotalbox.setVisible(true);
-	}
-
-	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
-	saved_label.setVisible(statflash);
-	//if(refresh) showJobs();
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
 }
 
@@ -752,8 +598,8 @@ void trytask()
 	}
 </style>
 
-<div width="1200px">
-<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<div width="${PANEL_WIDTH}">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#BC4426" >
 
 	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
@@ -772,7 +618,7 @@ void trytask()
 			<button id="jlistrma_b" sclass="k9mo" label="RMA jobs" onClick="doFunc(self)" />
 		</hbox>
 		<!-- <label id="searchtitle" sclass="subhead2" value="JOB MAKER" visible="false" /> -->
-	</div> <!-- ENDOF main-top div   -->
+	</div>
 	<separator height="3px" />
 
 	<div sclass="shadowbox" style="background:#3465a4" id="listdocu_div" >
@@ -927,9 +773,9 @@ void trytask()
 		</tabbox>
 	</div> <!-- ENDOF jobs meta and workarea -->
 
-<div id="workarea_2" />
-<div id="windsholder" />
-<div id="winsholder" />
+	<div id="workarea_2" />
+	<div id="windsholder" />
+	<div id="winsholder" />
 
 <zscript>
 <![CDATA[

@@ -256,7 +256,7 @@ void pasteMenuItem(int itype)
 <style src="/real-world.css" />
 
 <div width="1200px">
-<panel id="menueditor_panel" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panel id="menueditor_panel" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren>
 <hbox>
 	<groupbox mold="3d" width="400px">

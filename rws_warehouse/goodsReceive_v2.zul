@@ -317,13 +317,13 @@ void updateInventory_GRNItems()
 				"insert into u0001 (extraid,productnameyh,palletnoyh,shipmentcodeyh) values (@maxid,@prodid," + AUDIT_PALLET_ID + ",'" + shpc + "'); " +
 
 				"insert into ibals (code,date_,dep,qiss,qrec,val,qty2) " +
-				"values (@maxid," + tdate + ",0,0," + qty + ",0,0); " +
+				"values (@maxid," + tdate + ",0,0,0,0,0); " +
 
 				"end else begin " +
 				"set @_masterid = (select masterid from mr001 where code2='" + atg + "'); " +
 
 				"insert into ibals (code,date_,dep,qiss,qrec,val,qty2) " +
-				"values (@_masterid," + tdate + ",0,0," + qty + ",0,0); " +
+				"values (@_masterid," + tdate + ",0,0,0,0,0); " +
 
 				//"update mr001 set name='" + itm + "',code='" + snm + "' where code2='" + atg + "';" +
 				"end;";

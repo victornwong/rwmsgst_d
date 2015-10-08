@@ -26,13 +26,11 @@ void newBOMCommiter()
 	Listbox newlb = lbhand.makeVWListbox_Width(cm_bomitems_holder, cmbuldhds, "buildsassets_lb", 10);
 	r = sqlhand.gpSqlGetRows(sqlstm);
 	if(r.size() == 0) return;
-	newlb.setMold("paging");
-	newlb.setRows(21);
+	newlb.setMold("paging"); newlb.setRows(15);
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "asset_tag", "ram", "ram2", "ram3", "ram4", "hdd", "hdd2", "hdd3", "hdd4", "battery", "poweradaptor", "gfxcard" };
 	fcs = sqlhand.rws_Sql();
-	notfoundi = 0;
-	lnc = bld = 1;
+	notfoundi = 0; lnc = bld = 1;
 
 	for(d : r)
 	{

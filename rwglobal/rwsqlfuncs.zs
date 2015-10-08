@@ -546,6 +546,12 @@ String getFocus_CustomerName(String icustid)
 	return retval.get("name");
 }
 
+Object getEquipLookup_rec_byname(String iwhat)
+{
+	sqlstm = "select * from rw_equiplookup where name='" + iwhat + "'";
+	return sqlhand.gpSqlFirstRow(sqlstm);
+}
+
 Object getGCO_rec(String iwhat)
 {
 	sqlstm = "select * from rw_goodscollection where origid=" + iwhat;

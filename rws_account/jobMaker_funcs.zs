@@ -353,8 +353,7 @@ void checkMakeItemsGrid()
 		icols.setParent(igrd);
 
 		irows = new org.zkoss.zul.Rows();
-		irows.setId("items_rows");
-		irows.setParent(igrd);
+		irows.setId("items_rows"); irows.setParent(igrd);
 		igrd.setParent(items_holder);
 	}
 }
@@ -383,16 +382,14 @@ void showJobItems(Object tjrc)
 		cmid = glob_icomponents_counter.toString();
 
 		irow = gridhand.gridMakeRow("IRW" + cmid ,"","",items_rows);
-		gpMakeCheckbox(irow,"CBX" + cmid, cmid + ".", kk + "font-size:14px");
+		ngfun.gpMakeCheckbox(irow,"CBX" + cmid, cmid + ".", kk + "font-size:14px");
 
 		soms = "";
 		try { soms = items[i]; } catch (Exception e) {}
 
 		desb = gpMakeTextbox(irow,"IDE" + glob_icomponents_counter.toString(),soms,"font-size:9px;font-weight:bold;","99%");
-		desb.setMultiline(true);
-		desb.setHeight("70px");
-		//desb.setDroppable("mydrop");
-		desb.addEventListener("onDrop",dropMname);
+		desb.setMultiline(true); desb.setHeight("70px");
+		desb.addEventListener("onDrop",dropMname); //desb.setDroppable("mydrop");
 
 		soms = "";
 		try { soms = colors[i]; } catch (Exception e) {}
@@ -407,11 +404,14 @@ void showJobItems(Object tjrc)
 		gpMakeTextbox(irow,"IRP" + cmid,soms,kk,"99%"); // rental-period
 
 		soms = "";
-		try { soms = rent_perunits[i]; } catch (Exception e) {}
+		if(JOB_SHOW_PRICING)
+		{
+			try { soms = rent_perunits[i]; } catch (Exception e) {}
+		}
 		gpMakeTextbox(irow,"IRU" + cmid,soms,kk,"99%"); // rental per unit
 
-		gpMakeLabel(irow,"MON" + cmid,"",kk); // per month total
-		gpMakeLabel(irow,"RTO" + cmid,"",kk); // rental all total
+		ngfun.gpMakeLabel(irow,"MON" + cmid,"",kk); // per month total
+		ngfun.gpMakeLabel(irow,"RTO" + cmid,"",kk); // rental all total
 
 		glob_icomponents_counter++;
 	}
@@ -440,7 +440,7 @@ Object[] grnihds =
 	new listboxHeaderWidthObj("Qty",true,"40px"),
 };
 	lid = kiboo.makeRandomId("gnr");
-	Listbox newlb = lbhand.makeVWListbox_Width(idiv, grnihds, lid, 20);
+	Listbox newlb = lbhand.makeVWListbox_Width(idiv, grnihds, lid, 15);
 
 	sqlstm = "select i.name as productname, iy.qty2 from data d " +
 	"left join mr001 i on i.masterid = d.productcode " +
@@ -478,27 +478,22 @@ void showPOitems(String iwhat, Div idiv)
 	drows = new Rows();	drows.setParent(dgrid);
 
 	// Show PO details
-	drow = new Row();
-	drow.setParent(drows);
-	gpMakeLabel(drow,"", "Dated","");
-	gpMakeLabel(drow,"", dtf2.format(prc.get("datecreated")),"");
-	gpMakeLabel(drow,"", "Owner","");
-	gpMakeLabel(drow,"", prc.get("username"),"");
+	drow = new Row(); drow.setParent(drows);
+	ngfun.gpMakeLabel(drow,"", "Dated","");
+	ngfun.gpMakeLabel(drow,"", dtf2.format(prc.get("datecreated")),"");
+	ngfun.gpMakeLabel(drow,"", "Owner","");
+	ngfun.gpMakeLabel(drow,"", prc.get("username"),"");
 
-	drow = new Row();
-	drow.setSpans("1,3");
-	drow.setParent(drows);
-	gpMakeLabel(drow,"", "Vendor","");
-	gpMakeLabel(drow,"", prc.get("supplier_name"),"");
+	drow = new Row(); drow.setSpans("1,3"); drow.setParent(drows);
+	ngfun.gpMakeLabel(drow,"", "Vendor","");
+	ngfun.gpMakeLabel(drow,"", prc.get("supplier_name"),"");
 
 	String[] colws = { "30px","","40px","" };
 	String[] colls = { "No." ,"Item description","Qty", "UPrice" };
 
 	mgrid = new Grid(); mgrid.setParent(idiv);
-	gpmakeGridHeaderColumns_Width(colls,colws,mgrid);
+	ngfun.gpmakeGridHeaderColumns_Width(colls,colws,mgrid);
 	mrows = new Rows(); mrows.setParent(mgrid);
-
-	//alert(sqlhand.clobToString(prc.get("pr_items")));
 
 	ktg = sqlhand.clobToString(prc.get("pr_items"));
 	if(!ktg.equals(""))
@@ -511,21 +506,181 @@ void showPOitems(String iwhat, Div idiv)
 		for(i=0; i<itms.length; i++)
 		{
 			irow = new org.zkoss.zul.Row();
-			gpMakeLabel(irow,"", (i+1).toString() + ".","");
+			ngfun.gpMakeLabel(irow,"", (i+1).toString() + ".","");
 			itm = "";
 			try { itm = itms[i]; } catch (Exception e) {}
-			gpMakeLabel(irow,"",itm,ks);
+			ngfun.gpMakeLabel(irow,"",itm,ks);
 
 			qty = "";
 			try { qty = iqty[i]; } catch (Exception e) {}
-			gpMakeLabel(irow,"",qty,ks);
+			ngfun.gpMakeLabel(irow,"",qty,ks);
 
 			prc = "";
 			try { prc = iupr[i]; } catch (Exception e) {}
-			gpMakeLabel(irow,"",prc,ks);
+			ngfun.gpMakeLabel(irow,"",prc,ks);
 
 			irow.setParent(mrows);
 		}
 	}
 }
 
+void jobItems(Object iwhat)
+{
+	itype = iwhat.getId();
+	todaydate =  kiboo.todayISODateTimeString();
+	msgtext = sqlstm = "";
+	refresh = statflash = false;
+	
+	bstyle = "font-weight:bold;";
+	k9 = "font-size:9px";
+
+	if(itype.equals("ji_insert_b"))
+	{
+		cmid = glob_icomponents_counter.toString();
+
+		checkMakeItemsGrid();
+		irow = gridhand.gridMakeRow("IRW" + cmid ,"","",items_rows);
+
+		ngfun.gpMakeCheckbox(irow,"CBX" + cmid, cmid + ".",k9);
+
+		desb = gpMakeTextbox(irow,"IDE" + glob_icomponents_counter.toString(),"",bstyle + k9,"99%");
+		desb.setMultiline(true); desb.setHeight("70px"); desb.setDroppable("true");
+		desb.addEventListener("onDrop",dropMname);
+
+		gpMakeTextbox(irow,"ICL" + cmid ,"",bstyle,"99%"); // color
+		gpMakeTextbox(irow,"IQT" + cmid,"",bstyle,"99%"); // qty
+		gpMakeTextbox(irow,"IRP" + cmid,"",bstyle,"99%"); // rental-period
+		gpMakeTextbox(irow,"IRU" + cmid,"",bstyle,"99%"); // rental per unit
+
+		ngfun.gpMakeLabel(irow,"MON" + cmid,"",bstyle); // per month total
+		ngfun.gpMakeLabel(irow,"RTO" + cmid,"",bstyle); // rental all total
+
+		glob_icomponents_counter++;
+
+		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
+		statflash = false;
+	}
+
+	if(itype.equals("ji_remove_b"))
+	{
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+			bci = "CBX" + cmi; // HARDCODED checkbox-prefix
+			icb = items_grid.getFellowIfAny(bci);
+			if(icb != null)
+			{
+				if(icb.isChecked())
+				{
+					rwi = "IRW" + cmi;
+					rwo = items_grid.getFellowIfAny(rwi);
+					if(rwo != null) rwo.setParent(null);
+				}
+			}
+		}
+		refreshCheckbox_CountLabel("CBX",glob_icomponents_counter);
+		statflash = false;
+	}
+
+	if(itype.equals("ji_save_b"))
+	{
+		if(glob_sel_job.equals("")) return;
+		if(glob_icomponents_counter == 1) return; // nothing to do huh..
+
+		items = ""; qtys = "";
+		colors = ""; rental_periods = "";
+		rent_perunits = "";
+
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+			dsbi = "IDE" + cmi;
+			dsb = items_grid.getFellowIfAny(dsbi);
+			if(dsb != null) // if found desc box, others shud be there
+			{
+				des = kiboo.replaceSingleQuotes( dsb.getValue().trim() ).replaceAll("::"," "); // incase user enter the delimiter
+				items += des + "::";
+
+				cli = items_grid.getFellowIfAny("ICL" + cmi);
+				cls = kiboo.replaceSingleQuotes( cli.getValue().trim() ).replaceAll("::"," ");
+				colors += cls + "::";
+
+				qti = items_grid.getFellowIfAny("IQT" + cmi);
+				qts = kiboo.replaceSingleQuotes( qti.getValue().trim() ).replaceAll("::"," ");
+				qtys += qts + "::";
+
+				rpi = items_grid.getFellowIfAny("IRP" + cmi);
+				rps = kiboo.replaceSingleQuotes( rpi.getValue().trim() );
+				rps = rps.replaceAll("::"," ");
+				rental_periods += rps + "::";
+
+				rpu = items_grid.getFellowIfAny("IRU" + cmi);
+				rus = kiboo.replaceSingleQuotes( rpu.getValue().trim() ).replaceAll("::"," ");
+				rent_perunits += rus + "::";
+			}
+		}
+		
+		try {
+		items = items.substring(0,items.length()-2);
+		colors = colors.substring(0,colors.length()-2);
+		qtys = qtys.substring(0,qtys.length()-2);
+		rental_periods = rental_periods.substring(0,rental_periods.length()-2);
+		rent_perunits = rent_perunits.substring(0,rent_perunits.length()-2);
+		} catch (Exception e) {}
+
+		sqlstm = "update rw_jobs set items='" + items + "',qtys='" + qtys + "',colors='" + colors + "'" + 
+		",rental_periods='" + rental_periods + "',rent_perunits='" + rent_perunits + "' " +
+		"where origid=" + glob_sel_job;
+
+		jobItems(ji_calc_b); // Do items total/rental calcs
+		statflash = true;
+	}
+
+	if(itype.equals("ji_calc_b"))
+	{
+		totmonthly = 0;
+		grandtot = 0;
+
+		for(i=1;i<glob_icomponents_counter; i++)
+		{
+			cmi = i.toString();
+
+			qti = items_grid.getFellowIfAny("IQT" + cmi);
+			qts = qti.getValue();
+
+			rpi = items_grid.getFellowIfAny("IRP" + cmi);
+			rps = rpi.getValue();
+
+			rpu = items_grid.getFellowIfAny("IRU" + cmi);
+			rus = rpu.getValue().trim();
+
+			try { permonth = Float.parseFloat(qts) * Float.parseFloat(rus); } catch (Exception e) { permonth = 0; }
+			try { renttotal = permonth * Float.parseFloat(rps); } catch (Exception e) { renttotal = 0; }
+
+			pmco = items_grid.getFellowIfAny("MON" + cmi);
+
+			kval = "-";
+			if(JOB_SHOW_PRICING) kval = nf3.format(permonth);
+			pmco.setValue(kval);
+			totmonthly += permonth;
+
+			rtot = items_grid.getFellowIfAny("RTO" + cmi);
+			kval = "-";
+			if(JOB_SHOW_PRICING) kval = nf3.format(renttotal);
+			rtot.setValue(kval);
+			grandtot += renttotal;
+		}
+
+		if(JOB_SHOW_PRICING)
+		{
+			grandmonthly.setValue("MYR " + nf3.format(totmonthly));
+			grandtotal.setValue("MYR " + nf3.format(grandtot));
+			grandtotalbox.setVisible(true);
+		}
+	}
+
+	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
+	saved_label.setVisible(statflash);
+	//if(refresh) showJobs();
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
