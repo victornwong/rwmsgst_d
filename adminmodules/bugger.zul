@@ -291,12 +291,58 @@ class stkitemdoubelclik implements org.zkoss.zk.ui.event.EventListener
 }
 stkitem_doubclik = new stkitemdoubelclik();
 
+class irislbselector implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		//isel = event.getReference();
+		//alert(event);
+		alert("tdddd");
+	}
+}
+iris_dropdown_selector = new irislbselector();
+
+void populateIRIS_dropdown(String pcode1, String pcode2, Listbox pcodedd)
+{
+	//IRIS_ALL_CODES
+	
+	ts = pcodedd.getItems().toArray();
+	for(i=0;i<ts.length;i++) // clear any previous listitems
+	{
+		ts[i].setParent(null);
+	}
+
+	prfcode = pcode1 + pcode2;
+
+	sqlstm = "select disptext,value1 from lookups " +
+	"where myparent=cast((select idlookups from lookups where name='IRIS_ALL_CODES') as varchar) and " +
+	"disptext like '" + prfcode + "%' " +
+	"order by idlookups";
+
+	r = sqlhand.gpSqlGetRows(sqlstm);
+	String[] st = new String[2];
+	for(d: r)
+	{
+		st[0] = kiboo.checkNullString(d.get("disptext"));
+		st[1] = kiboo.checkNullString(d.get("value1"));
+		lbhand.insertListItems(pcodedd,st,"false","");
+	}
+	try { pcodedd.setSelectedIndex(0); } catch (Exception e) {}
+}
+
+void irisCodeOnSelect(Listbox pcode1, Listbox pcode2, Listbox pddrop)
+{
+	c1 = lbhand.getListcellItemLabel(pcode1.getSelectedItem(),1);
+	c2 = lbhand.getListcellItemLabel(pcode2.getSelectedItem(),1);
+	populateIRIS_dropdown(c1,c2,pddrop);
+}
+
 /**
  * [fillupIRIS_selector description]
  * @param tcondition [description]
  * @param tcode1   AREA code
  * @param tcode2   TYPE code dropdowns
- * @param tiris_dd [description]
+ * @param tiris_dd full code description for selection, numeric code store in lookup.value1
  * @param itype    1=init listbox only, 2=set tiris_dd by using tcode1 and tcode2
  */
 void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Listbox tiris_dd, int itype)
@@ -306,8 +352,9 @@ void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Lis
 		luhand.populateListBox_ValueSelection(tcondition,"IRIS_CONDITION_CODES",2,1);
 		luhand.populateListBox_ValueSelection(tcode1,"IRIS_AREA_CODES",2,1);
 		luhand.populateListBox_ValueSelection(tcode2,"IRIS_TYPE_CODES",2,1);
-	}
 
+		irisCodeOnSelect(tcode1,tcode2,tiris_dd);
+	}
 }
 
 ]]>
@@ -319,17 +366,33 @@ void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Lis
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#094D7F">
 
-<hbox>
-	<listbox id="iris_condition" mold="select" style="font-size:9px" width="150px" />
-	<listbox id="iris_code1" mold="select" style="font-size:9px" width="150px" />
-	<listbox id="iris_code2" mold="select" style="font-size:9px" width="150px" />
-	<listbox id="iris_dd" mold="select" style="font-size:9px" width="180px" />
-</hbox>
+<grid width="480px">
+	<rows>
+		<row>
+			<label id="condition_code" />
+			<label id="problem_code" />
+			<label id="extended_code" />
+		</row>
+		<row>
+			<listbox id="iris_condition" mold="select" style="font-size:9px" width="130px" />
+			<hbox>
+				<listbox id="iris_code1" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(self,iris_code2,iriscode_dd)" />
+				<listbox id="iris_code2" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(iris_code1,self,iriscode_dd)" />
+			</hbox>
+			<listbox id="iris_extended" mold="select" style="font-size:9px" width="130px" />
+		</row>
+		<row>
+			<separator />
+			<listbox id="iriscode_dd" mold="select" style="font-size:9px" width="140px" />
+			<separator />
+		</row>
+	</rows>
+</grid>
 
 <zscript>
 <![CDATA[
 
-fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iris_dd,1);
+fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iriscode_dd,1);
 
 /*
 <tipcolor words="test macro" bstyle="background:#3FADC5" />
