@@ -26,6 +26,7 @@ EXTRAOFF_TBL = "u011b"; // rental-invoice extra item details table
 void inject_Invoice_Headers(String[] hdv)
 {
 	kdate = calcFocusDate(kiboo.todayISODateString());
+	FCVOUCHER_PREFIX = (TESTING_MODE) ? "'RW'" : "";
 	lgn = "upload" + Math.round(Math.random() * 100).toString();
 
 	grabnextno = "declare @domaxid varchar(20);" +

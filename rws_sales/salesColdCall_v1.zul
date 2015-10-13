@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Sales/Marketing Activities";
-MYVERSION = "v0.1.8";
+MYVERSION = "v0.1.9";
 MYPANEL = "salcolcla";
 /**
  * @author Victor Wong
@@ -29,6 +29,7 @@ MYPANEL = "salcolcla";
  * 26/06/2015: Mandy req to add customer-grade into dump-list Excel
  * 21/07/2015: remove "Go check" email notif by James request
  * 28/09/2015: Tham req - add customer-grading and etc in dumb-list
+ * 12/10/2015: Tham req - last grading date - new field added, grade_update
  */
 import java.util.*;
 import java.text.*;
@@ -117,7 +118,7 @@ void contFunc(Object iwhat)
 	if(itype.equals("updgrade_b")) // update customer grade by CC or Tony
 	{
 		cgd = m_customer_grade.getSelectedItem().getLabel();
-		sqlstm = "update rw_activities_contacts set customer_grade='" + cgd + "' where origid=" + glob_sel_acticont;
+		sqlstm = "update rw_activities_contacts set customer_grade='" + cgd + "', grade_update='" + todaydate + "' where origid=" + glob_sel_acticont;
 
 		// 01/12/2014: james req to send notif email to requesting-user and himself when grade is updated
 		/* 21/07/2015: removed by James request
@@ -351,7 +352,6 @@ void sendNotifEmail_aftergrading(String iwhat)
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#ea7724">
-
 <div sclass="shadowbox" style="background:#2e3436;" >
 	<hbox>
 		<label value="Start date" sclass="k9b" />
@@ -475,7 +475,6 @@ coldcallmform = dynamicForm(coldcall_formholder, "coldcallmetaform_grid", "28");
 
 glob_current_user = useraccessobj.username;
 //listActiContacts(1,glob_current_user);
-
 //showChecklistItems( checks_holder , 1, "testgrid1" , "testrows1" );
 
 if(sechand.allowedUser(useraccessobj.username,"CAN_UPDATE_GRADE"))
@@ -493,7 +492,6 @@ if(useraccessobj.accesslevel == 9)
 {
 	expdump_b.setDisabled(false);
 }
-
 
 ]]>
 </zscript>

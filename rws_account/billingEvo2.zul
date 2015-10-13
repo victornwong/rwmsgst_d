@@ -52,7 +52,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-TESTING_MODE = false;
+TESTING_MODE = true;
 
 POPUPSTYLE1 = "background:#f57900";
 POPUPSTYLE2 = "background:#7AC320";
@@ -232,6 +232,16 @@ void billingShowLC(int itype)
 			bysearchtext += " and origid in ( select distinct parent_lc from rw_rentalbook where notif_date <> '1900-01-01' and notif_date <= getdate() and " +
 				"(fc_invoice = '' or fc_invoice is null)) ";
 			break;
+
+		case 3: // by LC/ROC numba
+			bylcno = "";
+			try { bylcno = Integer.parseInt(bylc_tb.getValue().trim()).toString(); } catch (Exception e) {}
+			if(!bylcno.equals(""))
+			{
+				bysearchtext += " and lc_id='" + bylcno + "' ";
+			}
+			else return;
+			break;
 	}
 
 	Listbox newlb = lbhand.makeVWListbox_Width(lcholder, lccols_headers, "lc_lb", 5);
@@ -279,12 +289,61 @@ void uploadInvoice(Object ibutt)
 		rentalinvoice = inject_RentalInvoice(lastinv);
 		if(!rentalinvoice.equals("ERROR")) // really inserted a rental-invoice
 		{
+			// set data.duedate to next-billing-date as requested by Shopa 13/10/2015
+			updRentalInvoice_duedate(rentalinvoice,nbdate);
+
 			cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, rentalinvoice);
 			cx[G_INV_DATE].setValue(today);
 			saveSlots();
 			guihand.showMessageBox("DONE: rental-invoice " + rentalinvoice + " uploaded to FOCUS6");
 		}
 	}
+}
+
+/**
+ * Update data.duedate
+ * @param irwi        rental-invoice voucher no.
+ * @param irwiduedate due-date in "YYYY-MM-DD" format
+ */
+void updRentalInvoice_duedate(String irwi, String irwiduedate)
+{
+	focusdate = calcFocusDate(irwiduedate);
+	sqlstm = "update data set duedate=" + focusdate.toString() + " where vouchertype=" + VOUCHERTYPE + " and voucherno='" + irwi + "';";
+
+	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(sqlstm); }
+	else sqlhand.rws_gpSqlExecuter(sqlstm);
+}
+
+void updRentalInvoice_fillslots()
+{
+	today = kiboo.todayISODateString();
+	/*
+	lastinv = getLastRentalInvoice_inslot();
+	if(lastinv.equals(""))
+	{
+		guihand.showMessageBox("ERR: no previous rental-invoice available for reference, please insert at least a rental-invoice for this to work");
+		return;
+	}
+
+	bkn = getBookno_by_invoice(lastinv);
+	if(!bkn.equals(glob_sel_fc6id)) // Check if last invoice really link to customer(AR)
+	{
+		guihand.showMessageBox("ERR: previous rental-invoice does not belong to this customer, cannot upload");
+		return;
+	}
+	*/
+
+	breakcount = 0;
+	while(true)
+	{
+		nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot billing-date
+		if(nbdate.equals("")) break; // if next-billing-date is empty, break out.
+		debugbox.setValue("nbdate: " + nbdate + "\n" + debugbox.getValue());
+
+		breakcount++;
+		if(breakcount > 36) { alert("limit reached.."); return; }
+	}
+	alert("uploads done");
 }
 
 ]]>
@@ -423,6 +482,8 @@ Asgn = assigned/non-assigned asset
 
 			<textbox id="searhtxt_tb" width="180px" sclass="k9" />
 			<button label="Load/Find billable" sclass="k9mo" onClick="billingShowLC(1)" />
+			<textbox id="bylc_tb" sclass="k9" width="60px" />
+			<button label="Load by LC/ROC" sclass="k9mo" onClick="billingShowLC(3)" />
 			<separator width="10px" />
 			<button label="Show today pending billing" sclass="k9mo" onClick="billingShowLC(2)" />
 		</hbox>
@@ -451,7 +512,8 @@ Asgn = assigned/non-assigned asset
 						<separator width="10px" />
 						<button label="Save slots" sclass="k9mo" onClick='saveSlots(); guihand.showMessageBox("Rental slots saved..");' />
 						<button id="viewpdfinv_b" label="View PDF invoice" sclass="k9mo" onClick="slotsFunc(self.getId())" visible="false" />
-						<button id="uplbilling_b" label="Upload billing" sclass="k9mo" style="color:#8454B7" onClick="uploadInvoice(self)" />
+						<button id="uplbilling_b" label="Upload 1 rental-invoice" sclass="k9mo" style="color:#8454B7" onClick="uploadInvoice(self)" />
+						<button id="uplfillall_b" label="Upload all rental-invoices" sclass="k9mo" style="color:#FC1993" onClick="updRentalInvoice_fillslots()" />
 					</hbox>
 					<separator height="5px" />
 					<div id="slotsholder" />
@@ -539,6 +601,7 @@ batchlcsuck_b.setVisible(false);
 if(useraccessobj.username.equals("padmin"))
 {
 	searhtxt_tb.setValue("sunway cons");
+	bylc_tb.setValue("24586");
 }
 
 ]]>

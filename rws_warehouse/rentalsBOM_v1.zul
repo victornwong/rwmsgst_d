@@ -686,7 +686,7 @@ void mpfFunc(String itype)
 			<button id="newbom_butt" label="New BOM" sclass="k9mo" onClick="doFunc(self)" />
 			<button id="commitbom_butt" label="COMMIT" sclass="k9mo" onClick="newBOMCommiter();" />
 			<button id="approveby_b" label="APPROVE" sclass="k9mo" onClick="doFunc(self)" />
-			<button id="shortinventory_b" label="SHORT INVENTORY" sclass="k9mo" style="color:#ff1111" onClick="doFunc(self)" />
+			<button id="shortinventory_b" label="SHORT INVENTORY" sclass="k9mo" style="color:#ff1111" onClick="doFunc(self)" visible="false" />
 			<separator width="20px" />
 			<button label="Tie to ROC" sclass="k9mo" onClick="enterROCpopup.open(self)" />
 		</hbox>

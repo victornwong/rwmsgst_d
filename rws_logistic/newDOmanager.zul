@@ -308,7 +308,7 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 				try
 				{
 					stg = kg[j].trim();
-					pil.put(stg,1); //ks += "put aset: " + stg + "\n";
+					pil.put(stg,1); ks += "aset-tag: " + stg + "\n";
 				 } catch (Exception e) {}
 			}
 		}
@@ -317,10 +317,12 @@ void processInjectFC6DO(String ifc6, String ido, String ipl)
 			// the pop-up. If user re-save the injected DO in FOCUS, then delete, things will be fine
 			iqty = 0;
 			try { iqty = Integer.parseInt(qtys[i]); } catch (Exception e) {}
-			pil.put(itms[i],iqty); //ks += itms[i] + " :: " + qtys[i] + "\n";
+			pil.put(itms[i],iqty); ks += "no aset-tag : " + itms[i] + " qty: " + qtys[i] + "\n";
 		}
 	}
+
 	//debugbox.setValue(ks);
+
 	fdono = inject_FC6DO(ifc6,pil);
 
 	if(!fdono.equals("")) // insert DO into FOCUS successful, update DeliveryOrderMaster.DONo
@@ -660,7 +662,7 @@ void closePanel()
 			<button label="Refurb/packing" sclass="k9mo" onClick="refurb_pop.open(self)" />
 			<button label="Delivery status" sclass="k9mo" onClick="deliverystat_pop.open(self)" />
 			<separator width="10px" />
-			<button id="uploaddo_b" label="UPLOAD TO FOCUS" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" visible="false" />
+			<button id="uploaddo_b" label="UPLOAD TO FOCUS" sclass="k9mo" style="color:#D02727" onClick="doFunc(self.getId())" visible="true" />
 			<separator width="10px" />
 			<button id="shwauditlogs_b" label="AuditLog" sclass="k9mo" onClick="doFunc(self.getId())" />
 		</hbox>
@@ -725,6 +727,7 @@ if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
 	uploaddo_b.setVisible(true);
+	doid_tb.setValue("18");
 }
 
 ]]>

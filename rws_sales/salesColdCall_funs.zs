@@ -80,6 +80,7 @@ Object[] actconthds =
 	new listboxHeaderWidthObj("DateCrt",true,""),
 	new listboxHeaderWidthObj("Grade",true,""),
 	new listboxHeaderWidthObj("Grd.Req",true,""),
+	new listboxHeaderWidthObj("Grd.Upd",true,""),
 	new listboxHeaderWidthObj("ContactP",true,""),
 	new listboxHeaderWidthObj("Tel",true,""),
 	new listboxHeaderWidthObj("Email",true,""),
@@ -89,7 +90,7 @@ Object[] actconthds =
 	new listboxHeaderWidthObj("Divs",true,"70px"),
 };
 
-USERNAME_POSI = 9;
+USERNAME_POSI = 10;
 
 class acticontclk implements org.zkoss.zk.ui.event.EventListener
 {
@@ -120,7 +121,7 @@ void listActiContacts(int itype, String iusername)
 	Listbox newlb = lbhand.makeVWListbox_Width(acticonts_holder, actconthds, "acticonts_lb", 20);
 
 	sqlstm = "select origid,cust_name,potential,username,industry,deleted,datecreated," +
-	"contact_person,cust_tel,cust_email,call_div,customer_grade,grade_req from rw_activities_contacts ";
+	"contact_person,cust_tel,cust_email,call_div,customer_grade,grade_req,grade_update from rw_activities_contacts ";
 	switch(itype)
 	{
 		case 1:
@@ -142,7 +143,7 @@ void listActiContacts(int itype, String iusername)
 	newlb.setMold("paging");
 	newlb.addEventListener("onSelect", acticontclkier );
 	ArrayList kabom = new ArrayList();
-	String[] fl = { "datecreated", "customer_grade", "grade_req", "contact_person", "cust_tel", "cust_email", "industry", "username", "potential", "call_div" };
+	String[] fl = { "datecreated", "customer_grade", "grade_req", "grade_update", "contact_person", "cust_tel", "cust_email", "industry", "username", "potential", "call_div" };
 	for(d : recs)
 	{
 		kabom.add( d.get("origid").toString() );
@@ -268,13 +269,13 @@ void genColdCallDump()
 	"Contact2", "Designation2", "Email2",
 	"Contact3", "Designation3", "Email3",
 	"Contact4", "Designation4", "Email4",
-	"Customer remarks",
+	"Customer remarks","Grade update"
 	 };
 
 	String[] flsd = { "username","cust_name","customer_grade","potential","contact_person","designation",
 	"cust_address1","cust_address2","cust_address3","cust_address4",
 	"cust_tel","cust_fax","cust_email","industry","call_div",
-	"customer_grade","grade_req","grading_remarks"
+	"customer_grade","grade_req","grading_remarks","grade_update"
 	};
 
 	String[] hsds = {

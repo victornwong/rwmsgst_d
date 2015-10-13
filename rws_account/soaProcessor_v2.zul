@@ -69,6 +69,7 @@ DecimalFormat nf2 = new DecimalFormat("0.00");
 DecimalFormat nf3 = new DecimalFormat("###,##0.00");
 DateFormat dtfm = new SimpleDateFormat("yyyy-MM-dd");
 DateFormat dtfmyr = new SimpleDateFormat("dd-MMM-yyyy");
+DateFormat billwise_dtfm = new SimpleDateFormat("MM-dd-yyyy");
 
 public class headerposition
 {
@@ -274,6 +275,7 @@ void generateExcelSOA2(int itype)
 
 	numsheets = excelWB.getNumberOfSheets(); sheet = excelWB.getSheetAt(0); numrows = sheet.getPhysicalNumberOfRows();
 
+	sttd = kiboo.getDateFromDatebox(statement_date);
 	todate = kiboo.todayISODateString();
 	FOC6_COL_READ = 11;
 	startscan = 8; pgadder = 4; page_break = 28; page2_break = 46; 	numc = 0;
@@ -313,20 +315,25 @@ void generateExcelSOA2(int itype)
 		chkv = thed[VOUCHER_POS].trim().toUpperCase();
 		if(chkv.indexOf("RCT") != -1) // found RCT - swap inv-amount and receipt
 		{
-			thed[RECEIPT_POS] = thed[INVOICE_AMNT];
-			thed[INVOICE_AMNT] = "";
+			if(!thed[INVOICE_AMNT].equals(""))
+			{
+				thed[RECEIPT_POS] = thed[INVOICE_AMNT];
+				thed[INVOICE_AMNT] = "";
+			}
 			thed[BALANCE_POS] = "";
 		}
-
-		if(thed[RENTAL_DUE_POS].compareTo(todate) <= 0) // check if rental-due-date less than today's date
+		/*
+			if(thed[RENTAL_DUE_POS].compareTo(todate) <= 0) // check if rental-due-date less than today's date
+			{ soaData.add(thed); numc++;
+				//for(x=0;x<thed.length;x++) { dbg += thed[x] + " :: "; }
+				//dbg += " :: rdp=" + thed[RENTAL_DUE_POS] + " todate=" + todate + "\n";
+			}
+		*/
+		// 13/10/2015: Mahes req, check invoice-date instead of rental-due date for processing. Also check against statement-date instead of today
+		if(thed[INVOICE_DATE].compareTo(sttd) <= 0)
 		{
 			soaData.add(thed);
 			numc++;
-
-			/*
-			for(x=0;x<thed.length;x++) { dbg += thed[x] + " :: "; }
-			dbg += " :: rdp=" + thed[RENTAL_DUE_POS] + " todate=" + todate + "\n";
-			*/
 		}
 	}
 	//debugbox.setValue(dbg); return;
@@ -356,7 +363,7 @@ void generateExcelSOA2(int itype)
 	Font wfont = wwb.createFont(); wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
 	Font nfont = wwb.createFont(); nfont.setFontHeightInPoints((short)6); nfont.setFontName("Arial"); // narration-font
 
-	sttd = kiboo.getDateFromDatebox(statement_date);
+	//sttd = kiboo.getDateFromDatebox(statement_date);
 	sttds = "Statement date: " + sttd;
 	dfints = "Late payment charges: " + customer_interest.getValue() + "%";
 
@@ -379,14 +386,13 @@ void generateExcelSOA2(int itype)
 		pgbreakd = false;
 		if(wop[VOUCHER_POS].equals("")) continue;
 
-		/*
-			//if(wop[0].equals("Unadjusted credits")) { unadjusted = wop; continue; }
+		//if(wop[0].equals("Unadjusted credits")) { unadjusted = wop; continue; }
+		/*	
 			dbg = "";
 			for(k=0; k<wop.length; k++) { dbg += (k+1).toString() + ":" + wop[k] + " : "; }
 			dbg += "\n";
 			debugbox.setValue(debugbox.getValue() + dbg);
 		*/
-
 		chkrwi = "";
 		try { chkrwi = (wop[VOUCHER_POS].substring(0,3)).toUpperCase(); }
 		catch (Exception e) {}
@@ -413,8 +419,10 @@ void generateExcelSOA2(int itype)
 		duedstr = dtfm.format(duedate);
 		} catch (Exception e) {}
 
-		kstr = duedstr; // default to invoice-due-date
-		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
+		// 13/10/2015: show INVOICE DATE instead of RENTAL DUE DATE : req by Mahes
+		//kstr = duedstr; // default to invoice-due-date
+		//excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
+		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,wop[INVOICE_DATE]);
 
 		for(j=INVOICE_AMNT;j<=BALANCE_POS;j++) // inv-amt, receipt, balance
 		{
@@ -813,7 +821,7 @@ void generateExcelSOA2(int itype)
 
 if(useraccessobj.accesslevel == 9)
 {
-	searchcust_tb.setValue("borneo vision");
+	searchcust_tb.setValue("sunway biz");
 }
 
 /*

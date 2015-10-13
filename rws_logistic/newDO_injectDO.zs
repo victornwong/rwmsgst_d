@@ -113,27 +113,40 @@ String inject_FC6DO(String bookno, HashMap kpx)
 
 	sqlstm1 = "select m.masterid as pcode, p.masterid as tags6v, m.code2 as assettag from mr001 AS m INNER JOIN " +
 	"dbo.u0001 AS u ON m.Eoff = u.ExtraId INNER JOIN dbo.mr008 AS p ON u.ProductNameYH = p.MasterId " +
-	"where m.code2 in (" + atgs + ");";
+	"where m.code2 in (" + atgs + ") or m.name in (" + atgs + ");";
 
 	rx = (TESTING_MODE) ? f30_gpSqlGetRows(sqlstm1) : sqlhand.rws_gpSqlGetRows(sqlstm1);
 
 	linecount = 0;
 
+	//headvals[0] = headvals[1] = headvals[2] = headvals[3] = "";
+
 	if(TESTING_MODE)
-	{
-		// 1251 = bookno (chg to use parameter bookno), 1078=code
+	{	// 1251 = bookno (chg to use parameter bookno), 1078=code
 		bookno = "2476"; // techno craft computer in F5012
 	}
 
 	for(d : rx)
 	{
-		prodcode = (d.get("pcode") == null) ? "0" : d.get("pcode").toString();
-		tags6 = (d.get("tags6v") == null) ? "0" : d.get("tags6v").toString();
+		prodcode = "0";
+		tags6 = "0";
+		try { prodcode = d.get("pcode").toString(); } catch (Exception e) {}
+		try { tags6 = d.get("tags6v").toString(); } catch (Exception e) {}
+
+		//prodcode = (d.get("pcode") == null) ? "0" : d.get("pcode").toString();
+		//tags6 = (d.get("tags6v") == null) ? "0" : d.get("tags6v").toString();
 
 		itemqty = -1;
-		try { itemqty = kpx.get(d.get("assettag")) * -1; } catch (Exception e) { itemqty = -1; }
-
+		/*
+		wpast = kiboo.checkNullString(d.get("assettag"));
+		if(!wpast.equals(""))
+		{
+			try { itemqty = kpx.get(d.get("assettag")) * -1; } catch (Exception e) { itemqty = -1; }
+		}
+		debugbox.setValue("assettag: " + wpast + "\n" + debugbox.getValue());
+		*/
 		// data.salesoff = indta.salesid
+
 		mainsqlstm += "set @imaxid = (select max(salesid)+1 from indta); " +
 		"insert into indta (salesid,quantity,stockvalue,rate,gross,qty2,subprocess,unit," +
 		"input0,output0,input1,output1,input2,output2,input3,output3," +
@@ -158,6 +171,8 @@ String inject_FC6DO(String bookno, HashMap kpx)
 
 		linecount++;
 	}
+
+	//debugbox.setValue( mainsqlstm + "\n" + debugbox.getValue() );
 
 	mainsqlstm += "update header set noentries=" + linecount.toString() + ", tnoentries=" + linecount.toString() +
 	" where headerid=" + headvals[0] + ";"; // update no. lines in header
