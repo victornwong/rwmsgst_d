@@ -338,7 +338,8 @@ void updRentalInvoice_fillslots()
 	{
 		nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot billing-date
 		if(nbdate.equals("")) break; // if next-billing-date is empty, break out.
-		debugbox.setValue("nbdate: " + nbdate + "\n" + debugbox.getValue());
+		debugbox.setValue(debugbox.getValue() + "\nnbdate: " + nbdate);
+		cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, "testinvoice");
 
 		breakcount++;
 		if(breakcount > 36) { alert("limit reached.."); return; }

@@ -322,19 +322,22 @@ void generateExcelSOA2(int itype)
 			}
 			thed[BALANCE_POS] = "";
 		}
+
+		if(thed[RENTAL_DUE_POS].compareTo(sttd) <= 0) // check if rental-due-date less than today's date
+		{ 
+			soaData.add(thed); numc++;
+			//for(x=0;x<thed.length;x++) { dbg += thed[x] + " :: "; } //dbg += " :: rdp=" + thed[RENTAL_DUE_POS] + " todate=" + todate + "\n";
+		}
+
+		// 13/10/2015: Mahes req, check invoice-date instead of rental-due date for processing. Also check against statement-date instead of today
+		// 15/10/2015: Mahes req to revert back to rental-due-date instead
 		/*
-			if(thed[RENTAL_DUE_POS].compareTo(todate) <= 0) // check if rental-due-date less than today's date
-			{ soaData.add(thed); numc++;
-				//for(x=0;x<thed.length;x++) { dbg += thed[x] + " :: "; }
-				//dbg += " :: rdp=" + thed[RENTAL_DUE_POS] + " todate=" + todate + "\n";
+			if(thed[INVOICE_DATE].compareTo(sttd) <= 0)
+			{
+				soaData.add(thed);
+				numc++;
 			}
 		*/
-		// 13/10/2015: Mahes req, check invoice-date instead of rental-due date for processing. Also check against statement-date instead of today
-		if(thed[INVOICE_DATE].compareTo(sttd) <= 0)
-		{
-			soaData.add(thed);
-			numc++;
-		}
 	}
 	//debugbox.setValue(dbg); return;
 
@@ -420,9 +423,10 @@ void generateExcelSOA2(int itype)
 		} catch (Exception e) {}
 
 		// 13/10/2015: show INVOICE DATE instead of RENTAL DUE DATE : req by Mahes
-		//kstr = duedstr; // default to invoice-due-date
-		//excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
-		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,wop[INVOICE_DATE]);
+		// 15/10/2015: mahes req to revert back to show rental-due-date
+		// excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,wop[INVOICE_DATE]);
+		kstr = duedstr; // default to invoice-due-date
+		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
 
 		for(j=INVOICE_AMNT;j<=BALANCE_POS;j++) // inv-amt, receipt, balance
 		{

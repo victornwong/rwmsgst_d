@@ -263,6 +263,71 @@ boolean MS_sendEmailWithAttachment(String ismtp, String iusername, String ipwd,
 	return retval;
 }
 
+/**
+ * [MS_sendEmailWithAttachment_arraylist description]
+ * Same as MS_sendEmailWithAttachment() above, but this one ifnames = ArrayList instead
+ * of String[]
+ * @param  ismtp     [description]
+ * @param  iusername [description]
+ * @param  ipwd      [description]
+ * @param  ifrom     [description]
+ * @param  ito       [description]
+ * @param  isubj     [description]
+ * @param  imessage  [description]
+ * @param  ifnames   [description]
+ * @return           [description]
+ */
+boolean MS_sendEmailWithAttachment_arraylist(String ismtp, String iusername, String ipwd, 
+	String ifrom, String ito, String isubj, String imessage, ArrayList iattachments)
+{
+	retval = false;
+	
+	Properties props = new Properties();
+	props.put("mail.smtp.host", ismtp);
+	props.put("mail.smtp.auth", "true");
+	props.put("mail.imap.auth.plain.disable","true");
+	props.put("mail.debug", "true");
+	props.put("mail.smtp.port", "25");
+	props.put("mail.from", ifrom);
+	javax.mail.Session mailsession = javax.mail.Session.getInstance(props, new MS_MyAuth(iusername,ipwd) );
+
+	try
+	{
+		MimeMessage msg = new MimeMessage(mailsession);
+		msg.setFrom();
+		msg.setRecipients(Message.RecipientType.TO,ito);
+		msg.setSubject(isubj);
+		msg.setSentDate(new Date());
+
+		// create and fill the first message part
+		MimeBodyPart mbp1 = new MimeBodyPart();
+		mbp1.setText(imessage);
+
+		// create the Multipart and add its parts to it - check in purchasereq_driller.zul, can attach file too!!
+		Multipart mp = new MimeMultipart();
+		mp.addBodyPart(mbp1);
+
+		// add the Multipart to the message
+		msg.setContent(mp);
+
+		// Loop through ifnames[] and attach the files
+		ifnames = iattachments.toArray();
+		for(i=0; i<ifnames.length; i++)
+		{
+			MimeBodyPart filepart = new MimeBodyPart();
+			FileDataSource fds = new FileDataSource(ifnames[i]);
+			filepart.setDataHandler(new DataHandler(fds));
+			filepart.setFileName(fds.getName());
+			mp.addBodyPart(filepart);
+		}
+
+		Transport.send(msg);
+		retval = true;
+	} catch (MessagingException mex) { alert("ERR: " + mex); }
+
+	return retval;
+}
+
 // Codes to use GMAIL smtp server
 // gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, "victor@rentwise.com","RE: TESTING gmailsend","Just testing..");
 boolean gmail_sendEmail(String ismtp, String iusername, String ipwd, String ifrom, String ito, String isubj, String imessage)
