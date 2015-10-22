@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "BillingEvo2 (Macam rental buku)";
-MYVERSION = "v0.1";
+MYVERSION = "v0.2";
 MYPANEL = "billnevo2";
 /**
  * @title Billing Evolution 2 - rental book management
@@ -26,6 +26,8 @@ MYPANEL = "billnevo2";
  * @since 14/05/2015
  * @notes
  * A new design to keep track of each rental installment - rental book thing
+ *
+ * 22/10/2015: add codes to update u001b.financepicyh and u001b.projectpicyh, to use in invoice template for "charge from" and "remarks at the bottom"
  *
  * HARD-CODED invoice item to use for extension and inertia billing in Focus6 on both 0J0 and 0J1
  * 91484 EXTENSION RENTAL CHARGES DT
@@ -52,7 +54,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-TESTING_MODE = true;
+TESTING_MODE = false;
 
 POPUPSTYLE1 = "background:#f57900";
 POPUPSTYLE2 = "background:#7AC320";
@@ -95,7 +97,7 @@ String getBookno_by_invoice(String invno)
 void showRentalSlots(String ilco)
 {
 	k9 = "font-size:9px";
-	sqlstm = "select fc_invoice,invoice_date,notif_date,remarks from rw_rentalbook " +
+	sqlstm = "select fc_invoice,invoice_date,notif_date,remarks,rwi_remarks from rw_rentalbook " +
 	"where parent_lc=" + ilco + " order by sorter;";
 	screcs = sqlhand.gpSqlGetRows(sqlstm);
 
@@ -128,15 +130,16 @@ void showRentalSlots(String ilco)
 			etrk = sqlhand.gpSqlFirstRow(sqlstm);
 		}
 
-		pdffn = sntdt = rsntdt = "";
-		if(etrk != null)
-		{
-			pdffn = kiboo.checkNullString(etrk.get("filename"));
-			sntdt = kiboo.dtf2.format(etrk.get("sentdate"));
-			rsntdt = kiboo.dtf2.format(etrk.get("sentdate"));
-		}
+		ngfun.gpMakeLabel(nrw,"",kiboo.checkNullString(d.get("rwi_remarks")),k9); // real-remarks field to be inserted into Focus rental-invoice
 
 		/*
+			pdffn = sntdt = rsntdt = "";
+			if(etrk != null)
+			{
+				pdffn = kiboo.checkNullString(etrk.get("filename"));
+				sntdt = kiboo.dtf2.format(etrk.get("sentdate"));
+				rsntdt = kiboo.dtf2.format(etrk.get("sentdate"));
+			}
 			ngfun.gpMakeLabel(nrw,"",pdffn,k9); // pdf-filename if any - search based on invoice number
 			ngfun.gpMakeLabel(nrw,"",sntdt,k9); // emailed pdf date
 			ngfun.gpMakeLabel(nrw,"",rsntdt,k9); // resend date
@@ -200,7 +203,7 @@ Object[] lccols_headers =
 	new listboxHeaderWidthObj("Start date",true,"70px"),
 	new listboxHeaderWidthObj("End date",true,"70px"), // 5
 	new listboxHeaderWidthObj("Order type",true,""),
-	new listboxHeaderWidthObj("fc6_custid",true,""),
+	new listboxHeaderWidthObj("FC6ID",true,""),
 };
 BLC_ORIGID_POS = 0;
 BLC_LCNO_POS = 1;
@@ -283,17 +286,22 @@ void uploadInvoice(Object ibutt)
 	}
 
 	nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot billing-date
+	String[] headvals = new String[4];
 
 	if( today.compareTo(nbdate) >= 0 ) // next billing-date lower or same as today - CONTROL against trigger-happy clicking
 	{
-		rentalinvoice = inject_RentalInvoice(lastinv);
+		rentalinvoice = inject_RentalInvoice(lastinv,headvals);
 		if(!rentalinvoice.equals("ERROR")) // really inserted a rental-invoice
 		{
-			// set data.duedate to next-billing-date as requested by Shopa 13/10/2015
-			updRentalInvoice_duedate(rentalinvoice,nbdate);
+			updRentalInvoice_duedate(rentalinvoice,nbdate); // set data.duedate to next-billing-date as requested by Shopa 13/10/2015
 
 			cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, rentalinvoice);
 			cx[G_INV_DATE].setValue(today);
+
+			theremarks = cx[G_REMARKS].getValue();
+			realfocusremarks = cx[G_REALREMARKS].getValue();
+			updRentalInvoice_insFinancePIC(headvals[INVINJ_EXTRAHEADEROFF_POS],theremarks,realfocusremarks);
+
 			saveSlots();
 			guihand.showMessageBox("DONE: rental-invoice " + rentalinvoice + " uploaded to FOCUS6");
 		}
@@ -310,14 +318,47 @@ void updRentalInvoice_duedate(String irwi, String irwiduedate)
 	focusdate = calcFocusDate(irwiduedate);
 	sqlstm = "update data set duedate=" + focusdate.toString() + " where vouchertype=" + VOUCHERTYPE + " and voucherno='" + irwi + "';";
 
-	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(sqlstm); }
+	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(debugbox.getValue() + "\n" + sqlstm); }
 	else sqlhand.rws_gpSqlExecuter(sqlstm);
+}
+
+/**
+ * Update rental-invoice invoice date, creation date
+ * @param irwi     rental-invoice voucher no.
+ * @param irwidate the date to set to , "YYYY-MM-DD" format
+ */
+void updRentalInvoice_invoicedate(String irwi, String irwidate)
+{
+	focusdate = calcFocusDate(irwidate);
+	sqlstm = "update data set Date_=" + focusdate.toString() + " where vouchertype=" + VOUCHERTYPE + " and voucherno='" + irwi + "';" +
+	"update header set Date_=" + focusdate.toString() + " where vouchertype=" + VOUCHERTYPE + " and voucherno='" + irwi + "';";
+
+	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(debugbox.getValue() + "\n" + sqlstm); }
+	else sqlhand.rws_gpSqlExecuter(sqlstm);
+}
+
+/**
+ * [updRentalInvoice_insFinancePIC description]
+ * @param iexthdoff         u001b extraid
+ * @param ithestring        string to insert into u001b.financepicyh
+ * @param irealfocusremarks string to insert into u001b.remarksyh
+ */
+void updRentalInvoice_insFinancePIC(String iexthdoff, String ithestring, String irealfocusremarks)
+{
+	if(ithestring.equals("") || iexthdoff.equals("")) return;
+
+	sqlstm = "update " + EXTRAHEADEROFF_TBL + " set FinancePICYH='" + ithestring + "',ProjectPICYH='" + irealfocusremarks + "' where ExtraId=" + iexthdoff;
+	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(debugbox.getValue() + "\ninsFinance: " + sqlstm); }
+	else sqlhand.rws_gpSqlExecuter(sqlstm);	
 }
 
 void updRentalInvoice_fillslots()
 {
+	if(Messagebox.show("This will mass-upload rental-invoices, for recurring billing", "Are you sure?",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
 	today = kiboo.todayISODateString();
-	/*
+	
 	lastinv = getLastRentalInvoice_inslot();
 	if(lastinv.equals(""))
 	{
@@ -331,53 +372,76 @@ void updRentalInvoice_fillslots()
 		guihand.showMessageBox("ERR: previous rental-invoice does not belong to this customer, cannot upload");
 		return;
 	}
-	*/
 
-	breakcount = 0;
+	injectedcount = breakcount = 0;
+	String[] headvals = new String[4];
+
 	while(true)
 	{
 		nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot billing-date
-		if(nbdate.equals("")) break; // if next-billing-date is empty, break out.
-		debugbox.setValue(debugbox.getValue() + "\nnbdate: " + nbdate);
-		cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, "testinvoice");
+		if(nbdate.equals("")) break; // if next-billing-date is empty, break out loop
 
+		rentalinvoice = inject_RentalInvoice(lastinv,headvals);
+		if(!rentalinvoice.equals("ERROR")) // invoice uploaded ok
+		{
+			injectedcount++;
+			//updRentalInvoice_invoicedate(rentalinvoice,today); // set invoice creation date to next-billing-date
+			updRentalInvoice_duedate(rentalinvoice,nbdate); // set data.duedate to next-billing-date as requested by Shopa 13/10/2015
+
+			cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, rentalinvoice);
+			cx[G_INV_DATE].setValue(today);
+			theremarks = cx[G_REMARKS].getValue();
+			realfocusremarks = cx[G_REALREMARKS].getValue();
+			updRentalInvoice_insFinancePIC(headvals[INVINJ_EXTRAHEADEROFF_POS],theremarks,realfocusremarks);
+
+			lastinv = getLastRentalInvoice_inslot();
+		}
+		debugbox.setValue(debugbox.getValue() + "\nnbdate: " + nbdate + " inv: " + rentalinvoice);
 		breakcount++;
-		if(breakcount > 36) { alert("limit reached.."); return; }
+		if(breakcount > 36) { guihand.showMessageBox("Limit 36 months reached.."); return; }
 	}
-	alert("uploads done");
+	saveSlots();
+	guihand.showMessageBox("OK: " + injectedcount.toString() + " rental-invoices uploaded to FOCUS..");
 }
 
 ]]>
 </zscript>
 
 <popup id="slotsedit_pop">
-	<div sclass="shadowbox" style="${POPUPSTYLE1}" width="350px" >
+	<div sclass="shadowbox" style="${POPUPSTYLE1}" width="400px" >
 		<grid sclass="GridLayoutNoBorder">
 			<rows>
-				<row style="${POPUPSTYLE1}">
+				<row style="${POPUPSTYLE1}" spans="1,1,2">
 					<label value="Next billing reminder" sclass="k9" />
-					<hbox>
-						<datebox id="i_notif_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-						<button id="updnextbill_b" label="Update next billing" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(2)" />
-					</hbox>
+					<datebox id="i_notif_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<button id="updnextbill_b" label="Update next billing" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(2)" />
 				</row>
-				<row style="${POPUPSTYLE1}" >
+				<row style="${POPUPSTYLE1}" spans="1,1,2">
 					<label value="Inv No" sclass="k9" />
-					<textbox id="i_fc_invoice_tb" sclass="k9" />
+					<textbox id="i_fc_invoice_tb" sclass="k9" width="90%" />
+					<button id="updinvno_b" label="Update invoice no." sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(4)" />
 				</row>
 				<row style="${POPUPSTYLE1}" >
 					<label value="Inv Date" sclass="k9" />
 					<datebox id="i_invoice_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<button id="updinvdate_b" label="Update invoice date" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(8)" />
+					<button id="clrinvdate_b" label="Clear invoice date" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(3)" />
 				</row>
-				<row style="${POPUPSTYLE1}">
-					<label value="Invoice remarks" sclass="k9" />
-					<textbox id="i_remarks_tb" sclass="k9" multiline="true" width="99%" height="70px" />
+				<row style="${POPUPSTYLE1}" spans="1,2,1">
+					<label value="FinancePIC" sclass="k9" />
+					<textbox id="i_remarks_tb" sclass="k9" width="90%" />
+					<button id="updinvrem_b" label="Update financeYH" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(5)" />
+				</row>
+				<row style="${POPUPSTYLE1}" spans="1,2,1">
+					<label value="Remarks" sclass="k9" />
+					<textbox id="i_realremarks_tb" sclass="k9" width="90%" />
+					<button id="updinvrealrem_b" label="Update remarks" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(7)" />
 				</row>
 			</rows>
 		</grid>
 		<separator height="3px" />
 		<hbox>
-			<button label="Update all" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(1)" />
+			<button label="Update all" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(1)" visible="false" />
 			<button label="Clear" sclass="k9mo" onClick='i_remarks_tb.setValue(""); kiboo.setTodayDatebox(i_notif_date_dt);' />
 			<button label="Cancel" sclass="k9mo" onClick="slotsedit_pop.close()" />
 		</hbox>
@@ -508,7 +572,7 @@ Asgn = assigned/non-assigned asset
 					<hbox>
 						<button id="untick_b" label="Ticker" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<button label="Slots" sclass="k9mo" onClick="slotsfunc_pop.open(self)" />
-						<button id="clearslot_b" label="Clear" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+						<button id="clearslot_b" label="Clear" sclass="k9mo" onClick="updSlotDetails(6)" />
 						<button id="remslot_b" label="Remove" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<separator width="10px" />
 						<button label="Save slots" sclass="k9mo" onClick='saveSlots(); guihand.showMessageBox("Rental slots saved..");' />
@@ -611,4 +675,3 @@ if(useraccessobj.username.equals("padmin"))
 </panel>
 </div>
 </zk>
-

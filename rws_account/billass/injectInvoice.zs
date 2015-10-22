@@ -16,6 +16,8 @@ VOUCHERTYPE = "3329"; // rental-invoice voucher type as defn in vtypes
 EXTRAHEADEROFF_TBL = "u001b"; // rental-invoice extra header details table
 EXTRAOFF_TBL = "u011b"; // rental-invoice extra item details table
 
+INVINJ_EXTRAHEADEROFF_POS = 1;
+
 /**
  * Inject rental-invoice header into FOCUS6
  * @param hdv hold return rec numbers from sql insert
@@ -71,7 +73,7 @@ void inject_Invoice_Headers(String[] hdv)
 
 	sqlstm5 = "select extraid from " + EXTRAHEADEROFF_TBL + " where RemarksYH='" + lgn + "';";
 	r = (TESTING_MODE) ? f30_gpSqlFirstRow(sqlstm5) : sqlhand.rws_gpSqlFirstRow(sqlstm5);
-	hdv[1] = r.get("extraid").toString();
+	hdv[INVINJ_EXTRAHEADEROFF_POS] = r.get("extraid").toString();
 
 }
 
@@ -80,7 +82,7 @@ void inject_Invoice_Headers(String[] hdv)
  * @param  prev_invoice previous rental-invoice to dup them items
  * @return              rental-invoice voucher no. or "ERROR" if cannot find previous rental-invoice
  */
-String inject_RentalInvoice(String prev_invoice)
+String inject_RentalInvoice(String prev_invoice, String[] pInjectDetails)
 {
 	kdate = calcFocusDate(kiboo.todayISODateString());
 	String[] headvals = new String[4];
@@ -106,7 +108,7 @@ String inject_RentalInvoice(String prev_invoice)
 		"from (select RemarksYH,CustomerRefYH,ROCNoYH,DORefYH,ETAYH,ETDYH,OPSNoteYH,PrepaidRentalYH,RentalPaidYH, " +
 		"OrderTypeYH,DepositAmtYH,DepositRemarksYH,DeliveryToYH,InstTypeYH,LCNoYH,WitnessYH,Signatory1YH,Designation1YH, " +
 		"Designation2YH,ReservationNoYH,LCStatusYH,DeliveryDtYH,NoofInstallmentYH,FinancePICYH,ProjectPICYH,ProjectSiteYH " +
-		"from " + EXTRAHEADEROFF_TBL + " where extraid=" + prw_extraheaderoff + ") i where extraid=" + headvals[1];
+		"from " + EXTRAHEADEROFF_TBL + " where extraid=" + prw_extraheaderoff + ") i where extraid=" + headvals[INVINJ_EXTRAHEADEROFF_POS];
 
 		if(TESTING_MODE) f30_gpSqlExecuter(sqlstm);
 		else sqlhand.rws_gpSqlExecuter(sqlstm);
@@ -186,7 +188,7 @@ String inject_RentalInvoice(String prev_invoice)
 					"@dmaxid," + kdate + "," + VOUCHERTYPE + ",'" + headvals[3] + "'," + pd.get("BookNo") + "," + pd.get("ProductCode") + "," +
 					pd.get("Tags0") + "," + pd.get("Tags1") + "," + pd.get("Tags2") + "," + pd.get("Tags3") + "," +
 					pd.get("Amount1") + "," + pd.get("Amount2") + "," + pd.get("OriginalAmount") + ",2622464,0,0," + pd.get("Tags6") + "," +
-					headvals[0] + "," + nextextraoff + "," + headvals[1] + "," + nextsalesid + "," +
+					headvals[0] + "," + nextextraoff + "," + headvals[INVINJ_EXTRAHEADEROFF_POS] + "," + nextsalesid + "," +
 					pd.get("Code") + "," + kdate + "," + pd.get("SizeofRec") + "," + pd.get("Links1") + "," + pd.get("Links2") + "," +
 					pd.get("Links3") + "," + pd.get("LinkToPrBatch") + "," + pd.get("ExchgRate") + "," +
 					pd.get("Tags4") + "," + pd.get("Tags5") + "," + pd.get("Tags7") + "," +
@@ -206,6 +208,12 @@ String inject_RentalInvoice(String prev_invoice)
 			if(TESTING_MODE) f30_gpSqlExecuter(updsql);
 			else sqlhand.rws_gpSqlExecuter(updsql);
 		}
+
+		pInjectDetails[0] = headvals[0]; // store them headers offsets to be returned
+		pInjectDetails[1] = headvals[1];
+		pInjectDetails[2] = headvals[2];
+		pInjectDetails[3] = headvals[3];
+
 		return headvals[3]; // FOCUS rental-invoice voucher no. Note the index
 	}
 	return "ERROR";

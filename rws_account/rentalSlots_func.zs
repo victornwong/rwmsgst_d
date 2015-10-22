@@ -7,8 +7,8 @@
 import org.victor.*;
 
 // Slots grid column posisi
-G_TICKER = 0; G_SLOT_NO = 1; G_NEXT_BILL = 2; G_INV_NO = 3; G_INV_DATE = 4; G_REMARKS = 5;
-G_PDFFILENAME = 6;
+G_TICKER = 0; G_SLOT_NO = 1; G_NEXT_BILL = 2; G_INV_NO = 3; G_INV_DATE = 4; G_REMARKS = 5; G_REALREMARKS = 6;
+//G_PDFFILENAME = 6;
 
 /**
  * Slots func dispenser
@@ -97,7 +97,7 @@ void iterateSlots(Object irows, int itype)
 						break;
 
 					case 4: // clear slot details ONLY starting from invoice-no. onwards
-						for(k=G_INV_NO; k<G_PDFFILENAME+1; k++)
+						for(k=G_INV_NO; k<G_REALREMARKS+1; k++)
 						{
 							try { cx[k].setValue(""); } catch (Exception e) {}
 						}
@@ -126,9 +126,9 @@ void saveSlots()
 	for(i=0; i<hx.length; i++)
 	{
 		jk = hx[i].getChildren().toArray();
-		sqlstm += "insert into rw_rentalbook (parent_lc,sorter,notif_date,fc_invoice,invoice_date,remarks) values " +
+		sqlstm += "insert into rw_rentalbook (parent_lc,sorter,notif_date,fc_invoice,invoice_date,remarks,rwi_remarks) values " +
 		"(" + glob_selected_lc + "," + jk[G_SLOT_NO].getValue() + ",'" + jk[G_NEXT_BILL].getValue() + "','" + jk[G_INV_NO].getValue() + "','" +
-		jk[G_INV_DATE].getValue() + "','" + jk[G_REMARKS].getValue() + "');";
+		jk[G_INV_DATE].getValue() + "','" + jk[G_REMARKS].getValue() + "','" + jk[G_REALREMARKS].getValue() + "');";
 	}
 	sqlhand.gpSqlExecuter(sqlstm);
 }
@@ -162,6 +162,34 @@ void updSlotDetails(int itype)
 
 		case 2: // update next-billing date notif
 			hx[G_NEXT_BILL].setValue(kd);
+			break;
+
+		case 3: // clear rental-invoice date
+			hx[G_INV_DATE].setValue("");
+			break;
+
+		case 4: // update invoice no.
+			hx[G_INV_NO].setValue(i_fc_invoice_tb.getValue());
+			break;
+
+		case 5: // update invoice remarks to be inserted into FinancePICYH
+			hx[G_REMARKS].setValue(i_remarks_tb.getValue());
+			break;
+
+		case 6: // clear all
+			for(i=G_NEXT_BILL; i<G_REALREMARKS+1; i++)
+			{
+				hx[i].setValue("");
+			}
+			break;
+
+		case 7: // update real remarks field in Focus rental-invoice
+			hx[G_REALREMARKS].setValue(i_realremarks_tb.getValue());
+			break;
+
+		case 8: // update invoice date
+			invd = kiboo.dtf2.format(i_invoice_date_dt.getValue());
+			hx[G_INV_DATE].setValue(invd);
 			break;
 	}
 }
@@ -205,6 +233,8 @@ void invoiceSlot_dclick_callback(Object isel)
 	}
 
 	i_remarks_tb.setValue(cx[G_REMARKS].getValue().trim());
+	i_realremarks_tb.setValue(cx[G_REALREMARKS].getValue().trim());
+
 	slotsedit_pop.open(glob_sel_slot_obj);
 }
 
@@ -266,8 +296,8 @@ void checkCreateSlotsGrid(Div iholder, String islotid)
 	String[] colhed = { "","No.","Next bill","Inv No","Inv Date","Remarks","PDF","Emailed","Resend" };
 	String[] colwds = { "20px", "30px", "80px", "100px", "80px", "", "", "80px", "80px" };
 	*/
-	String[] colhed = { "","No.","Next bill","Inv No","Inv Date","Remarks" };
-	String[] colwds = { "20px", "30px", "80px", "100px", "80px", "" };
+	String[] colhed = { "","No.","Next bill","Inv No","Inv Date","FinancePIC","ProjectPIC" };
+	String[] colwds = { "20px", "30px", "80px", "100px", "80px", "","" };
 
 	ngfun.checkMakeGrid(colwds, colhed, iholder, islotid, SLOTS_GRID_ROWS_ID, "", "800px", true);
 }

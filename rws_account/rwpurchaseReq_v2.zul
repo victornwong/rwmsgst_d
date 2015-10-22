@@ -688,7 +688,7 @@ if(useraccessobj.accesslevel == 9)
 	setnewpr_b.setDisabled(false);
 }
 
-if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navin") || useraccessobj.username.equals("shopa"))
+if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navinkumar") || useraccessobj.username.equals("shopa"))
 {
 	setnewpr_b.setDisabled(false);
 }
