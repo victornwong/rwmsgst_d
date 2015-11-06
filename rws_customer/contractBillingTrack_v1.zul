@@ -19,7 +19,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "LC Management";
-MYVERSION = "v0.4.8";
+MYVERSION = "v0.4.9";
 MYPANEL = "billtrkcpan";
 /*
 @Title LC billing tracking and so on
@@ -43,6 +43,7 @@ MYPANEL = "billtrkcpan";
 14/05/2015: shopa req, cpy metadata from other LC
 30/06/2015: add a to-do button to add to-do for LC - uses wall-module to show 'em
 01/07/2015: add flexi-import DO for 0J0 (uses funcs rws_warehouse/goodsreceive/injtest.zs for temp. access 0J0 )
+05/11/2015: nurul req, concat ProjectPIC and remarks when importing from FC6
 
 */
 import java.util.*;

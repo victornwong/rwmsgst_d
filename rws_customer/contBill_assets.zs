@@ -709,7 +709,7 @@ void impRWI_Extra()
 
 	sqlstm = "select d.bookno, c.name, r.rocnoyh, r.noofinstallmentyh, " +
 	"convert(datetime, dbo.ConvertFocusDate(d.date_), 112) vdate, " +
-	"r.ordertypeyh, r.remarksyh, r.insttypeyh, " +
+	"r.ordertypeyh, r.remarksyh, r.insttypeyh, r.projectpicyh, " +
 	"(select sum(amount1) from data where voucherno='" + lcn + "' and vouchertype=3329) as contractamt, " +
 	"convert(datetime, dbo.ConvertFocusDate(u.contractstartyh), 112) as cstart, " +
 	"convert(datetime, dbo.ConvertFocusDate(u.contractendyh), 112) as cend, " +
@@ -725,10 +725,10 @@ void impRWI_Extra()
 	if(drc == null) return;
 
 	String[] fl = { "name", "bookno", "cstart", "cend", "rocnoyh", "noofinstallmentyh",
-	"remarksyh", "ordertypeyh", "insttypeyh", "contractamt", "vdate" };
+	"remarksyh", "ordertypeyh", "insttypeyh", "contractamt", "vdate", "projectpicyh" };
 
 	Object[] ob = { customername, l_fc6_custid, i_lstartdate, i_lenddate, i_rocno, i_period,
-	i_remarks, i_order_type, i_inst_type, i_rm_contract, i_invoice_date };
+	i_remarks, i_order_type, i_inst_type, i_rm_contract, i_invoice_date, i_remarks };
 
 	ngfun.populateUI_Data(ob,fl,drc);
 

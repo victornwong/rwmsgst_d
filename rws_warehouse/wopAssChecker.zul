@@ -8,7 +8,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "WhopAssets Checker/ Location Changer / Grade Also";
-MYVERSION = "v0.2.6";
+MYVERSION = "v0.2.7";
 MY_ID = "wopassdpan";
 /*
 @Author Victor Wong
@@ -24,6 +24,7 @@ Make it to check stock-tick scanned asset against what're inside FC6 inventory t
 12/01/2015: repair-division req to show commentsyh in list
 21/07/2015: Satish req to put quantity column
 10/08/2015: remove control on pallet textbox, can key in any pallet for fast changes - request by Satish
+05/11/2015: Vimalan req to be able to update u0001.commentyh
 */
 
 import org.victor.*;
@@ -197,6 +198,27 @@ void massUpdateCasing()
 	checkEmAssets(last_type);	
 }
 
+void massUpdateComment()
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+	tcom = kiboo.replaceSingleQuotes(comment_tb.getValue().trim());
+	if(tcom.equals("")) return;
+
+	ags = "";
+	si = fndassets_lb.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		ags += "'" + lbhand.getListcellItemLabel(si[i],0).trim() + "',";
+	}
+	try { ags = ags.substring(0,ags.length()-1); } catch (Exception e) {}
+
+	sqlstm = "update u0001 set commentsyh='" + tcom + "' " +
+	"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+	sqlhand.rws_gpSqlExecuter(sqlstm);
+	checkEmAssets(last_type);	
+}
+
 ]]>
 </zscript>
 
@@ -231,6 +253,11 @@ void massUpdateCasing()
 					<listbox id="itemcasing_lb" mold="select" sclass="k9" />
 					<button id="chgcasing_b" sclass="k9mo" label="casing" onClick="massUpdateCasing()" disabled="true" />
 				</hbox>
+				<separator height="3px" />
+				<hbox>
+					<textbox id="comment_tb" sclass="k9" width="250px" />
+					<button id="chgcomment_b" label="comment" sclass="k9mo" onClick="massUpdateComment()" disabled="true" />
+				</hbox>
 				<separator height="5px" />
 				<div id="fndass_holder" />
 				<separator height="2px" />
@@ -253,6 +280,7 @@ void massUpdateCasing()
 		chggrade_b.setDisabled(false);
 		chgtype_b.setDisabled(false);
 		chgcasing_b.setDisabled(false);
+		chgcomment_b.setDisabled(false);
 	}
 
 ]]>

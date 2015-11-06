@@ -45,7 +45,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
 ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com,victor@rentwise.com"; // TODO HARDCODED 29/11/2013
+NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com,umananthini@rentwise.com"; // TODO HARDCODED 29/11/2013
 
 Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
 global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
