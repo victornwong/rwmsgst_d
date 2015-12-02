@@ -102,8 +102,7 @@ Object[] boms_hds =
 	"from stockrentalitems sri where customer_name is not null and customer_name <> 'UNDEF'";
 	recs = sqlhand.gpSqlGetRows(sqlstm);
 	if(recs.size() == 0) return;
-	newlb.setMold("paging");
-	newlb.addEventListener("onSelect", bomldicker );
+	newlb.setMold("paging"); newlb.addEventListener("onSelect", bomldicker );
 	ArrayList kabom = new ArrayList();
 	String[] fl = { "origid", "customer_name", "builds", "job_id", "lc_id", "do_id" };
 	for(dpi : recs)

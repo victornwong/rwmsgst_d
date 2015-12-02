@@ -204,7 +204,14 @@ void POI_SetCellStyleRange(HSSFSheet isheet, HSSFCellStyle istyle, int irow, int
 	}
 }
 
-// iwhat= listbox, iwhere= export-div, ilbhds= listbox headers, ioutfn= output filename, isheetname= excel sheet-name
+/**
+ * [exportExcelFromListbox description]
+ * @param iwhat      listbox holding the things to export
+ * @param iwhere     export DIV - usually kasiexport
+ * @param ilbhds     listbox headers - to form the header-row in EXCEL worksheet
+ * @param ioutfn     output filename - parent directory=/tmp
+ * @param isheetname sheet name in EXCEL
+ */
 void exportExcelFromListbox(Object iwhat, Object iwhere, Object ilbhds, String ioutfn, String isheetname)
 {
 	if(iwhat.getItemCount() == 0) return;
@@ -252,6 +259,5 @@ void exportExcelFromListbox(Object iwhat, Object iwhere, Object ilbhds, String i
 	wb.write(fileOut); // Write Excel-file
 	fileOut.close();
 	downloadFile(iwhere,ioutfn,outfn);
-
 }
 

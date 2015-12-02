@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="whopaset2"?>
+<zk>
+<zscript src="../rwglobal/rwglobaldefs.zs" />
+<zscript src="../rwglobal/rwsqlfuncs.zs" />
+<zscript src="../rwglobal/formMaker_v1.zs" />
+<zscript src="../rwglobal/systemAudit.zs" />
+<zscript src="../rwglobal/uploadDocu_v1.zs" />
+<zscript src="../rwglobal/fc6_CustomerSelector.zs" />
+<zscript src="../rwglobal/jobNotes_funcs.zs" />
+<zscript src="../rwglobal/uploadedWorksheet_v1.zs" />
+<zscript src="../rwglobal/emailfuncs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "WhopAssets Checker/ Location Changer / Grade (SIKIT BARU)";
+MYVERSION = "v0.2";
+MYPANEL = "whopasdet2panel";
+/**
+ * @title Inventory management for FOCUS - update things and etc
+ * @author Victor Wong
+ * @since 11/30/2015
+ * @notes
+ * 11/30/2015: Transform from the fast-n-dirty window-based whop-ass checker to panel, higher level of functionality added
+ * 11/30/2015: requested by Satish/Navin/Harvin to save audit-log of inventory metadata(pallet,grade,etc)
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+INVENTORY_CHANGE_LINKCODE = "INVTCHANGE";
+
+last_type = 0;
+glob_sel_prodname = "";
+
+void inventoryDoubleClick_callback(Object isel)
+{
+	glob_sel_prodname = lbhand.getListcellItemLabel(isel,0);
+	checkEmAssets(3,glob_sel_prodname);
+}
+
+Object[] invthds = 
+{
+	new listboxHeaderWidthObj("ProductName",true,""),
+	new listboxHeaderWidthObj("QTY",true,""),
+	new listboxHeaderWidthObj("PENDDELY",true,""),
+	new listboxHeaderWidthObj("PENDGRNLOG",true,""),
+	new listboxHeaderWidthObj("PROD",true,""),
+	new listboxHeaderWidthObj("PRODPROCESS",true,""),
+	new listboxHeaderWidthObj("QTN",true,""),
+	new listboxHeaderWidthObj("WHTORETURN",true,""),
+	new listboxHeaderWidthObj("RIP",true,""),
+	new listboxHeaderWidthObj("SCRAP",true,""),
+};
+
+class invtdoublclik implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		inventoryDoubleClick_callback(event.getTarget());
+	}
+}
+inventorydoubleclicker = new invtdoublclik();
+
+void showInventoryFC6(Div pDiv, String pLbid, Textbox pSearch)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(pDiv, invthds, pLbid, 13);
+	st = kiboo.replaceSingleQuotes(pSearch.getValue().trim());
+	sqlstm = "select distinct p0.name, sum(p0.qty) as totalqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='PEND DELY') as penddelyqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='PEND GRN(LOG)') as pendgrnqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='PROD') as prodqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='PROD_PROCESS') as prodprocessqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='QTN') as qtnqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='WH TO RETURN') as whtoreturnqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='RIP') as ripqty, " +
+	"(select sum(qty) from partsall_0 where name=p0.name and pallet='SCRAP') as scarpqty " +
+	"from partsall_0 p0 where p0.name<>'' ";
+
+	if(!st.equals("")) sqlstm += "and p0.name like '%" + st + "%'"; // to include search-text for product-name
+
+	sqlstm += " group by Name order by Name";
+	r = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(r.size() == 0) return;
+	//newlb.setMultiple(true); newlb.setCheckmark(true); newlb.setRows(20); newlb.setMold("paging");
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "name","totalqty","penddelyqty","pendgrnqty","prodqty","prodprocessqty","qtnqty","whtoreturnqty","ripqty","scarpqty" };
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, inventorydoubleclicker);
+}
+
+Object[] wpshd = 
+{
+	new listboxHeaderWidthObj("AssetTag",true,""),
+	new listboxHeaderWidthObj("S/Num",true,""),
+	new listboxHeaderWidthObj("Desc",true,""),
+	new listboxHeaderWidthObj("Brand",true,""),
+	new listboxHeaderWidthObj("Model",true,""),
+	new listboxHeaderWidthObj("Grd",true,""),
+	new listboxHeaderWidthObj("PalletNo",true,""),
+	new listboxHeaderWidthObj("Type",true,""),
+	new listboxHeaderWidthObj("Case",true,""),
+	new listboxHeaderWidthObj("Comments",true,""),
+	new listboxHeaderWidthObj("Qty",true,""),
+};
+
+/**
+ * Load inventory from partsall_0 , knockoff from wopAssChecker.zul but modified with additional pProdname to list inventory by product-name instead
+ * of just serial or asset-tags
+ * @param itype     display things type. (1=by asset-tag, 2=by serial, 3=by product-name)
+ * @param pProdname product-name to filter by
+ */
+void checkEmAssets(int itype, String pProdname)
+{
+	last_type = itype;
+	tgs = (wopass_tb.getValue().trim()).split("\n");
+	asts = "";
+	for(i=0;i<tgs.length;i++)
+	{
+		asts += "'" + tgs[i].trim() + "',";
+	}
+	try { asts = asts.substring(0,asts.length()-1); } catch (Exception e) {}
+
+	Listbox newlb = lbhand.makeVWListbox_Width(fndass_holder, wpshd, "fndassets_lb", 5);
+
+	kk = "where ltrim(rtrim(s.code2)) in (" + asts + ") order by s.code2 desc;"; // default itype=1
+	switch(itype)
+	{
+		case 2:
+			kk = "where ltrim(rtrim(s.code)) in (" + asts + ") order by s.code desc;";
+			break;
+		case 3:
+			kk = "where p.name like '" + pProdname + "%' and p.qty>=1;";
+			break;
+	}
+
+	sqlstm = "select s.name, s.code, s.code2, si.brandyh, si.modelyh, si.gradeyh, si.itemtypeyh, w.name as palletno, si.casingyh, si.commentsyh, p.qty " +
+	"from mr001 s left join u0001 si on si.extraid = s.eoff " +
+	"left join partsall_0 p on p.assettag = s.code2 " +
+	"left join mr003 w on w.masterid = si.palletnoyh " + kk;
+
+	ats = sqlhand.rws_gpSqlGetRows(sqlstm);
+	if(ats.size() == 0) return;
+	newlb.setRows(20); newlb.setMold("paging"); newlb.setMultiple(true); newlb.setCheckmark(true);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "code2", "code", "name", "brandyh", "modelyh", "gradeyh", "palletno", "itemtypeyh", "casingyh", "commentsyh","qty" };
+	for(d : ats)
+	{
+		ngfun.popuListitems_Data2(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	scnass_lb.setValue("Check: " + tgs.length.toString());
+	fndrecs_lb.setValue("Found: " + ats.size().toString());
+}
+
+MPFU_PALLET = 1; MPFU_GRADE = 2; MPFU_TYPE = 3;
+MPFU_CASING = 4; MPFU_COMMENT = 5;
+
+/**
+ * Mass update inventory things - refer to itype. Uses hardcoded fndassets_lb to determine selected items available
+ * Other hardcoded UI components drop-down listbox and textbox
+ * @param itype what to mass-update selected item. (1=pallet,2=grade,3=type,4=casing,5=comments)
+ */
+void massUpdateInventoryThings(int itype)
+{
+	if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+
+	ags = getSelecteItems_fromListbox(fndassets_lb,0); // in rwsqlfuncs.zs
+	if(ags.equals("")) return;
+
+	sqlstm = fieldname = chgval = logwhatdo = donething = "";
+
+	switch(itype)
+	{
+		case 1: // chg pallet location
+			ipallet = kiboo.replaceSingleQuotes(palletloca_tb.getValue().trim());
+			sqlstm2 = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+			r = sqlhand.rws_gpSqlFirstRow(sqlstm2);
+			if(r == null) { guihand.showMessageBox("ERR: invalid pallet name"); return; }
+			pmid = r.get("masterid").toString();
+
+			if(Messagebox.show("Please make sure you put these items to the proper loca/pallet", "Are you sure?", 
+				Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+			logwhatdo = "CHANGE PALLET TO "; fieldname = "palletnoyh"; chgval = pmid; donething = ipallet;
+			break;
+
+		case 2: // chg grading
+			donething = chgval = assgrade_lb.getSelectedItem().getLabel();
+			fieldname = "gradeyh";
+			logwhatdo = "CHANGE GRADING TO ";
+			break;
+
+		case 3: // chg inventory type
+			donething = chgval = itemtype_lb.getSelectedItem().getLabel();
+			fieldname = "itemtypeyh";
+			logwhatdo = "CHANGE TYPE TO ";
+			break;
+
+		case 4: // chg casing
+			donething = chgval = itemcasing_lb.getSelectedItem().getLabel();
+			fieldname = "casingyh";
+			logwhatdo = "CHANGE CASING TO ";
+			break;
+
+		case 5: // chg comment-field in u0001
+			donething = chgval = kiboo.replaceSingleQuotes(comment_tb.getValue().trim());
+			if(donething.equals("")) { guihand.showMessageBox("ERR: cannot put empty comment.."); return; }
+			fieldname = "commentsyh";
+			logwhatdo = "CHANGE COMMENT TO [";
+			donething += "] "; // close the []
+			break;
+	}
+
+	if(!fieldname.equals(""))
+	{
+		sqlstm = "update u0001 set " + fieldname + "='" + chgval + "' " +
+			"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, logwhatdo, donething);
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+}
+
+void exportListbox()
+{
+	try {
+	exportExcelFromListbox(fndassets_lb, kasiexport, wpshd, "checkassets.xls","chkass");
+	} catch (Exception e) {}
+}
+
+void exportInventorySerialized()
+{
+	try {
+	exportExcelFromListbox(inventory_lb, kasiexport, invthds, "serializedinventory.xls","things");
+	} catch (Exception e) {}
+}
+
+]]>
+</zscript>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+</style>
+
+<popup id="transactlogpop">
+	<div sclass="shadowbox" style="background:#E9380C" width="550px">
+		<hbox style="padding:3px">
+			<label value="From" sclass="k9b" /> <datebox id="log_startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="To" sclass="k9b" /> <datebox id="log_enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<textbox id="log_searhtxt_tb" sclass="k9" />
+			<button label="Load/Find" sclass="k9mo" onClick='showSystemAudit_2(auditlog_holder,INVENTORY_CHANGE_LINKCODE,"",log_searhtxt_tb.getValue().trim(),log_startdate,log_enddate)' />
+			<button label="Export" sclass="k9mo" onClick="export_auditlog()" />
+		</hbox>
+		<separator height="3px" />
+		<div id="auditlog_holder" />
+	</div>
+</popup>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
+<panelchildren style="background:#0C203E">
+	<div id="workarea" sclass="shadowbox" style="background:#763F19">
+		<hbox>
+			<div width="100px">
+				<label value="Scanned assets / serial-number" sclass="k9b" />
+				<textbox id="wopass_tb" multiline="true" width="99%" height="250px" sclass="k9" />
+				<separator height="2px" />
+				<vbox>
+					<button label="Check asset-tag" sclass="k9" onClick="checkEmAssets(1,glob_sel_prodname)" />
+					<button label="Check serial-num" sclass="k9" onClick="checkEmAssets(2,glob_sel_prodname)" />
+					<button label="Export" sclass="k9" onClick="exportListbox()" />
+					<button label="Transaction log" sclass="k9" onClick="transactlogpop.open(self)" />
+					<button label="Clear" sclass="k9" onClick='wopass_tb.setValue("")' />
+				</vbox>
+				<separator height="2px" />
+				<label id="scnass_lb" sclass="k9b" />
+			</div>
+			<div>
+				<hbox>
+					<label sclass="k9b" value="Pallet/Loca" />
+					<textbox id="palletloca_tb" width="60px" sclass="k9" />
+					<button id="chgpallet_b" sclass="k9mo" label="pallet" onClick="massUpdateInventoryThings(MPFU_PALLET)" disabled="true" />
+					<listbox id="assgrade_lb" mold="select" sclass="k9" />
+					<button id="chggrade_b" sclass="k9mo" label="grade" onClick="massUpdateInventoryThings(MPFU_GRADE)" disabled="true" />
+					<listbox id="itemtype_lb" mold="select" sclass="k9" />
+					<button id="chgtype_b" sclass="k9mo" label="type" onClick="massUpdateInventoryThings(MPFU_TYPE)" disabled="true" />
+					<listbox id="itemcasing_lb" mold="select" sclass="k9" />
+					<button id="chgcasing_b" sclass="k9mo" label="casing" onClick="massUpdateInventoryThings(MPFU_CASING)" disabled="true" />
+					<textbox id="comment_tb" sclass="k9" width="180px" />
+					<button id="chgcomment_b" label="comment" sclass="k9mo" onClick="massUpdateInventoryThings(MPFU_COMMENT)" disabled="true" />
+				</hbox>
+				<separator height="3px" />
+				<div id="fndass_holder" />
+				<separator height="2px" />
+				<label id="fndrecs_lb" sclass="k9b" />
+			</div>
+		</hbox>
+	</div>
+	<div sclass="shadowbox" style="background:#763F19">
+		<hbox>
+			<label value="Serialized inventory ONLY" sclass="k9b" />
+			<textbox id="invtsearch_tb" sclass="k9" />
+			<button label="List / search" sclass="k9mo" onClick='showInventoryFC6(inventoryholder,"inventory_lb",invtsearch_tb)' />
+			<button label="Export" sclass="k9mo" onClick="exportInventorySerialized()" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+	<div id="inventoryholder" />
+
+	<div id="kasiexport" visible="false" />
+<zscript>
+<![CDATA[
+
+	rws_fillListbox_uniqField("partsall_0","grade",assgrade_lb);
+	rws_fillListbox_uniqField("partsall_0","item",itemtype_lb);
+	rws_fillListbox_uniqField("partsall_0","casing",itemcasing_lb);
+
+	if(sechand.allowedUser(useraccessobj.username,"WHOPASSET_USER"))
+	{
+		chgpallet_b.setDisabled(false);
+		chggrade_b.setDisabled(false);
+		chgtype_b.setDisabled(false);
+		chgcasing_b.setDisabled(false);
+		chgcomment_b.setDisabled(false);
+	}
+
+/* 
+	unused, replaced by simpler mass-updater function
+	// knockoff from equipRequest_tracker_v1.zul -- with modi
+	void massUpdatePalletLoca(String ipallet)
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+		ipallet = kiboo.replaceSingleQuotes(ipallet.trim());
+		sqlstm = "select masterid from mr003 where ltrim(rtrim(name))='" + ipallet + "'";
+		r = sqlhand.rws_gpSqlFirstRow(sqlstm);
+		if(r == null) { guihand.showMessageBox("ERR: invalid pallet name"); return; }
+		pmid = r.get("masterid").toString();
+
+		ags = getSelecteItems_fromListbox(fndassets_lb,0); // in rwsqlfuncs.zs
+		if(ags.equals("")) return;
+
+		if(Messagebox.show("Please make sure you put these items to the proper loca/pallet", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
+
+		sqlstm = "update u0001 set palletnoyh='" + pmid + "' " +
+		"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+		
+		//	if(!glob_sel_extrahdd.equals("")) // update u0015.lastlocator and lastlocatedate
+		//	{ sqlstm += "update u0015 set lastlocator='" + useraccessobj.username + "', lastlocadate='" + kiboo.todayISODateTimeString() + "' where extraid=" + glob_sel_extrahdd; }
+		
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, "CHANGE PALLET TO ", ipallet);
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+
+	void massUpdateAssetGrade()
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+		tg = assgrade_lb.getSelectedItem().getLabel();
+		//if(tg.equals("")) return;
+
+		ags = getSelecteItems_fromListbox(fndassets_lb,0);
+		if(ags.equals("")) return;
+
+		sqlstm = "update u0001 set gradeyh='" + tg + "' " +
+		"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, "CHANGE GRADING TO ", tg);
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+
+	void massUpdateAssetType()
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+		tg = itemtype_lb.getSelectedItem().getLabel();
+
+		ags = getSelecteItems_fromListbox(fndassets_lb,0); // in rwsqlfuncs.zs
+		if(ags.equals("")) return;
+
+		sqlstm = "update u0001 set itemtypeyh='" + tg + "' " +
+		"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, "CHANGE TYPE TO ", tg);
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+
+	void massUpdateCasing()
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+		tg = itemcasing_lb.getSelectedItem().getLabel();
+		//if(tg.equals("")) return;
+
+		ags = getSelecteItems_fromListbox(fndassets_lb,0); // in rwsqlfuncs.zs
+		if(ags.equals("")) return;
+
+		sqlstm = "update u0001 set casingyh='" + tg + "' " +
+		"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, "CHANGE CASING TO ", tg);
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+
+	void massUpdateComment()
+	{
+		if(!lbhand.check_ListboxExist_SelectItem(fndass_holder,"fndassets_lb")) return;
+		tcom = kiboo.replaceSingleQuotes(comment_tb.getValue().trim());
+		if(tcom.equals("")) return;
+
+		ags = getSelecteItems_fromListbox(fndassets_lb,0); // in rwsqlfuncs.zs
+		if(ags.equals("")) return;
+
+		sqlstm = "update u0001 set commentsyh='" + tcom + "' " +
+		"where extraid in (select eoff from mr001 where ltrim(rtrim(code2)) in (" + ags + "));";
+
+		sqlhand.rws_gpSqlExecuter(sqlstm);
+		saveInventoryChangeLog(INVENTORY_CHANGE_LINKCODE, ags, "CHANGE COMMENT TO [", tcom + "]");
+		checkEmAssets(last_type,glob_sel_prodname);
+	}
+*/
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

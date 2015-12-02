@@ -163,11 +163,10 @@ void showPRMetadata(String iwhat)
 	BPM_toggleButts( true, approvers_box);
 
 	if(sechand.allowedUser(useraccessobj.username,"PR_APPROVERS"))
-		BPM_toggleButts( (prc.get("pr_status").equals("SUBMIT")) ? false : true, approvers_box);
+		BPM_toggleButts( (prc.get("pr_status").equals("VERIFY")) ? false : true, approvers_box);
 
 	workarea.setVisible(true);
 	bpm_area.setVisible(true);
-
 }
 
 Object[] prlb_hds =
@@ -365,7 +364,7 @@ void sendNoti_newPR(String iwhat,String iwho)
 	topeople = NOTIF_EMAILS; // defined in rwpurchaseReq_v2.zul
 	//topeople = "victor@rentwise.com";
 	emailsubj = "RE: New " + lnkc + " requested by " + iwho;
-	emailmsg = "A new PR has been created. Pending procurement-division action.";
+	emailmsg = "A new PR has been submitted. Pending Satish verification.";
 	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
 	guihand.showMessageBox("Email-notification sent to procurement-division");
 }
@@ -375,7 +374,7 @@ void sendPR_approver_email(String iwhat)
 	lnkc = PR_PREFIX + iwhat;
 	topeople = getFieldsCommaString("PR_APPROVERS",1);
 	emailsubj = "RE: New " + lnkc + " submitted [" + glob_pr_rec.get("priority") + "]";
-	emailmsg = "A new PR has been submitted. Pending approval, your action is required.";
+	emailmsg = "A new PR has been verified by Satish. Pending approval, your action is required.";
 	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
 }
 

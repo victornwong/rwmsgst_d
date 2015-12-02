@@ -962,3 +962,22 @@ String doregex(String istring, String ipattern)
 	}
 	return retval;
 }
+
+/**
+ * Get selected items in listbox and return format to quote-comma string
+ * wo = pAsstags.replaceAll("'","").replaceAll(",",", "); // use this to take out quote-comma delimiter
+ * @param  pListbox listbox to grab them selected items
+ * @param  pCol     which column to grab the string
+ * @return          quote-comma delimited string
+ */
+String getSelecteItems_fromListbox(Listbox pListbox, int pCol)
+{
+	retval = "";
+	si = pListbox.getSelectedItems().toArray();
+	for(i=0; i<si.length; i++)
+	{
+		retval += "'" + lbhand.getListcellItemLabel(si[i],pCol).trim() + "',";
+	}
+	try { retval = retval.substring(0,retval.length()-1); } catch (Exception e) {}
+	return retval;
+}

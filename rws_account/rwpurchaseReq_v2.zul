@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Purchase Requisition / Order";
-MYVERSION = "v0.4.2";
+MYVERSION = "v0.4.3";
 MYPANEL = "rwprmpopan";
 /**
  * Purchase Req and Order for Rentwise ONLY!
@@ -29,6 +29,8 @@ MYPANEL = "rwprmpopan";
  * 26/05/2014: export data out for analysis as required by Satish
  * 10/06/2015: add Navin to notification emails list, NOTIF_EMAILS
  * 29/07/2015: export PR/PO via BIRT for PDF and etc
+ * 18/11/2015: navin request - satish can only VERIFY PR, cannot approve. 2 approvers needed: navin and umatini/leanne
+ * 							add new status, VERIFY
  */
 import java.util.*;
 import java.text.*;
@@ -45,7 +47,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
 ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com,umananthini@rentwise.com"; // TODO HARDCODED 29/11/2013
+NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com,umananthini@rentwise.com,leanneooi@rentwise.com"; // TODO HARDCODED 29/11/2013
 
 Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
 global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
@@ -99,9 +101,8 @@ void doFunc(Object iwhat)
 {
 	itype = iwhat.getId();
 	todaydate =  kiboo.todayISODateTimeString();
-	refresh = false;
-	sqlstm = msgtext = "";
-	lnkc = PR_PREFIX + glob_sel_prid;
+	refresh = false; sqlstm = msgtext = "";
+	lnkc = JN_linkcode(); // get the linking-code
 
 	if(itype.equals("newpr_b"))
 	{
@@ -130,9 +131,26 @@ void doFunc(Object iwhat)
 			if(!glob_sel_prstatus.equals("DRAFT")) { msgtext = "You can only submit new DRAFT PR for approval.."; }
 			else
 			{
-				sqlstm = "update purchaserequisition set pr_status='SUBMIT' where origid=" + glob_sel_prid;
+				sqlstm = "update purchaserequisition set pr_status='SUBMIT',notify_pr='" + todaydate + "' where origid=" + glob_sel_prid;
 
 				glob_sel_prstatus = "SUBMIT";
+				//injectApprovers(lnkc, "PR");
+				showPRMetadata(glob_sel_prid);
+				refresh = true;
+				disableButts(true);
+				//sendPR_approver_email(glob_sel_prid);
+				sendNoti_newPR(glob_sel_prid,glob_pr_rec.get("username")); // send notif, awaiting VERIFY from Satish
+			}
+		}
+
+		if(itype.equals("verifypr_b")) // 18/11/2015: navin req: only satish can verify a PR
+		{
+			if(!glob_sel_prstatus.equals("SUBMIT")) { msgtext = "You can only verify submitted PR.."; }
+			else
+			{
+				sqlstm = "update purchaserequisition set pr_status='VERIFY' where origid=" + glob_sel_prid;
+
+				glob_sel_prstatus = "VERIFY";
 				injectApprovers(lnkc, "PR");
 				showPRMetadata(glob_sel_prid);
 				refresh = true;
@@ -340,10 +358,8 @@ void reportFunc(Object iwhat)
 <popup id="preports_pop">
 	<div sclass="shadowbox" style="background:#394752;" width="700px" >
 		<hbox>
-			<label value="Report start date" sclass="k9b" />
-			<datebox id="rep_startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
-			<label value="Report end date" sclass="k9b" />
-			<datebox id="rep_enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="Report start date" sclass="k9b" /> <datebox id="rep_startdate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="Report end date" sclass="k9b" /> <datebox id="rep_enddate" format="yyyy-MM-dd" sclass="k9" onCreate="kiboo.setTodayDatebox(self)" />
 		</hbox>
 		<separator height="3px" />
 		<grid>
@@ -493,11 +509,11 @@ void reportFunc(Object iwhat)
 
 <style src="/real-world.css" />
 <style>
-.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
-{
-border: none; overflow: hidden; zoom: 1;
-border-top: none; border-left: none; border-right: none; border-bottom: none;
-}
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
 </style>
 
 <div width="1200px">
@@ -506,23 +522,22 @@ border-top: none; border-left: none; border-right: none; border-bottom: none;
 
 	<div sclass="shadowbox" style="background:#2e3436;">
 		<hbox>
-			<label value="Start date" sclass="k9b" />
-			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-			<label value="End date" sclass="k9b" />
-			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="Start date" sclass="k9b" /> <datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+			<label value="End date" sclass="k9b" /> <datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
 			<textbox id="searhtxt_tb" sclass="k9" />
 			<button label="Load/Search" sclass="k9mo" onClick="showPRList(1)" />
 			<button label="List approved" sclass="k9mo" onClick="showPRList(3)" />
 			<button label="List non-approved" sclass="k9mo" onClick="showPRList(4)" />
 			<textbox id="searchprno_tb" sclass="k9" width="60px" />
 			<button label="By PR" sclass="k9" onClick="showPRList(2)" />
-
 		</hbox>
 		<separator bar="true" />
+
 		<hbox>
 			<button id="newpr_b" label="Create PR" sclass="k9mo" onClick="doFunc(self)" />
 			<button id="notifynewpr_b" label="Notify procurement " sclass="k9mo" style="color:#3465a4" onClick="doFunc(self)" />
-			<button id="submitpr_b" label="Submit for approval" sclass="k9mo" style="color:#5c0404" onClick="doFunc(self)" />
+			<button id="submitpr_b" label="Submit for verification" sclass="k9mo" style="color:#5c0404" onClick="doFunc(self)" />
+			<button id="verifypr_b" label="Verify" sclass="k9mo" style="color:#5c0404" onClick="doFunc(self)" disabled="true" />
 			<button id="cancelpr_b" label="CANCEL" sclass="k9mo" onClick="doFunc(self)" />
 			<button id="printpr_b" label="Print/Export" sclass="k9mo" onClick="doFunc(self)" visible="false" />
 			<button id="printpr2_b" label="Print/Export" sclass="k9mo" onClick="doFunc(self)" />
@@ -686,11 +701,18 @@ if(useraccessobj.accesslevel == 9)
 {
 	admin_bb.setVisible(true);
 	setnewpr_b.setDisabled(false);
+	verifypr_b.setDisabled(false);
 }
 
 if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navinkumar") || useraccessobj.username.equals("shopa"))
 {
 	setnewpr_b.setDisabled(false);
+}
+
+// 18/11/2015: req by navin, only satish can verify a PR
+if(useraccessobj.username.equals("satish"))
+{
+	verifypr_b.setDisabled(false);
 }
 
 ]]>
@@ -699,5 +721,3 @@ if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("nav
 </panel>
 </div>
 </zk>
-
-

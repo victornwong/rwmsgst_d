@@ -12,11 +12,12 @@
 <zscript src="../rwglobal/emailfuncs.zs" />
 <zscript src="./jobsheet/jobsheet_funcs.zs" />
 <zscript src="./jobsheet/jobsheet_PL_funcs.zs" />
+<zscript src="./jobsheet/textlistboxmangler.zs" />
 <zscript src="./goodsreceive/injtest.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "WH Jobsheet - Items Request";
-MYVERSION = "v0.1";
+MYVERSION = "v0.1.1";
 MYPANEL = "whplayjspan";
 /**
  * WH side play with jobsheet request items
@@ -24,6 +25,7 @@ MYPANEL = "whplayjspan";
  * @since 10/09/2014
  *
  * Uses share functions in jobsheet_funcs.zs
+ * 12/11/2015: parts-return functionality built-into
  */
 import java.util.*;
 import java.text.*;
@@ -62,8 +64,7 @@ String JN_linkcode()
 void pl_DoFunc(String itype)
 {
 	todaydate =  kiboo.todayISODateTimeString();
-	sqlstm = msgtext = "";
-	refresh = refresh_joblist = hideworkarea = false;
+	sqlstm = msgtext = ""; refresh = refresh_joblist = hideworkarea = false;
 	unm = useraccessobj.username;
 
 	if(itype.equals("shwauditlogs_b"))
@@ -132,6 +133,26 @@ void pl_DoFunc(String itype)
 	{
 		if(glob_sel_jobsheet.equals("")) return;
 		genAssetTags_printout(glob_sel_job,glob_sel_jobsheet);
+	}
+
+	if(itype.equals("partret_b")) // parts-return thing
+	{
+		// TODO can only activate this one only when pick-list is commited/done, else user can edit items in the textbox
+		try
+		{
+			jk = pl_rows.getChildren().toArray();
+			ArrayList itms = new ArrayList();
+
+			for(i=0;i<jk.length;i++)
+			{
+				ki = jk[i].getChildren().toArray(); // check in jobsheet_funcs.wh_pl_colls for element position
+				if(ki[0].isChecked()) // find only the FIRST ticked pick-item
+				{
+					// read things from scan-items textbox and send to edit-scan-items popup
+					scanitems_Listbox_mangler(ki[4]);
+				}
+			}
+		} catch (Exception e) {}
 	}
 
 	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
@@ -264,8 +285,38 @@ void reallyTransferItemsToProd()
 	}
 }
 
+/**
+ * Call-back from updateMangleitemsBack_toTextbox()
+ * - for this pick-list module, save 'em asset-tags
+ */
+void mangleItems_callback()
+{
+	pl_DoFunc("saveass_b"); // call function-handler instead of calling directly to saveScannedTags()
+}
+
 ]]>
 </zscript>
+
+<popup id="mangleitems_pop">
+	<div sclass="shadowbox" style="background:#3F7CBA" width="300px">
+		<label value="Pick-items Return or Add" style="font-size:12px;font-weight:bold;color:#ffffff" />
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="background:#3F7CBA">
+					<button label="Remove selected parts" sclass="k9mo" onClick="removeMangleitems()" />
+					<button label="Update to pick-list" sclass="k9mo" onClick="updateMangleitemsBack_toTextbox()" />
+					<button label="Close" sclass="k9mo" onClick="mangleitems_pop.close()" />
+				</row>
+				<row spans="1,2" style="background:#3F7CBA">
+					<textbox id="manglenewitem_tb" sclass="k9" />
+					<button label="Add new item to pick-list" sclass="k9mo" onClick="addItemToMangleList()" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<div id="mangleitems_holder" />
+	</div>
+</popup>
 
 <popup id="expasspop">
 	<div id="expass_div" width="700px" />
@@ -290,7 +341,10 @@ void reallyTransferItemsToProd()
 		<separator height="3px" />
 		<div id="auditlogs_holder" />
 		<separator height="3px" />
-		<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+		<hbox>
+			<button label="Ok" sclass="k9" onClick="auditlogs_pop.close()" />
+			<button label="Export audit-log" sclass="k9" onClick="auditlogs_pop.close();export_auditlog()" />
+		</hbox>
 	</div>
 </popup>
 
@@ -304,6 +358,13 @@ void reallyTransferItemsToProd()
 </popup>
 
 <style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	} 
+</style>
 
 <div width="${PANEL_WIDTH}">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true">
@@ -313,22 +374,15 @@ void reallyTransferItemsToProd()
 	<button visible="false" id="ji_calc_b" label="Calc" sclass="k9" onClick="jobItems(self)" />
 
 	<hbox style="padding:3px">
-		<label value="Start date" sclass="k9b" />
-		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-		<label value="End date" sclass="k9b" />
-		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-		<textbox id="searhtxt_tb" width="100px" sclass="k9" />
-		<button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
-		<textbox id="jobid_tb" width="50px" sclass="k9" />
-		<button label="by job" sclass="k9mo" onClick="showJobs(2)" />
-		<textbox id="picklist_tb" width="50px" sclass="k9" />
-		<button label="by pick-list" sclass="k9mo" onClick="showJobs(3)" />
+		<label value="Start date" sclass="k9b" /> <datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<label value="End date" sclass="k9b" /> <datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+		<textbox id="searhtxt_tb" width="100px" sclass="k9" /> <button label="Load/Find" sclass="k9mo" onClick="showJobs(1)" />
+		<textbox id="jobid_tb" width="50px" sclass="k9" /> <button label="by job" sclass="k9mo" onClick="showJobs(2)" />
+		<textbox id="picklist_tb" width="50px" sclass="k9" /> <button label="by pick-list" sclass="k9mo" onClick="showJobs(3)" />
 
 		<button id="prnpickedass_b" label="Print picked asset-tags" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 		<button id="admclrcommit_b" label="Set pick-list draft" sclass="k9mo" style="color:#D61D1D" onClick="js_adminDo(self.getId())" visible="false" />
-
 		<separator width="10px" />
-
 		<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#D60D0D" onClick="adminPop.open(self)" visible="false" />
 	</hbox>
 	<div id="jobs_holder" />
@@ -354,7 +408,6 @@ void reallyTransferItemsToProd()
 					<hbox>
 						<label value="Jobsheet - Request items" sclass="subhead1" />
 						<button id="tfxprod_b" label="Transfer items to PROD" style="font-weight:bold;color:#F01B1B" onClick="pl_DoFunc(self.getId())" />
-						<button id="shwauditlogs_b" label="AuditLog" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 					</hbox>
 					<label value="WH extra notes" sclass="k9mo" style="color:#ffffff" />
 					<textbox id="j_extranotes" multiline="true" width="400px" height="60px" sclass="k9" />
@@ -363,6 +416,8 @@ void reallyTransferItemsToProd()
 						<button id="chkstock_b" label="Check inventory + loca" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 						<button id="chkasses_b" label="Check asset tags" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 						<button id="printpl_b" label="Print pick-list" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+						<button id="partret_b" label="Parts return" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
+						<button id="shwauditlogs_b" label="AuditLog-parts-return" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 					</hbox>
 					<hbox visible="false">
 						<button id="pladd_b" label="Add item" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
@@ -403,7 +458,7 @@ void reallyTransferItemsToProd()
 if(useraccessobj.accesslevel == 9)
 {
 	admin_b.setVisible(true);
-	jobid_tb.setValue("2745");
+	jobid_tb.setValue("2739");
 	admpalletinp_tb.setVisible(true); // let admin change to pallet.. shortcut
 	admclrcommit_b.setVisible(true);
 }

@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Sales/Marketing Activities";
-MYVERSION = "v0.1.9";
+MYVERSION = "v0.2.0";
 MYPANEL = "salcolcla";
 /**
  * @author Victor Wong
@@ -30,6 +30,7 @@ MYPANEL = "salcolcla";
  * 21/07/2015: remove "Go check" email notif by James request
  * 28/09/2015: Tham req - add customer-grading and etc in dumb-list
  * 12/10/2015: Tham req - last grading date - new field added, grade_update
+ * 02/12/2015: Totally remove "TONY" from any notification or whatever, requested by Mandy
  */
 import java.util.*;
 import java.text.*;
@@ -94,15 +95,15 @@ void contFunc(Object iwhat)
 		msgtext = "Cold-call data saved..";
 	}
 
-	if(itype.equals("preeval_b")) // send notif email to CC and Tony to perform pre-eval on customer
+	if(itype.equals("preeval_b")) // send notif email to CC to perform pre-eval on customer
 	{
 		sqlstm = "update rw_activities_contacts set grade_req='" + todaydate + "' where origid=" + glob_sel_acticont;
-		msgtext = "Pre-pre-evaluation request sent to CC and Tony";
+		msgtext = "Pre-pre-evaluation request sent to CC";
 
 		bizr = a_businessroc.getValue().trim();
 		cstn = a_cust_name.getValue().trim();
 
-		topeople = "creditcontrol@rentwise.com,tony@rentwise.com,thamkl@rentwise.com"; // HARDCODED - change accordingly
+		topeople = "creditcontrol@rentwise.com,thamkl@rentwise.com"; // HARDCODED - change accordingly
 		subj = "Pre-pre-evaluation request by " + unm + " for " + cstn + " (" + bizr + ")";
 		msgb = "Pre-pre-evaluation request for this company:\n" + cstn + " (" + bizr + ")\n\n" +
 		"Please update the customer-grade in RWMS Sales Activities/Cold-Call module ASAP.";
@@ -115,7 +116,7 @@ void contFunc(Object iwhat)
 		sendNotifEmail_aftergrading(glob_sel_acticont);
 	}
 
-	if(itype.equals("updgrade_b")) // update customer grade by CC or Tony
+	if(itype.equals("updgrade_b")) // update customer grade by CC
 	{
 		cgd = m_customer_grade.getSelectedItem().getLabel();
 		sqlstm = "update rw_activities_contacts set customer_grade='" + cgd + "', grade_update='" + todaydate + "' where origid=" + glob_sel_acticont;
@@ -221,7 +222,7 @@ void sendNotifEmail_aftergrading(String iwhat)
 	"\nRequest date: " + kiboo.dtf2.format(acr.get("grade_req")) +
 	"\n\nGRADING: " + grd +
 	"\nREMARKS: " + kiboo.checkNullString( acr.get("grading_remarks") ) + 
-	"\n\nFor any clarification, contact Mr Tham, Tony or Credit-Control department.";
+	"\n\nFor any clarification, contact Mr Tham or Credit-Control department.";
 
 	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
 	guihand.showMessageBox("Graded notification email sent..");
