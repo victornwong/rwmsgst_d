@@ -65,7 +65,7 @@ void reloadItem_typecategory()
  */
 void popuEditItemInputboxes(Listitem iln)
 {
-	Object[] edititem_tbs = { e_itemname, e_description, e_eqtype, e_category, e_price, e_sdeviation }; // edit-item popup input boxes
+	Object[] edititem_tbs = { e_itemname, e_description, e_category, e_eqtype, e_price, e_sdeviation }; // edit-item popup input boxes
 	for(i=0;i<edititem_tbs.length;i++)
 	{
 		kk = lbhand.getListcellItemLabel(iln,i+3);

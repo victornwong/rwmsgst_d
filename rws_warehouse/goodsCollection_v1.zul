@@ -38,6 +38,7 @@ Collection-list status : complete, partial, pending
 08/12/2014: req by farah/huiping: able to import assets from DO - uses codes from LC module
 10/12/2014: req huiping, CANCEL status, check gco not COMPLETE/PARTIAL, then ask for reason and audit-log
 17/03/2015: req by Nurul, generate GCO items list
+08/12/2015: req by shopa and umanthini, add "items-received-back" button to record date
 */
 import java.util.*;
 import java.text.*;
@@ -293,6 +294,14 @@ void doFunc(Object iwhat)
 
 	if(itype.equals("importitems_b"))
 	{
+	}
+
+	if(itype.equals("recvback_b")) // 08/12/2015: shopa/umathini req, items-received-back date recording
+	{
+		if(glob_sel_gco.equals("")) return;
+		sqlstm = "update rw_goodscollection set receiveback_date='" + todaydate + "' where origid=" + glob_sel_gco;
+		refresh = true;
+		add_RWAuditLog(lnkc, "", "Items received back into Rentwise", useraccessobj.username);
 	}
 
 	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
@@ -620,6 +629,7 @@ BOXWIDTH = "800px";
 			<button id="pickup_b" sclass="k9mo" label="Transp.Pickup" onClick="doFunc(self)" />
 			<button id="print_b" sclass="k9mo" label="Print" onClick="doFunc(self)" />
 			<!-- <button id="complete_b" label="Complete" onClick="doFunc(self)" /> -->
+			<button id="recvback_b" label="Items received" sclass="k9mo" onClick="doFunc(self)" />
 			<button id="setnew_b" label="SET NEW" sclass="k9mo" style="color:#F52222" onClick="adminFunc(self)" visible="false" />
 			<button label="Export EXCEL" sclass="k9mo" onClick="exportGCOList()" />
 			<button label="Generate GCO items list" sclass="k9mo" onClick="gcoitems_pop.open(self)" />

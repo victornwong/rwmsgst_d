@@ -710,7 +710,8 @@ if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("nav
 }
 
 // 18/11/2015: req by navin, only satish can verify a PR
-if(useraccessobj.username.equals("satish"))
+// 08/12/2015: req by navin, add also himself to be able to verify a PR.. haha
+if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navinkumar"))
 {
 	verifypr_b.setDisabled(false);
 }

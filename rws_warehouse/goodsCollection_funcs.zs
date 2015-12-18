@@ -202,6 +202,7 @@ Object[] gdcols_headers =
 	new listboxHeaderWidthObj("MRN",true,"70px"),
 	new listboxHeaderWidthObj("CSV",true,"60px"),
 	new listboxHeaderWidthObj("ADT",true,"60px"),
+	new listboxHeaderWidthObj("RecvDate",true,"70px"),
 	/*
 	new listboxHeaderWidthObj("LOGSTAT",true,"60px"),
 	new listboxHeaderWidthObj("OVERDUE",true,"60px"),
@@ -273,7 +274,7 @@ void showGoodsCollection(int itype)
 	}
 
 	sqlstm = "select gc.origid, gc.datecreated, gc.username, gc.customer_name, gc.status, gc.pickupdate, gc.completedate, gc.lc_id," +
-	"gc.ackdate, gc.transporter, gc.tempgrn, gc.sv_no, gc.qc_id, gc.logregion, " +
+	"gc.ackdate, gc.transporter, gc.tempgrn, gc.sv_no, gc.qc_id, gc.logregion, gc.receiveback_date, " +
 	"case when gc.completedate is null then 'TNULL' else " +
 	"	case when gc.logregion is null then 'TERR' " +
 	"else " +
@@ -324,7 +325,7 @@ void showGoodsCollection(int itype)
 	ArrayList kabom = new ArrayList();
 
 	String[] fl = { "origid", "datecreated", "customer_name", "status", "lc_id", "username", "ackdate",
-	"pickupdate", "transporter", "logregion", "completedate", "tempgrn", "username", "sv_no", "qc_id" };
+	"pickupdate", "transporter", "logregion", "completedate", "tempgrn", "username", "sv_no", "qc_id", "receiveback_date" };
 	// "logstat", "overduestat", "adtchecker"
 
 	for(d : screcs)
