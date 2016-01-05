@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Job Maker (ROC/SO/etc)";
-MYVERSION = "v2.0";
+MYVERSION = "v2.0.1";
 MYPANEL = "jobmakeapanr";
 /*
 @Title Job maker - to manage ROC,SO,RMA or anything else
@@ -33,6 +33,7 @@ MYPANEL = "jobmakeapanr";
 24/06/2014: import meta and items from ROC and SO FC6
 26/09/2014: chg rw_jobs.items to NTEXT to store unlimited items
 16/10/2014: bump to version 2. Linking to new modules and UI redesign
+05/01/2016: modif FOCUS SO import , unitqty uses quantity and no longer input0
 
 */
 import java.util.*;

@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Sales/Marketing Activities";
-MYVERSION = "v0.2.0";
+MYVERSION = "v0.2.1";
 MYPANEL = "salcolcla";
 /**
  * @author Victor Wong
@@ -31,6 +31,7 @@ MYPANEL = "salcolcla";
  * 28/09/2015: Tham req - add customer-grading and etc in dumb-list
  * 12/10/2015: Tham req - last grading date - new field added, grade_update
  * 02/12/2015: Totally remove "TONY" from any notification or whatever, requested by Mandy
+ * 04/01/2016: change all occurance of tham@ to umananthini@rentwise.com
  */
 import java.util.*;
 import java.text.*;
@@ -103,7 +104,7 @@ void contFunc(Object iwhat)
 		bizr = a_businessroc.getValue().trim();
 		cstn = a_cust_name.getValue().trim();
 
-		topeople = "creditcontrol@rentwise.com,thamkl@rentwise.com"; // HARDCODED - change accordingly
+		topeople = "creditcontrol@rentwise.com,umananthini@rentwise.com"; // HARDCODED - change accordingly
 		subj = "Pre-pre-evaluation request by " + unm + " for " + cstn + " (" + bizr + ")";
 		msgb = "Pre-pre-evaluation request for this company:\n" + cstn + " (" + bizr + ")\n\n" +
 		"Please update the customer-grade in RWMS Sales Activities/Cold-Call module ASAP.";
@@ -222,7 +223,7 @@ void sendNotifEmail_aftergrading(String iwhat)
 	"\nRequest date: " + kiboo.dtf2.format(acr.get("grade_req")) +
 	"\n\nGRADING: " + grd +
 	"\nREMARKS: " + kiboo.checkNullString( acr.get("grading_remarks") ) + 
-	"\n\nFor any clarification, contact Mr Tham or Credit-Control department.";
+	"\n\nFor any clarification, contact Finance or Credit-Control department.";
 
 	gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, subj, msgb);
 	guihand.showMessageBox("Graded notification email sent..");

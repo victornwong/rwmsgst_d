@@ -189,14 +189,15 @@ void updateAssignment_customerDetails(String iaix, String icnm)
 		return;
 	}
 
-	adr = kiboo.checkNullString(r.get("address1yh")) + "\n" +
+	adr = kiboo.checkNullString( r.get("address1yh") ) + "\n" +
 	kiboo.checkNullString(r.get("address2yh")) + "\n" +
 	kiboo.checkNullString(r.get("address3yh")) + "\n" +
 	kiboo.checkNullString(r.get("address4yh"));
 
+	adr = kiboo.replaceSingleQuotes(adr);
+
 	cmpn = kiboo.checkNullString( r.get("code2") );
-	// take out ( )
-	//cmpn = cmpn.replaceAll('(','').replaceAll(')','');
+	//cmpn = cmpn.replaceAll('(','').replaceAll(')',''); // take out ( )
 
 	ma = kiboo.checkNullString(r.get("manumberyh"));
 	ma_n = ma_d = "";
@@ -343,6 +344,7 @@ void genNOA(int itype)
 		{
 			sqlstm = "select origid,lc_id from rw_assignment where groupi=" + kk;
 			gr = sqlhand.gpSqlGetRows(sqlstm);
+
 			for(d : gr)
 			{
 				gpi += d.get("lc_id") + ", ";

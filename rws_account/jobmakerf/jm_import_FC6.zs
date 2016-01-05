@@ -7,22 +7,33 @@ boolean impFC6_SOROC_items(String ivn, String ijob, int itype)
 	kk = kiboo.replaceSingleQuotes( ivn.trim() );
 	if(kk.equals("")) return false;
 
-	vtype = "5635"; // ROC
-	exttb = "u011b";
+	sqlstm = "";
+
 	switch(itype)
 	{
-		case 2:
+		case 1: // ROC
+			vtype = "5635";
+			exttb = "u011b";
+			// 17/08/2015: FC6 table mangled, indta.input0 = quantity, indta.quantity=rental period
+			sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross,iy.stockvalue, cast((iy.input0) as int) as unitqty, iy.rate as perunit, " +
+			"(iy.quantity*-1) as rentperiod, iy.output2 as mthtotal from data d " +
+			"left join mr008 ro on ro.masterid = d.tags6 left join indta iy on iy.salesid = d.salesoff " +
+			"left join " + exttb + " u on u.extraid = d.extraoff " +
+			"where d.vouchertype=" + vtype + " and d.voucherno='" + kk + "' order by d.bodyid";
+			break;
+
+		case 2: // SO
 			vtype = "5632";
 			exttb = "u0117";
+			// 05/01/2016: modif for SO items, Focus demangled the input/output fields, assuming input3 is rent-period, but unused in SO
+			sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross,iy.stockvalue, " +
+			"(iy.quantity*-1) as unitqty, iy.rate as perunit, iy.input3 as rentperiod, iy.output2 as mthtotal " +
+			"from data d " +
+			"left join mr008 ro on ro.masterid = d.tags6 left join indta iy on iy.salesid = d.salesoff " +
+			"left join " + exttb + " u on u.extraid = d.extraoff " +
+			"where d.vouchertype=" + vtype + " and d.voucherno='" + kk + "' order by d.bodyid";
 			break;
 	}
-
-	// 17/08/2015: FC6 table mangled, indta.input0 = quantity, indta.quantity=rental period
-	sqlstm = "select ro.name as product_name, u.spec1yh, u.spec2yh, iy.gross,iy.stockvalue, cast((iy.input0) as int) as unitqty, iy.rate as perunit, " +
-	"(iy.quantity*-1) as rentperiod, iy.output2 as mthtotal from data d " +
-	"left join mr008 ro on ro.masterid = d.tags6 left join indta iy on iy.salesid = d.salesoff " +
-	"left join " + exttb + " u on u.extraid = d.extraoff " +
-	"where d.vouchertype=" + vtype + " and d.voucherno='" + kk + "' order by d.bodyid";
 
 	trs = sqlhand.rws_gpSqlGetRows(sqlstm);
 	if(trs.size() == 0) return false;
