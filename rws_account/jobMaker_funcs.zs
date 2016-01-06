@@ -628,6 +628,11 @@ void jobItems(Object iwhat)
 		rent_perunits = rent_perunits.substring(0,rent_perunits.length()-2);
 		} catch (Exception e) {}
 
+		/*
+		debugbox.setValue(debugbox.getValue() +
+		"\nitems=" + items + "\ncolors=" + colors + "\nqtys=" + qtys + "\nrental_periods=" + rental_periods + "\nrent_perunits=" + rent_perunits);
+		*/
+
 		sqlstm = "update rw_jobs set items='" + items + "',qtys='" + qtys + "',colors='" + colors + "'" + 
 		",rental_periods='" + rental_periods + "',rent_perunits='" + rent_perunits + "' " +
 		"where origid=" + glob_sel_job;
@@ -643,32 +648,35 @@ void jobItems(Object iwhat)
 
 		for(i=1;i<glob_icomponents_counter; i++)
 		{
-			cmi = i.toString();
+			try
+			{
+				cmi = i.toString();
 
-			qti = items_grid.getFellowIfAny("IQT" + cmi);
-			qts = qti.getValue();
+				qti = items_grid.getFellowIfAny("IQT" + cmi);
+				qts = qti.getValue();
 
-			rpi = items_grid.getFellowIfAny("IRP" + cmi);
-			rps = rpi.getValue();
+				rpi = items_grid.getFellowIfAny("IRP" + cmi);
+				rps = rpi.getValue();
 
-			rpu = items_grid.getFellowIfAny("IRU" + cmi);
-			rus = rpu.getValue().trim();
+				rpu = items_grid.getFellowIfAny("IRU" + cmi);
+				rus = rpu.getValue().trim();
 
-			try { permonth = Float.parseFloat(qts) * Float.parseFloat(rus); } catch (Exception e) { permonth = 0; }
-			try { renttotal = permonth * Float.parseFloat(rps); } catch (Exception e) { renttotal = 0; }
+				try { permonth = Float.parseFloat(qts) * Float.parseFloat(rus); } catch (Exception e) { permonth = 0; }
+				try { renttotal = permonth * Float.parseFloat(rps); } catch (Exception e) { renttotal = 0; }
 
-			pmco = items_grid.getFellowIfAny("MON" + cmi);
+				pmco = items_grid.getFellowIfAny("MON" + cmi);
 
-			kval = "-";
-			if(JOB_SHOW_PRICING) kval = nf3.format(permonth);
-			pmco.setValue(kval);
-			totmonthly += permonth;
+				kval = "-";
+				if(JOB_SHOW_PRICING) kval = nf3.format(permonth);
+				pmco.setValue(kval);
+				totmonthly += permonth;
 
-			rtot = items_grid.getFellowIfAny("RTO" + cmi);
-			kval = "-";
-			if(JOB_SHOW_PRICING) kval = nf3.format(renttotal);
-			rtot.setValue(kval);
-			grandtot += renttotal;
+				rtot = items_grid.getFellowIfAny("RTO" + cmi);
+				kval = "-";
+				if(JOB_SHOW_PRICING) kval = nf3.format(renttotal);
+				rtot.setValue(kval);
+				grandtot += renttotal;
+			} catch (Exception e) {}
 		}
 
 		if(JOB_SHOW_PRICING)

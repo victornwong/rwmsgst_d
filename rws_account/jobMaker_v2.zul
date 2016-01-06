@@ -603,6 +603,8 @@ void trytask()
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#BC4426" >
 
+	<label id="debugbox" multiline="true" sclass="k9b" />
+
 	<div sclass="shadowbox" style="background:#849324" id="maintop_div" >
 		<hbox id="datboxgrid">
 			<label value="Start" sclass="k9b" />

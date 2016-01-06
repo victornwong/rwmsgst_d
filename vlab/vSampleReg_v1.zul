@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="vsamplreg"?>
+<zk>
+<zscript src="vglobal/vglobaldefs.zs" />
+<zscript src="vglobal/vlabsql.zs" />
+<zscript src="vglobal/customerSelector.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "SR";
+MYVERSION = "v0.0.1";
+MYPANEL = "vsamepregpanel";
+/**
+ * @title Sample registration redesign from ancient version
+ * @author Victor Wong
+ * @since 06/01/2016
+ * @notes
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.sql.*;
+import java.sql.Date;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+useraccessobj = null;
+
+try {
+useraccessobj = sechand.getUserAccessObject();
+//if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+} catch (Exception e) {}
+
+if(useraccessobj == null)
+{
+	useraccessobj = new userAccessObj();
+	useraccessobj.username = "tester";
+}
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+glob_sel_jobfolder = glob_sel_arcode = "";
+
+/**
+ * Call-back exec from findCustomers.fndcustdclicker . Customize this for other modu
+ * @param isel    list-item object
+ * @param icid    customer.Id
+ * @param iarcode customer.ar_code
+ * @param icustn  customer.customer_name
+ */
+void findcustomer_Callback(Object isel, String icid, String iarcode, String icustn)
+{
+	selcustomer_pop.close();
+	r = getCustomer_Rec(icid); if(r == null) { guihand.showMessageBox("ERR: Cannot access customer database.."); return; }
+	glob_sel_arcode = iarcode; // save for global usage - going to be saved into db too
+
+	jf_ar_code.setValue( r.get("ar_code") );
+	jf_customer_name.setValue( r.get("customer_name") );
+	/*
+		String[] cfl = { "ar_code", "customer_name" , "address1", "address2", "address3", "Address4",
+		"contact_person1", "telephone_no", "fax_no", "E_mail" };
+		ngfun.populateUI_Data(wocustomermetaboxes,cfl,r); // populate 'em metadata boxes
+	*/
+}
+
+Object[] sampleshds1 =
+{
+	new listboxHeaderWidthObj("NO.",true,"90px"),
+	new listboxHeaderWidthObj("MARKING",true,""),
+	new listboxHeaderWidthObj("NOTES",true,""),
+};
+
+/**
+ * Call-back from job-folders listbox onselect and double-clicker
+ * @param isel [description]
+ */
+void jobfolders_callBack(Object isel)
+{
+	
+	glob_sel_jobfolder = lbhand.getListcellItemLabel(isel,JF_ORIGID);
+	jfr = get_JobFolders(glob_sel_jobfolder);
+	if(jfr == null) { guihand.showMessageBox("ERR: Cannot access job-folder database.."); return; }
+	// show job-folder metadata
+	jf_origid.setValue(glob_sel_jobfolder);
+	cnm = "UNDEF";
+	if(jfr.get("ar_code") != null) cnm = get_CustomerByArCode(jfr.get("ar_code"));
+	jf_customer_name.setValue(cnm);
+
+	Listbox newlb = lbhand.makeVWListbox_Width(samples_holder, sampleshds1, "samples_lb", 13); // always start with empty samples listbox
+	newlb.setCheckmark(true); newlb.setMultiple(true);
+	// show samples
+
+	// show attachments
+}
+
+void vInsert_JobFolder(String pUser, String pBranch)
+{
+	String todaysdate = kiboo.todayISODateTimeString();
+	Sql sql = v_Sql(); if(sql == null) { guihand.showMessageBox("ERR: Cannot connect to database.."); return; }
+
+	Connection thecon = sql.getConnection();
+		
+	PreparedStatement pstmt = thecon.prepareStatement("insert into JobFolders " +
+	" (ar_code,datecreated,uploadToLIMS,uploadToMYSOFT,duedate," +
+	"tat,extranotes,folderstatus,deleted,folderno_str," + 
+	"deliverymode,securityseal,noboxes,temperature,custreqdate," +
+	"customerpo,customercoc,allgoodorder,paperworknot,paperworksamplesnot, " + 
+	"samplesdamaged,attention,priority,exportReportTemplate,branch," +
+	"labfolderstatus,releasedby,releaseddate,coadate,coaprintdate," + 
+	"jobnotes,lastjobnotesdate,share_sample,createdby) values " + 
+	"(?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?)");
+
+	pstmt.setString(1,""); pstmt.setString(2,todaysdate); pstmt.setInt(3,0); pstmt.setInt(4,0); pstmt.setString(5,todaysdate);
+	pstmt.setInt(6,7); pstmt.setString(7,""); pstmt.setString(8,FOLDER_DRAFT); pstmt.setInt(9,0); pstmt.setString(10,"");
+	pstmt.setString(11,""); pstmt.setString(12,""); pstmt.setString(13,""); pstmt.setString(14,""); pstmt.setString(15,todaysdate);
+	pstmt.setString(16,""); pstmt.setString(17,""); pstmt.setInt(18,0); pstmt.setInt(19,0); pstmt.setInt(20,0);
+	pstmt.setInt(21,0); pstmt.setString(22,""); pstmt.setString(23,"NORMAL"); pstmt.setInt(24,0); pstmt.setString(25,pBranch);
+	pstmt.setString(26,"WIP"); pstmt.setString(27,""); pstmt.setString(28,null); pstmt.setString(29,null); pstmt.setString(30,null);
+
+	pstmt.setString(31,""); pstmt.setString(32,null); pstmt.setString(33,""); pstmt.setString(34,pUser);
+
+	pstmt.executeUpdate();
+	sql.close();
+	alert("insert new job");
+}
+
+void jobFoldersFunc(String iwhat)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = ""; renum = false;
+	unm = "tester"; try { unm = useraccessobj.username; } catch (Exception e) {}
+
+	if(iwhat.equals("newjob_b")) // insert new job-folder
+	{
+		vInsert_JobFolder(unm,HQ_BRANCH);
+	}
+
+	if(iwhat.equals("commitjob_b")) // commit job-folder
+	{
+	}
+
+	if(iwhat.equals("canceljob_b")) // cancel job-folder, only un-committed ones can cancel. Else, need authorization
+	{
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		vsql_execute(sqlstm);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+void samplesFuncDo(String iwhat)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = ""; renum = false;
+	unm = "tester"; try { unm = useraccessobj.username; } catch (Exception e) {}
+
+	if(!sqlstm.equals(""))
+	{
+		vsql_execute(sqlstm);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+Object[] jobfolderhds1 =
+{
+	new listboxHeaderWidthObj("JOB",true,"80px"),
+	new listboxHeaderWidthObj("DATED",true,"70px"),
+	new listboxHeaderWidthObj("CUSTOMER",true,""),
+	new listboxHeaderWidthObj("SC",true,"60px"),
+	new listboxHeaderWidthObj("STAT",true,"70px"),
+	new listboxHeaderWidthObj("PRTY",true,"70px"),
+	new listboxHeaderWidthObj("USER",true,"70px"),
+	new listboxHeaderWidthObj("arcode",false,""),
+};
+JF_ORIGID = 0; JF_DATED = 1; JF_CUSTOMER = 2; JF_SAMPLECOUNT = 3;
+JF_STATUS = 4; JF_PRIORITY = 5; JF_USER = 6; JF_ARCODE = 7;
+
+last_listjob_type = 0;
+
+class joblbonselect implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException { try { jobfolders_callBack(event.getReference()); } catch (Exception e) {} }
+}
+joblb_onselect = new joblbonselect();
+
+class joblbdclick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException { try { jobfolders_callBack(event.getTarget()); } catch (Exception e) {} }
+}
+joblb_dcliker = new joblbdclick();
+
+/**
+ * List job-folders, uses some hardcoded UI obj: startdate,enddate,searhtxt_tb,byjob_tb
+ * @param pType type of list-out
+ * @param pDiv  DIV holder
+ * @param pLbid listbox ID string
+ */
+void listJobFolders(int pType, Div pDiv, String pLbid)
+{
+	last_listjob_type = pType;
+	sdate = kiboo.getDateFromDatebox(startdate); edate = kiboo.getDateFromDatebox(enddate);
+	jfi = "0";
+	try { jfi = Integer.parseInt(byjob_tb.getValue().trim()).toString(); } catch (Exception e) {}
+	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+
+	Listbox newlb = lbhand.makeVWListbox_Width(pDiv, jobfolderhds1, pLbid, 13);
+	newlb.setMold("paging"); // newlb.setMultiple(true); newlb.setCheckmark(true); 
+	newlb.addEventListener("onSelect", joblb_onselect);
+
+	sqlstm = "select j.origid,j.ar_code,j.datecreated,j.folderstatus,j.priority,j.createdby," +
+	"CAST((select count(origid) from JobSamples where jobfolders_id=j.origid) as DECIMAL(0)) as samplecount, c.customer_name " +
+	"from JobFolders j " +
+	"left join Customer c on c.ar_code=j.ar_code ";
+
+	switch(pType)
+	{
+		case 1: // by date-range and search-text
+			sqlstm += "where DATE(j.datecreated) between '" + sdate + "' and '" + edate + "' ";
+			if(!st.equals("")) sqlstm += "and c.customer_name like '%" + st + "%' ";
+			break;
+
+		case 2: // by job-folder ONLY
+			sqlstm += "where j.origid=" + jfi;
+			break;
+	}
+
+	sqlstm += " order by j.origid;";
+	r = vsql_GetRows(sqlstm); if(r.size() == 0) return;
+
+	String[] fl = { "origid","datecreated","customer_name","samplecount","folderstatus","priority","createdby","ar_code" };
+	ArrayList kabom = new ArrayList();
+
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		li = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	//lbhand.setDoubleClick_ListItems(newlb, joblb_dcliker);
+}
+
+]]>
+</zscript>
+
+<popup id="listpopop">
+	<div sclass="shadowbox" style="${LISTPOBACKGROUND}">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${LISTPOBACKGROUND}">
+					<label value="Start" sclass="wbo" />
+					<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<label value="End" sclass="wbo" />
+					<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+				</row>
+				<row style="${LISTPOBACKGROUND}" spans="3,1">
+					<textbox id="searhtxt_tb" sclass="k9" width="95%" />
+					<button label="Load/Find" sclass="k9mo" onClick='listpopop.close(); listJobFolders(1,folders_holder,"jobfolder_lb");' />
+				</row>
+				<row style="${LISTPOBACKGROUND}" spans="3,1">
+					<textbox id="byjob_tb" sclass="k9" width="50%" />
+					<button label="by job-folder" sclass="k9mo" onClick='listpopop.close(); listJobFolders(2,folders_holder,"jobfolder_lb");' />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<popup id="selcustomer_pop">
+	<div sclass="shadowbox" style="background:#F0D126" width="650px" >
+		<hbox>
+			<label value="Search" sclass="k9" />
+			<textbox id="searchcust_tb" sclass="k9" />
+			<button label="Find / Load" sclass="k9mo" onClick="findCustomers(searchcust_tb,foundcusts_holder,selectcustid)" />
+		</hbox>
+		<separator height="3px" />
+		<hbox>
+			<div id="foundcusts_holder" width="400px" />
+			<div>
+				<label id="selectcustid" sclass="k9mo" multiline="true" />
+			</div>
+		</hbox>
+	</div>
+</popup>
+
+<popup id="addsample_pop">
+	<div sclass="shadowbox" style="${LISTPOBACKGROUND}" width="180px">
+		<hbox>
+			<label value="Count" />
+			<textbox id="addsamplecount_tb" width="60px" value="1" />
+			<button id="addsample_b" label="Add" onClick="samplesFuncDo(self.getId())" />
+		</hbox>
+	</div>
+</popup>
+
+<popup id="samplesmpf_pop">
+	<div sclass="shadowbox" style="${LISTPOBACKGROUND}" width="380px">
+		<label value="Multi Processing Functions" />
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
+<panelchildren style="background:#5B6176">
+
+	<div sclass="shadowbox" style="background:#232C47">
+		<hbox>
+			<button label="LIST" sclass="k9mo" onClick="listpopop.open(self)" />
+			<separator width="8px" />
+			<button id="newjob_b" label="NEW JOB" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+			<button id="commitjob_b" label="COMMIT" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+			<separator width="8px" />
+			<button id="canceljob_b" label="CANCEL JOB" sclass="k9mo" style="${REDTEXTSTYLE}" onClick="jobFoldersFunc(self.getId())" />
+		</hbox>
+	</div>
+	<separator height="3px" />
+	<div id="folders_holder" sclass="shadowbox" style="background:#2F4F9A" />
+	<separator height="3px" />
+	<div id="workarea" sclass="shadowbox" style="background:#232C47">
+		<tabbox>
+			<tabs>
+				<tab id="tab0" label="METADATA" />
+				<tab id="tab1" label="SAMPLES" />
+				<tab id="tab2" label="ATTACHMENTS" />
+			</tabs>
+			<tabpanels>
+				<tabpanel> <!-- METADATA -->
+					<hbox>
+						<button id="setcustomer_b" label="SET CUSTOMER" sclass="k9mo" onClick="selcustomer_pop.open(self)" />
+						<button id="savefoldermeta_b" label="SAVE METADATA" sclass="k9mo" />
+					</hbox>
+					<separator height="3px" />
+					<grid width="600px">
+						<rows>
+							<row>
+								<label value="JOB FOLDER" sclass="k9" />
+								<label id="jf_origid" />
+								<label value="Dated" sclass="k9" />
+								<label id="jf_datecreated" />
+								<label value="ARCODE" sclass="k9" />
+								<label id="jf_ar_code" sclass="k9" />
+							</row>
+							<row spans="1,5">
+								<label value="Customer" sclass="k9" />
+								<label id="jf_customer_name" sclass="k9" />
+							</row>
+						</rows>
+					</grid>
+				</tabpanel>
+				<tabpanel> <!-- SAMPLES -->
+					<hbox>
+						<button label="ADD SAMPLES" sclass="k9mo" onClick="addsample_pop.open(self)" />
+						<button label="MPF" sclass="k9mo" onClick="samplesmpf_pop.open(self)" />
+						<button label="REMOVE" sclass="k9mo" />
+					</hbox>
+					<separator height="3px" />
+					<div id="samples_holder" width="600px" />
+
+				</tabpanel>
+				<tabpanel> <!-- ATTACHMENTS -->
+				</tabpanel>
+			</tabpanels>
+		</tabbox>
+	</div>
+
+<zscript>
+<![CDATA[
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>
