@@ -134,8 +134,7 @@ void genWH_picklist(String iwhat)
 	//HSSFSheet sheet = excelWB.createSheet("THINGS");
 
 	Font wfont = excelWB.createFont();
-	wfont.setFontHeightInPoints((short)8);
-	wfont.setFontName("Arial");
+	wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
 
 	excelInsertString(sheet,0,1, "RWMS Job ID: " + jnum + " Pick-list: " + jpl.get("origid").toString() );
 	excelInsertString(sheet,1,1, "Customer: " + jrec.get("customer_name") );
@@ -147,25 +146,20 @@ void genWH_picklist(String iwhat)
 	excelInsertString(sheet,3,3, "OrderType: " + kiboo.checkNullString(jrec.get("order_type")) );
 
 	CellStyle st3 =  excelWB.createCellStyle();
-	st3.setFillForegroundColor(HSSFColor.GREY_40_PERCENT.index);
-	st3.setFillPattern(HSSFCellStyle.SOLID_FOREGROUND);
-	st3.setWrapText(true);
+	st3.setFillForegroundColor(HSSFColor.GREY_40_PERCENT.index); st3.setFillPattern(HSSFCellStyle.SOLID_FOREGROUND); st3.setWrapText(true);
 	//st3.setAlignment(CellStyle.ALIGN_CENTER);
-	st3.setBorderLeft(CellStyle.BORDER_THIN);
-	st3.setBorderRight(CellStyle.BORDER_THIN);
-	st3.setBorderBottom(CellStyle.BORDER_THIN);
+	st3.setBorderLeft(CellStyle.BORDER_THIN); st3.setBorderRight(CellStyle.BORDER_THIN); st3.setBorderBottom(CellStyle.BORDER_THIN);
 	st3.setFont(wfont);
 
 	CellStyle st4 =  excelWB.createCellStyle();
 	st4.cloneStyleFrom(st3);
 	st4.setFillPattern(HSSFCellStyle.NO_FILL);
 
-	// loop print the req items
 	lnc = 1;
 	itms = sqlhand.clobToString(jpl.get("pl_items")).split("~");
 	qtys = sqlhand.clobToString(jpl.get("pl_qty")).split("~");
 
-	for(i=0; i<itms.length; i++)
+	for(i=0; i<itms.length; i++) // loop print the req items
 	{
 		excelInsertString(sheet,5+i,0, lnc.toString() + ".");
 		excelInsertString(sheet,5+i,1, itms[i]);
@@ -182,7 +176,6 @@ void genWH_picklist(String iwhat)
 	fileOut.close();
 
 	downloadFile(kasiexport,tfname,outfn);
-
 }
 
 String[] sourceSerialNo_byAssetTag(String iatg)
@@ -190,7 +183,8 @@ String[] sourceSerialNo_byAssetTag(String iatg)
 	String[] retv = new String[2];
 	retv[0] = retv[1] = "";
 	sqlstm = "select serial,name from partsall_0 where assettag='" + iatg + "';";
-	r = f30_gpSqlFirstRow(sqlstm); // TODO - chg back sqlhand
+	//r = f30_gpSqlFirstRow(sqlstm); // testing
+	r = sqlhand.gpSqlFirstRow(sqlstm);
 
 	if(r != null)
 	{
@@ -241,5 +235,4 @@ void genAssetTags_printout(String ijid, String ipl)
 	newiframe.setSrc(thesrc);
 	newiframe.setParent(expass_div);
 	expasspop.open(prnpickedass_b);
-
 }

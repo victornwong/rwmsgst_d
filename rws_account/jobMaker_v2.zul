@@ -147,14 +147,14 @@ void doFunc(Object iwhat)
 
 				if(oty.equals("NEW")) // if order-type=NEW, send notif to procurement
 				{
-					topeople = "laikw@rentwise.com,satish@rentwise.com,sangeetha@rentwise.com";
+					topeople = "satish@rentwise.com,harvin@rentwise.com";
 					emailsubj = "RE: New " + lnkc + " submitted which required NEW EQUIPMENTS";
 					emailmsg = "A new job has been submitted which required NEW EQUIPMENTS purchase." +
 					"Do take the appropriate action ASAP.";
 					gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
 
 					// 03/03/2014: inject task TODO HARDCODED
-					String[] tsku = { "sangeetha","satish","laikw" };
+					String[] tsku = { "sangeetha","satish","harvin" };
 					for(i=0; i<tsku.length; i++)
 					{
 						injInternalTask(useraccessobj.username, tsku[i], emailsubj, lnkc, "URGENT");
