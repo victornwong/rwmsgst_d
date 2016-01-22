@@ -13,7 +13,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Sales/Marketing Activities";
-MYVERSION = "v0.2.1";
+MYVERSION = "v0.2.2";
 MYPANEL = "salcolcla";
 /**
  * @author Victor Wong
@@ -32,6 +32,7 @@ MYPANEL = "salcolcla";
  * 12/10/2015: Tham req - last grading date - new field added, grade_update
  * 02/12/2015: Totally remove "TONY" from any notification or whatever, requested by Mandy
  * 04/01/2016: change all occurance of tham@ to umananthini@rentwise.com
+ * 19/01/2016: Mandy request, add column "LEAD SOURCE" and "CAMPAIGN" : genColdCallDump()
  */
 import java.util.*;
 import java.text.*;

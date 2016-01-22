@@ -19,6 +19,9 @@ box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px" >
 	</div>
 	<div id="approvers_box" />
 </div>
+
+18/01/2016: remove any sales people involvement in any approver except for quotation if required later (RW)
+
 */
 
 // toggle 'em BPM related buttons
@@ -58,8 +61,7 @@ boolean checkBPM_fullapproval(String ilnkc)
 	{
 		if((int)krr.get("bpcount") == (int)krr.get("appcount")) retv = true;
 		if((int)krr.get("bpcount") == 0) retv = false; // no BPM-actions found
-	}
-	//alert(sqlstm + " " + krr + " " + retv);
+	} //alert(sqlstm + " " + krr + " " + retv);
 	return retv;
 }
 
@@ -93,19 +95,19 @@ void injectApprovers(String lnkc, String ijobtype)
 		crk = sqlhand.gpSqlFirstRow(sqlstm);
 		if(crk == null) // if no approvers in bpm_actions for this jobtype, do new one
 		{
-			// remove all previous ones in-case any
-			sqlstm = "delete from bpm_actions where assigner='" + lnkc + "';";
-		
-			// TODO customize here to inject how type/how-many approvers
-			//if(ijobtype.equals("ROC"))
+			sqlstm = "delete from bpm_actions where assigner='" + lnkc + "';"; // remove all previous ones in-case any
 
-			if(!ijobtype.equals("PR"))
+			// TODO customize here to inject how type/how-many approvers : if(ijobtype.equals("ROC"))
+
+			if(!ijobtype.equals("PR")) // any other non-PR vouchers, only CC to approve (RW)
 				sqlstm += "insert into bpm_actions (assigner,datecreated,actiontype,field1,field2) values " +
 				"('" + lnkc + "','" + todaydate + "','APPROVAL','CC','" + ijobtype + "');";
 
-			if(ijobtype.equals("SO"))
-				sqlstm += "insert into bpm_actions (assigner,datecreated,actiontype,field1,field2) values " +
-				"('" + lnkc + "','" + todaydate + "','APPROVAL','SALES','" + ijobtype + "');";
+			/* 18/01/2016: remove any sales people involvement in any approver except for quotation if required later
+				if(ijobtype.equals("SO"))
+					sqlstm += "insert into bpm_actions (assigner,datecreated,actiontype,field1,field2) values " +
+					"('" + lnkc + "','" + todaydate + "','APPROVAL','SALES','" + ijobtype + "');";
+			*/
 
 			if(ijobtype.equals("PR"))
 			{
@@ -114,12 +116,11 @@ void injectApprovers(String lnkc, String ijobtype)
 
 				sqlstm += "insert into bpm_actions (assigner,datecreated,actiontype,field1,field2) values " +
 				"('" + lnkc + "','" + todaydate + "','APPROVAL','APP1_GM_FC_CEO','" + ijobtype + "');";
-/*
+			/*
 				sqlstm += "insert into bpm_actions (assigner,datecreated,actiontype,field1,field2) values " +
 				"('" + lnkc + "','" + todaydate + "','APPROVAL','APP2_FC_CEO','" + ijobtype + "');";
-*/
+			*/
 			}
-				
 		}
 	}
 	if(!sqlstm.equals("")) sqlhand.gpSqlExecuter(sqlstm);
@@ -143,7 +144,6 @@ class bpm_approverClick implements org.zkoss.zk.ui.event.EventListener
 	public void onEvent(Event event) throws UiException
 	{
 		bid = event.getTarget().getId();
-
 		spl = bid.split("_"); // split comp-ID, first part the button_id and 2nd = bpm linking-code
 
 		bty = spl[0].substring(0,3);
@@ -158,7 +158,7 @@ class bpm_approverClick implements org.zkoss.zk.ui.event.EventListener
 		BPM_updateRec(bid,useraccessobj.username,cmtb.getValue(), bpt,
 			( (bty.equals("APP")) ? "APPROVE" : "DISAPPROVE") , lnkc);
 
-		// refresh according to linking-code prefix (def in rwglobaldefs.zs)
+		// refresh according to linking-code prefix (def in rwglobaldefs.zs) (TODO hardcoded for Rentwise only)
 		if(lnkc.indexOf(JOBS_PREFIX) != -1)
 		{
 			kid = spl[1].substring(JOBS_PREFIX.length(),spl[1].length());
@@ -177,7 +177,6 @@ class bpm_approverClick implements org.zkoss.zk.ui.event.EventListener
 			showPRMetadata(kid);
 			checkPR_Approval(kid); // call-back in rwpurchaseReq_v1.zul
 		}
-
 	}
 }
 
@@ -209,11 +208,8 @@ void showApprovalThing(String lnkc, String ijobtype, Div iholder)
 	aks = sqlhand.gpSqlGetRows(sqlstm);
 	if(aks.size() == 0) return;
 
-	apg = new Grid();
-	apg.setId("app_grid");
-	apg.setParent(iholder);
-	krws = new org.zkoss.zul.Rows();
-	krws.setParent(apg);
+	apg = new Grid(); apg.setId("app_grid"); apg.setParent(iholder);
+	krws = new org.zkoss.zul.Rows(); krws.setParent(apg);
 
 	bpmevt = new bpm_approverClick();
 

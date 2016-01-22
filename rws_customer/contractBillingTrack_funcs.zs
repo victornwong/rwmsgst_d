@@ -245,7 +245,7 @@ void listROCLC(int itype)
 			break;
 
 		case 3 : // load latest entered
-			sqlstm = "select top 15 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder, lc.assigned," +
+			sqlstm = "select top 66 lc.origid, lc.lc_id, lc.rocno, lc.customer_name,lc.period,lc.lstartdate,lc.lenddate,lc.lstatus, lc.super_reminder, lc.assigned," +
 			"(select count(origid) from rw_lc_equips where lc_parent=lc.origid) as aqty, lc.inst_type, lc.rwno, " +
 			"(select count(lce1.gcn_id) from rw_lc_equips lce1 " +
 			"where lce1.lc_parent=lc.origid and (lce1.gcn_id is not null or lce1.gcn_id<>0)) as gcocount," +

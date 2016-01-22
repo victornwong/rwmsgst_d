@@ -1,5 +1,6 @@
 // String mangler work in listbox - each line in a string inserted as a listbox item
 // Uses some hardcoded things from calling module. Remember the popup too - got a copy at the end
+// Hardcoded thing : JN_linkcode() in main file
 
 Object[] mngitmhds =
 {
@@ -38,20 +39,30 @@ void scanitems_Listbox_mangler(Textbox pTbox)
 
 /**
  * Just remove selected-items in mangleitems_lb - no confirmation
+ * 18/01/2016: audit-log for removed items, everytime activated by user
  */
 void removeMangleitems()
 {
 	ilb = mangleitems_holder.getFellowIfAny("mangleitems_lb"); // HARDCODED ui elements in mangleitems_pop
 	if(ilb == null) return;
 	ts = ilb.getSelectedItems().toArray();
+	rmitems = "";
 	for(i=0;i<ts.length;i++)
 	{
+		kk = lbhand.getListcellItemLabel(ts[i],0);
+		rmitems += kk + " ";
 		ts[i].setParent(null);
+	}
+	if(rmitems.equals(""))
+	{
+		adts = "Remove asset-tag: " + rmitems.trim();
+		add_RWAuditLog(JN_linkcode(),"",adts,useraccessobj.username);
 	}
 }
 
 /**
  * Add from textbox to mangle-item listbox. Uses manglenewitem_tb defined in popup.
+ * 18/01/2016: audit-log for each added asset-tag, everytime activated by user
  */
 void addItemToMangleList()
 {
@@ -62,6 +73,9 @@ void addItemToMangleList()
 	ArrayList kabom = new ArrayList();
 	kabom.add(kk);
 	lbhand.insertListItems(ilb,kiboo.convertArrayListToStringArray(kabom),"false","");
+
+	adts = "Add asset-tag: " + kk;
+	add_RWAuditLog(JN_linkcode(),"",adts,useraccessobj.username); // 18/01/2016: constant audit-log paranoia
 }
 
 /**
@@ -76,11 +90,12 @@ void updateMangleitemsBack_toTextbox()
 	ts = ilb.getItems().toArray();
 	for(i=0; i<ts.length; i++)
 	{
-		kk = lbhand.getListcellItemLabel(ts[i],0);
+		kk = kiboo.replaceSingleQuotes( lbhand.getListcellItemLabel(ts[i],0) );
 		tobe_itemslist += kk + ",";
 		tobe_insert += kk + "\n";
 	}
-	adts = "Original tags: " + mangleOriginalItems + "\nUPDATED to: " + tobe_itemslist;
+	//adts = "Original tags: " + mangleOriginalItems + "\nUPDATED to: " + tobe_itemslist;
+	adts = "Update return-replace items";
 	add_RWAuditLog(JN_linkcode(),"",adts,useraccessobj.username); // Add original-items and tobe_insert to audit-log
 	mangleTextboxObj.setValue(tobe_insert); // replace things in textbox
 	mangleItems_callback();

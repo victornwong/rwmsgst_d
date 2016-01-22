@@ -241,6 +241,10 @@ void setContactPotential(Object iwhat)
 	listActiContacts(last_loadcont,glob_current_user);
 }
 
+/**
+ * Extract data into MS-EXCEL . XML-form data will be chopped to populate them columns
+ * 19/01/2016: Mandy request, add column "LEAD SOURCE" and "CAMPAIGN"
+ */
 void genColdCallDump()
 {
 	sqlstm = "select * from rw_activities_contacts where deleted=0";
@@ -259,7 +263,9 @@ void genColdCallDump()
 
 	String[] rhds = { "REC","Dated","User","Customer","Grade","Potential","Contact","Designation",
 	"Address1","Address2","Address3","Address4","Tel","Fax","Email","Industry","Division",
-	"CustomerGrade","GradeReq","GradeRemarks",
+	"CustomerGrade","GradeReq","GradeRemarks","Grade update",
+	"LEAD SOURCE","CAMPAIGN",
+
 	"Total No PC","DT","NB","Tech.Level","OS","Brand","Specs","Warranty",
 	"Server brand","Server count", "MS-Off Ver", "MS-Off License",
 	"ERP", "PABX Brand", "PC/Server remarks",
@@ -269,13 +275,14 @@ void genColdCallDump()
 	"Contact2", "Designation2", "Email2",
 	"Contact3", "Designation3", "Email3",
 	"Contact4", "Designation4", "Email4",
-	"Customer remarks","Grade update"
+	"Customer remarks"
 	 };
 
 	String[] flsd = { "username","cust_name","customer_grade","potential","contact_person","designation",
 	"cust_address1","cust_address2","cust_address3","cust_address4",
 	"cust_tel","cust_fax","cust_email","industry","call_div",
-	"customer_grade","grade_req","grading_remarks","grade_update"
+	"customer_grade","grade_req","grading_remarks","grade_update",
+	"leadsource","campaign"
 	};
 
 	String[] hsds = {

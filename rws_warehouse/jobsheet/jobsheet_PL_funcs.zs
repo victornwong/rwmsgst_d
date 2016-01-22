@@ -184,7 +184,7 @@ String[] sourceSerialNo_byAssetTag(String iatg)
 	retv[0] = retv[1] = "";
 	sqlstm = "select serial,name from partsall_0 where assettag='" + iatg + "';";
 	//r = f30_gpSqlFirstRow(sqlstm); // testing
-	r = sqlhand.gpSqlFirstRow(sqlstm);
+	r = sqlhand.rws_gpSqlFirstRow(sqlstm);
 
 	if(r != null)
 	{

@@ -18,15 +18,14 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Job Maker (ROC/SO/etc)";
-MYVERSION = "v2.0.1";
+MYVERSION = "v2.0.2";
 MYPANEL = "jobmakeapanr";
 /*
 @Title Job maker - to manage ROC,SO,RMA or anything else
 @Author Victor Wong
 @Dated 22/08/2013
 
-03/03/2014: if job is for new equips, add task-notif for PR div.
-			List equips name/qty from focus6 instead of stkmstdet
+03/03/2014: if job is for new equips, add task-notif for PR div. List equips name/qty from focus6 instead of stkmstdet
 10/03/2014: some codes optimization
 19/03/2014: mod job-listing to use grid instead of listbox
 16/04/2014: Lai req to see MRN which linked to T.GRN
@@ -34,6 +33,7 @@ MYPANEL = "jobmakeapanr";
 26/09/2014: chg rw_jobs.items to NTEXT to store unlimited items
 16/10/2014: bump to version 2. Linking to new modules and UI redesign
 05/01/2016: modif FOCUS SO import , unitqty uses quantity and no longer input0
+18/01/2016: inject BPM approvers when job is submitted - users able to toggle approval buttons = lookup CC_APPROVER_USER
 
 */
 import java.util.*;
@@ -130,14 +130,15 @@ void doFunc(Object iwhat)
 			}
 			else
 			{
+				injectApprovers(lnkc, glob_sel_jobtype); // 18/01/2016: inject BPM entries when submit job
+
 				sqlstm = "update rw_jobs set status='SUBMIT' where origid=" + glob_sel_job;
 				refresh = true;
 
 				toggleButts(itype,true);
 				toggleButts("workarea_butts",true);
 
-				// Send email notif to approvers
-				topeople = luhand.getLookups_ConvertToStr("JOB_APPROVER_EMAILS",2,",");
+				topeople = luhand.getLookups_ConvertToStr("JOB_APPROVER_EMAILS",2,","); // Send email notif to approvers
 				emailsubj = "RE: New " + lnkc + " submitted";
 				emailmsg = "A new job has been submitted. Pending approval, your action required.";
 				//gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
@@ -154,7 +155,7 @@ void doFunc(Object iwhat)
 					gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);
 
 					// 03/03/2014: inject task TODO HARDCODED
-					String[] tsku = { "sangeetha","satish","harvin" };
+					String[] tsku = { "satish","harvin" };
 					for(i=0; i<tsku.length; i++)
 					{
 						injInternalTask(useraccessobj.username, tsku[i], emailsubj, lnkc, "URGENT");

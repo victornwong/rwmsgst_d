@@ -28,6 +28,8 @@ MYPANEL = "whplayjspan";
  * 12/11/2015: parts-return functionality built-into
  * 13/01/2016: re-design for return-replace functions . Process flow: request -> pick items -> return(faulty picked items) -> replace (something else pick)
  * 	All return and replacement activity logs mandatory
+ * 18/01/2016: parts return and replace, each activation by user will be audit-logged
+ * 18/01/2016: Harvin confirmed pallet name to use for WH->Prod transfer = PROD_PROCESS
  */
 import java.util.*;
 import java.text.*;
@@ -139,7 +141,7 @@ void pl_DoFunc(String itype)
 
 	if(itype.equals("partret_b")) // parts-return thing
 	{
-		// TODO can only activate this one only when pick-list is commited/done, else user can edit items in the textbox
+		// TODO can only activate this one only when pick-list is commited/done, else user can edit items in the textbox in draft pick-list
 		try
 		{
 			jk = pl_rows.getChildren().toArray();
@@ -307,7 +309,7 @@ void mangleItems_callback()
 				<button label="Return selected parts" sclass="k9mo" onClick="removeMangleitems()" />
 				<textbox id="manglenewitem_tb" sclass="k9" />
 				<button label="Add replacement" sclass="k9mo" onClick="addItemToMangleList()" />
-				<button label="Save scan items" sclass="k9mo" onClick="updateMangleitemsBack_toTextbox()" />
+				<button label="Update items" sclass="k9mo" onClick="updateMangleitemsBack_toTextbox()" />
 				<button id="shwauditlogs_b" label="Transcation logs" sclass="k9mo" onClick="pl_DoFunc(self.getId())" />
 			</vbox>
 			<div id="mangleitems_holder" />
@@ -328,7 +330,7 @@ void mangleItems_callback()
 		<div id="tfxlist_holder" />
 		<separator height="3px" />
 		<button id="realtransfer_b" label="Really transfer to PROD" style="font-weight:bold" onClick="reallyTransferItemsToProd()" />
-		<textbox id="admpalletinp_tb" sclass="k9" value="PROD" visible="false" />
+		<textbox id="admpalletinp_tb" sclass="k9" value="PROD_PROCESS" visible="false" />
 	</div>
 </popup>
 
@@ -413,8 +415,8 @@ void mangleItems_callback()
 				<vbox>
 					<label value="Jobsheet - Request Items - Pick List" sclass="subhead1" />
 					<hbox>
-						<button id="prnpickedass_b" label="Print picked items list" style="font-weight:bold;color:#2E29CB" onClick="pl_DoFunc(self.getId())" />
-						<button id="tfxprod_b" label="Transfer items to PROD" style="font-weight:bold;color:#F01B1B" onClick="pl_DoFunc(self.getId())" />
+						<button id="prnpickedass_b" label="1. Print picked items list" style="font-weight:bold;color:#2E29CB" onClick="pl_DoFunc(self.getId())" />
+						<button id="tfxprod_b" label="2. Transfer items to PROD" style="font-weight:bold;color:#F01B1B" onClick="pl_DoFunc(self.getId())" />
 					</hbox>
 					<label value="WH extra notes" sclass="k9mo" style="color:#ffffff" />
 					<textbox id="j_extranotes" multiline="true" width="400px" height="60px" sclass="k9" />
@@ -474,4 +476,3 @@ if(useraccessobj.accesslevel == 9)
 </panel>
 </div>
 </zk>
-
