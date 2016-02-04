@@ -289,9 +289,9 @@ void savePRItems(String iwhat)
 	for(i=0; i<cds.length; i++)
 	{
 		c1 = cds[i].getChildren().toArray();
-		itms += kiboo.replaceSingleQuotes( c1[1].getValue().replaceAll("~"," ") ) + "~";
-		iqty += kiboo.replaceSingleQuotes( c1[2].getValue().replaceAll("~"," ") ) + "~";
-		iuprice += kiboo.replaceSingleQuotes( c1[3].getValue().replaceAll("~"," ") ) + "~";
+		itms += kiboo.replaceSingleQuotes( c1[1].getValue().trim().replaceAll("~"," ") ) + "~";
+		iqty += kiboo.replaceSingleQuotes( c1[2].getValue().trim().replaceAll("~"," ") ) + "~";
+		iuprice += kiboo.replaceSingleQuotes( c1[3].getValue().trim().replaceAll("~"," ") ) + "~";
 	}
 
 	try { itms = itms.substring(0,itms.length()-1); } catch (Exception e) {}
@@ -329,22 +329,27 @@ void checkMakeItemsGrid()
 }
 
 // Calculate sub-total and populate column
+// 03/02/2016: put a trim() for listbox item string
 void calcPRItems(Object irows)
 {
 	cds = irows.getChildren().toArray();
 	if(cds.length < 1) return;
 	gtotal = 0.0;
+	dbgstr = "";
 	for(i=0; i<cds.length; i++)
 	{
 		c1 = cds[i].getChildren().toArray();
-		qty = c1[2].getValue();
-		upr = c1[3].getValue();
-		subt = 0.0;
-		try { subt = Integer.parseInt(qty) * Float.parseFloat(upr); } catch (Exception e) {}
+		qty = 0; try { qty = Integer.parseInt(c1[2].getValue().trim()); } catch (Exception e) {}
+		upr = 0.0; try { upr = Float.parseFloat(c1[3].getValue().trim()); } catch (Exception e) {}
+		subt = qty * upr;
+		//try { subt = Integer.parseInt(qty) * Float.parseFloat(upr); } catch (Exception e) { dbgstr += "hit:" + i.toString() + "\n"; }
 		gtotal += subt;
 		c1[4].setValue(nf.format(subt));
+
+		//dbgstr += "no:" + i.toString() + " qty:" + qty.toString() + " upr:" + upr.toString() + " subt:" + subt.toString() + "\n";
 	}
 	total_lbl.setValue(nf.format(gtotal));
+	//debugbox.setValue(dbgstr);
 }
 
 void removePRItems(Object irows)

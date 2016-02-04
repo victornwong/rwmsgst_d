@@ -47,7 +47,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
 ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,sangeetha@rentwise.com,umananthini@rentwise.com,leanneooi@rentwise.com"; // TODO HARDCODED 29/11/2013
+NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,leanneooi@rentwise.com"; // TODO HARDCODED 29/11/2013
 
 Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
 global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
@@ -519,7 +519,7 @@ void reportFunc(Object iwhat)
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#D5E843">
-
+	<label id="debugbox" multiline="true" style="color:#ffffff" />
 	<div sclass="shadowbox" style="background:#2e3436;">
 		<hbox>
 			<label value="Start date" sclass="k9b" /> <datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
@@ -669,8 +669,6 @@ void reportFunc(Object iwhat)
 			</tabpanels>
 		</tabbox>
 	</div>
-
-<!-- <textbox id="debugbox" multiline="true" width="99%" height="100px" /> -->
 
 <div id="kasiexport" visible="false" />
 <div id="winsholder" />

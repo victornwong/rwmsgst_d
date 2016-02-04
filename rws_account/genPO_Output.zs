@@ -26,9 +26,9 @@ void birt_genPO_Template(String ipr)
 		for(i=0; i<itms.length; i++)
 		{
 			unitprice = "0.0";
-			try { kk = Float.parseFloat(iupr[i]); unitprice = iupr[i]; } catch (Exception e) {}
+			try { kk = Float.parseFloat(iupr[i].trim()); unitprice = iupr[i]; } catch (Exception e) {}
 			quantity = "0";
-			try { kk = Integer.parseInt(iqty[i]); quantity = iqty[i]; } catch (Exception e) {}
+			try { kk = Integer.parseInt(iqty[i].trim()); quantity = iqty[i]; } catch (Exception e) {}
 
 			sqlstm += "insert into purchasereq_items (pr_parent_id,description,unitprice,quantity,curcode) values " +
 			"(" + ipr + ",'" + kiboo.checkNullString(itms[i]) + "'," + unitprice + "," + quantity + ",'" + kiboo.checkNullString(prc.get("curcode")) + "');";
