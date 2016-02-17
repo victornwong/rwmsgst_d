@@ -59,16 +59,26 @@ import java.net.*;
 
 import java.sql.*;
 
-import java.sql.DriverManager;
-import java.sql.Connection;
-import java.sql.SQLException;
-
 import java.util.regex.*;
 
 import com.itextpdf.text.pdf.PdfReader;
 import com.itextpdf.text.pdf.parser.PdfReaderContentParser;
 import com.itextpdf.text.pdf.parser.SimpleTextExtractionStrategy;
 import com.itextpdf.text.pdf.parser.TextExtractionStrategy;
+
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import net.ucanaccess.converters.TypesMap.AccessType;
+import net.ucanaccess.ext.FunctionType;
+import net.ucanaccess.jdbc.UcanaccessConnection;
+import net.ucanaccess.jdbc.UcanaccessDriver;
+
+import com.healthmarketscience.jackcess.*;
 
 import org.victor.*;
 
@@ -357,8 +367,151 @@ void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Lis
 	}
 }
 
+Object[] talktimehds =
+{
+	new listboxHeaderWidthObj("DateTime",true,""),
+	new listboxHeaderWidthObj("Extension",true,""),
+	new listboxHeaderWidthObj("Person",true,""),
+	new listboxHeaderWidthObj("TrunkNo",true,""),
+	new listboxHeaderWidthObj("Phone",true,""),
+	new listboxHeaderWidthObj("CallType",true,""),
+	new listboxHeaderWidthObj("Duration",true,""),
+	new listboxHeaderWidthObj("Rang",true,""),
+	new listboxHeaderWidthObj("Info",true,""),
+	new listboxHeaderWidthObj("Extra",true,""),
+};
+
+/**
+ * Connection conn=DriverManager.getConnection("jdbc:ucanaccess://<mdb or accdb file path>",user, password); :: UCanAccess method
+ * Connection conn=DriverManager.getConnection("jdbc:ucanaccess://c:/pippo.mdb");
+ * File dbFile = new File(mdbfn); :: Jackcess method
+ * db = DatabaseBuilder.open(dbFile);
+ */
+void loadTalkTimeRecords(String pCallType, String pStartdate, String pEnddate)
+{
+	if(pCallType.equals("ALL")) pCallType = "%";
+
+	Class.forName("net.ucanaccess.jdbc.UcanaccessDriver");
+	mdbfn = session.getWebApp().getRealPath("tmp/TTR.mdb"); // TODO hardcoded to use current mdb, make dynamic dropdown to let user select which mdb
+	Connection conn = DriverManager.getConnection("jdbc:ucanaccess://" + mdbfn,"sa","");
+
+	sqlstm = "select st.dtDateTime, st.intExt, et.varName, st.varTrunkNo, " +
+	"st.varPhone, st.varCallType, st.varDuration, st.varMisscallDuration, " +
+	"st.varABBRV, st.varABBRVDesc from Trx_SignalTbl st " +
+	"left join Mas_ExtensionTbl et on et.intExt = st.intExt " +
+	"where st.dtDateTime between #" + pStartdate + "# and #" + pEnddate + "# " +
+	"and st.varCallType like '" + pCallType + "' " +
+	"order by st.dtDateTime";
+
+	st = conn.createStatement();
+	rs = st.executeQuery(sqlstm);
+
+	Listbox newlb = lbhand.makeVWListbox_Width(talktime_holder, talktimehds, "talktime_lb", 21);
+	newlb.setMold("paging");
+
+	//String[] fl = { "dtDateTime", "intExt", "varName", "varTrunkNo", "varPhone", "varCallType", "varDuration", "varMisscallDuration", "varABBRV", "varABBRVDesc" };
+	ArrayList kabom = new ArrayList();
+
+	while(rs.next())
+	{
+		j = rs.getMetaData().getColumnCount();
+		for(i=1; i<=j; ++i)
+		{
+			o = rs.getObject(i);
+			kabom.add(o.toString().trim());
+		}
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	conn.close();
+}
+
+void listdirfiles(String idirectory, Div iholder, String lbid)
+{
+	Object[] files_hd =
+	{
+		new listboxHeaderWidthObj("Filename",true,""),
+	};
+
+	Listbox newlb = lbhand.makeVWListbox_Width(iholder, files_hd, lbid, 1);
+	newlb.setMold("select");
+	File directory = new File(idirectory);
+	File[] flist = directory.listFiles();
+	ArrayList kabom = new ArrayList();
+	for(k : flist)
+	{
+		if(k.isFile())
+		{
+			kabom.add(k.getName());
+			lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","font-size:9px");
+			kabom.clear();
+		}
+	}
+}
+
+/**
+ * MS-ACCESS MDB filename filter used in listing them
+ * @return
+ */
+FilenameFilter mdbFilter = new FilenameFilter() 
+{
+	public boolean accept(File file, String name)
+	{
+		if(name.endsWith(".mdb") || name.endsWith(".MDB")) return true;
+		else return false;
+	}
+};
+
+/**
+ * Get files listing from directory specified by pPath. Uses filter for specified file listing
+ * @param pLb     listbox to put them filenames/full-path found
+ * @param pPath   full path to list them files
+ * @param pFilter FilenameFilter type - see example mdbFilter. null=list all files
+ */
+void listDirectoryFiles(Listbox pLb, String pPath, FilenameFilter pFilter)
+{
+	Object[] files_hd =
+	{
+		new listboxHeaderWidthObj("Filename",true,""),
+		new listboxHeaderWidthObj("fullpath",false,""), // hide this as listbox will be type select(drop-down)
+	};
+
+	File directory = new File(pPath);
+	File[] flist = (pFilter == null) ? directory.listFiles() : directory.listFiles(pFilter);
+	String[] kabom = new String[2];
+	for(k : flist)
+	{
+		if(k.isFile())
+		{
+			kabom[0] = k.getName();
+			kabom[1] = k.getAbsolutePath();
+			lbhand.insertListItems(pLb,kabom,"false","");
+		}
+	}
+}
+
+void showselfile()
+{
+	try
+	{
+		ts = ttfiles_lb.getSelectedItem();
+		st = lbhand.getListcellItemLabel(ts,0) + " :: " + lbhand.getListcellItemLabel(ts,1);
+		alert(st);
+	} catch (Exception e) {}
+}
+
 ]]>
 </zscript>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
 
 <?component name="tipcolor" macroURI="/macros/macrocomp1.zul" ?>
 
@@ -366,33 +519,55 @@ void fillupIRIS_selector(Listbox tcondition, Listbox tcode1, Listbox tcode2, Lis
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#094D7F">
 
-<grid width="480px">
-	<rows>
-		<row>
-			<label id="condition_code" />
-			<label id="problem_code" />
-			<label id="extended_code" />
-		</row>
-		<row>
-			<listbox id="iris_condition" mold="select" style="font-size:9px" width="130px" />
-			<hbox>
-				<listbox id="iris_code1" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(self,iris_code2,iriscode_dd)" />
-				<listbox id="iris_code2" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(iris_code1,self,iriscode_dd)" />
-			</hbox>
-			<listbox id="iris_extended" mold="select" style="font-size:9px" width="130px" />
-		</row>
-		<row>
-			<separator />
-			<listbox id="iriscode_dd" mold="select" style="font-size:9px" width="140px" />
-			<separator />
-		</row>
-	</rows>
-</grid>
+<hbox>
+	<listbox id="ttfiles_lb" mold="select" sclass="k9" />
+	<button label="dang" onClick="showselfile()" />
+
+	<listbox id="calltype_dd" mold="select" sclass="k9" />
+	<label value="From" sclass="wbo" /> <datebox id="callstart" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="To" sclass="wbo" /> <datebox id="callend" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+
+	<button label="Load" sclass="k9o" onClick="loadTalkTimeRecords(calltype_dd.getSelectedItem().getLabel(), kiboo.getDateFromDatebox(callstart), kiboo.getDateFromDatebox(callend))" />
+</hbox>
+
+<div id="talktime_holder"  />
+
+
+<!--
+	<grid width="480px">
+		<rows>
+			<row>
+				<label id="condition_code" />
+				<label id="problem_code" />
+				<label id="extended_code" />
+			</row>
+			<row>
+				<listbox id="iris_condition" mold="select" style="font-size:9px" width="130px" />
+				<hbox>
+					<listbox id="iris_code1" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(self,iris_code2,iriscode_dd)" />
+					<listbox id="iris_code2" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(iris_code1,self,iriscode_dd)" />
+				</hbox>
+				<listbox id="iris_extended" mold="select" style="font-size:9px" width="130px" />
+			</row>
+			<row>
+				<separator />
+				<listbox id="iriscode_dd" mold="select" style="font-size:9px" width="140px" />
+				<separator />
+			</row>
+		</rows>
+	</grid>
+-->
 
 <zscript>
 <![CDATA[
 
-fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iriscode_dd,1);
+String[] calltype_string = { "ALL","INCOMING","OUTGOING","MISSCALL" };
+lbhand.populateDropdownListbox(calltype_dd,calltype_string);
+
+listDirectoryFiles(ttfiles_lb, "/var/lib/tomcat7/webapps/rwmsgst_d/tmp",null);
+
+//listdirfiles("/var/lib/tomcat7/webapps/rwmsgst_d/tmp",ttfiles_holder,"ttfiles_lb");
+//fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iriscode_dd,1);
 
 /*
 <tipcolor words="test macro" bstyle="background:#3FADC5" />

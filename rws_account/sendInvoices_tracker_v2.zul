@@ -223,6 +223,12 @@ void extractTaxInvoiceMeta(String ipath, String ifilename, String[] iretvals)
 	iretvals[4] = doregex(tis,"RC/LC No.: (.*?)\n"); // try to grab RC/LC : 05/08/2015
 
 	if(iretvals[3].indexOf("@") == -1) iretvals[3] = ""; // not actually an email
+
+	if(DEBUGGING)
+	{
+		dbgstr = "invno:" + iretvals[0] + " invdate:" + iretvals[1] + " custname:" + iretvals[2] + " email:" + iretvals[3] + " rclc:" + iretvals[4] + "\n";
+		debugflag_lbl.setValue(dbgstr + debugflag_lbl.getValue());
+	}
 }
 
 /**
@@ -342,10 +348,12 @@ void importTaxInvoicesOnly()
 		if(d.isFile())
 		{
 			fn = d.getName();
+
+			if(DEBUGGING) debugflag_lbl.setValue("fn:" + fn + "\n" + debugflag_lbl.getValue());
+
 			if(fn.indexOf("sent") == -1) // don't have the word "sent" in filename, it's a new file, can import into tracker
 			{
-				// Check if filename already in rw_email_invoice.filename
-				if(!checkPDF_filename_exist_tracker(fn))
+				if(!checkPDF_filename_exist_tracker(fn)) // Check if filename already in rw_email_invoice.filename
 				{
 					extractTaxInvoiceMeta(TAXINVOICES_FOLDER, fn, invmeta);
 					if(!invmeta[0].equals("")) // process valid invoice-no only
@@ -1089,7 +1097,7 @@ void testme()
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#4A71A4">
 	<!-- <button label="testme" onClick="testme()" visible="${DEBUGGING}" /> -->
-	<label id="debugflag_lbl" sclass="k9" multiline="true" />
+	<label id="debugflag_lbl" multiline="true" style="color:#ffffff" />
 	<separator height="5px" />
 	<hbox>
 		<separator width="5px" />

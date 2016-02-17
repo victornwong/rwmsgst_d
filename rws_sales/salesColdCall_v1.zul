@@ -33,6 +33,7 @@ MYPANEL = "salcolcla";
  * 02/12/2015: Totally remove "TONY" from any notification or whatever, requested by Mandy
  * 04/01/2016: change all occurance of tham@ to umananthini@rentwise.com
  * 19/01/2016: Mandy request, add column "LEAD SOURCE" and "CAMPAIGN" : genColdCallDump()
+ * 15/02/2016: Put leanneooi@rentwise.com in notification emailing
  */
 import java.util.*;
 import java.text.*;
@@ -105,7 +106,7 @@ void contFunc(Object iwhat)
 		bizr = a_businessroc.getValue().trim();
 		cstn = a_cust_name.getValue().trim();
 
-		topeople = "creditcontrol@rentwise.com,umananthini@rentwise.com"; // HARDCODED - change accordingly
+		topeople = "creditcontrol@rentwise.com,leanneooi@rentwise.com"; // HARDCODED - change accordingly
 		subj = "Pre-pre-evaluation request by " + unm + " for " + cstn + " (" + bizr + ")";
 		msgb = "Pre-pre-evaluation request for this company:\n" + cstn + " (" + bizr + ")\n\n" +
 		"Please update the customer-grade in RWMS Sales Activities/Cold-Call module ASAP.";
@@ -486,7 +487,7 @@ if(sechand.allowedUser(useraccessobj.username,"CAN_UPDATE_GRADE"))
 	notifaftergrade_b.setDisabled(false);
 }
 
-if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james") || useraccessobj.username.equals("tham")) // 10/03/2014. 28/09/2015: add Tham KL
+if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james") || useraccessobj.username.equals("leanne")) // 16/02/2016: add leanne
 {
 	expdump_b.setDisabled(false);
 }
