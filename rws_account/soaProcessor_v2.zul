@@ -11,7 +11,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "SOA Template Processor";
-MYVERSION = "v0.3.1";
+MYVERSION = "v0.3.2";
 MYPANEL = "soaproc2";
 /**
  * Statement of Account template processor
@@ -34,6 +34,8 @@ MYPANEL = "soaproc2";
  * 18/06/2015: start port to FOCUS 0J1 database
  * 01/09/2015: re-do the SOA generator, uses raw-data from FOCUS bill-wise output. no mangling required.
  * 30/09/2015: unadjusted credit = receipts and CN, requested by Mahes to put into SOA. Check accuracy, good so far
+ * 19/02/2016: Rachel assert new understanding on late-payment-interest calculation based on balance instead of invoice-amount. Reprogram the generateExcelSOA3()
+ * 22/02/2016: Rachel request to have another SOA without late-payment interest. Need to create another XLS template without late-payment and outstanding column
  */
 import java.util.*;
 import java.text.*;
@@ -177,8 +179,8 @@ void doFunc(Object iwhat)
 		email_pop.close();
 	}
 
-	if(itype.equals("gensoa_narr_b")) generateExcelSOA2(1);
-	if(itype.equals("gensoa_nonarr_b")) generateExcelSOA2(2);
+	if(itype.equals("gensoa_narr_b")) generateExcelSOA3(1);
+	if(itype.equals("gensoa_nonarr_b")) generateExcelSOA3(2);
 }
 
 // Can be moddified or make this into general-purpose func TODO
@@ -231,21 +233,10 @@ void emailDocumentFromDS(String ireplyto, Object iextcnts, Object idocs, String 
 }
 
 /**
- * Generate SOA from Focus6 raw bill-wise data
- * @param itype 1=with narration, 2=no narration
- *
- * hardcoded to read company-name from B9
-	*	checkrow = sheet.getRow(8);
-	*	kcell = checkrow.getCell(1);
-	*	compname = POI_GetCellContentString(kcell,evaluator,"#").trim();
-	*	compname = compname.replaceAll(" \\/","_");
+ * Knockoff from generateExcelSOA2() - with changes requested by Rachel 18/02/2016
+ * @param itype : 1=with interest, 2=without interest
  */
-/*	
-	DataFormat numformat = wwb.createDataFormat();
-	CellStyle numstyle = wwb.createCellStyle();
-	numstyle.setDataFormat(numformat.getFormat("###,###.#0"));
-*/
-void generateExcelSOA2(int itype)
+void generateExcelSOA3(int itype)
 {
 	try
 	{
@@ -265,7 +256,7 @@ void generateExcelSOA2(int itype)
 			inps = mainUpload_Data.thefiledata;
 	} catch (Exception e)
 	{
-		guihand.showMessageBox("ERR: cannot read worksheet, please save as MS-Excel 97-2003 xls");
+		guihand.showMessageBox("ERR: cannot read worksheet, please save as MS-Excel 97-2003 xls format");
 	}
 
 	if(inps == null) return;
@@ -275,27 +266,36 @@ void generateExcelSOA2(int itype)
 
 	numsheets = excelWB.getNumberOfSheets(); sheet = excelWB.getSheetAt(0); numrows = sheet.getPhysicalNumberOfRows();
 
+	Date t_rentalduedate = new Date();
+	Date t_statementdate = statement_date.getValue();
+
+	//t_rentalduedate = mydtf.parse("28-06-2016");
+	//debugbox.setValue(t_rentalduedate.toString() + " :: " + t_statementdate.toString());
+
 	sttd = kiboo.getDateFromDatebox(statement_date);
 	todate = kiboo.todayISODateString();
-	FOC6_COL_READ = 11;
+
+	FOC6_COL_READ = 12;
 	startscan = 8; pgadder = 4; page_break = 28; page2_break = 46; 	numc = 0;
 	soa_inv_total = soa_recp_total = soa_balance_total = "";
 	soaData.clear();
 
-	TOTAL_POS = 1; VOUCHER_POS = 0; INVOICE_NO_POS = 1; INVOICE_DATE = 2; RENTAL_DUE_POS = 4;
-	INVOICE_AMNT = 5; RECEIPT_POS = 6; BALANCE_POS = 7; NARRATION_POS = 8; REMARKS_POS = 9;
+	TOTAL_POS = 1; VOUCHER_POS = 0; INVOICE_NO_POS = 1; INVOICE_DATE = 2; CUSTOMERNAME_POS = 3; RENTAL_DUE_POS = 4;
+	INVOICE_AMNT = 5; CN_POS = 6; RECEIPT_POS = 7; BALANCE_POS = 8; NARRATION_POS = 9; REMARKS_POS = 10;
 
 	WK_VOUCHER_COL = 0; WK_DUEDATE_COL = 1; WK_INVAMT_COL = 2; WK_RECEIPT_COL = 3; WK_BALANCE_COL = 4; WK_LATEPAYMENT_COL = 5; WK_OS_COL = 6;
 	WK_AGE_COL = 7; WK_NARRATION_COL = 8;
+
+	WK2_VOUCHER_COL = 0; WK2_DUEDATE_COL = 1; WK2_INVAMT_COL = 2; WK2_RECEIPT_COL = 3; WK2_BALANCE_COL = 4; WK2_AGE_COL = 5; WK2_NARRATION_COL = 6;
 
 	dbg = "";
 	
 	for(rw=startscan; rw<numrows; rw++) // read each row of the raw-data : hardcoded to read from startscan onwards
 	{
-		String[] thed = new String[10];
+		String[] thed = new String[11];
 		checkrow = sheet.getRow(rw);
 		
-		for(rc=1; rc<FOC6_COL_READ; rc++)
+		for(rc=1; rc<FOC6_COL_READ; rc++) // Ignore column 0, start scan worksheet column 1 -> for data
 		{
 			kcell = checkrow.getCell(rc);
 			if(kcell != null)
@@ -309,37 +309,30 @@ void generateExcelSOA2(int itype)
 		chkv = thed[VOUCHER_POS].trim().toUpperCase();
 		if(chkv.indexOf("OPB") != -1) // found OPB, Swap voucher-column
 		{
-			thed[VOUCHER_POS] = thed[INVOICE_NO_POS];
+			kk = thed[VOUCHER_POS]; // Take invoice-no as voucher-no, swap it
+			thed[VOUCHER_POS] = thed[INVOICE_NO_POS]; 
+			thed[INVOICE_NO_POS] = kk;
+
+			if(thed[VOUCHER_POS].indexOf("RCT") != -1) // OPB and it's a RCT
+			{
+				thed[RECEIPT_POS] = thed[INVOICE_AMNT]; // Swap invoice-amount to receipt-amount
+				thed[INVOICE_AMNT] = ""; // blank invoice-amount because it's type RCT receipt
+			}
 		}
 
-		chkv = thed[VOUCHER_POS].trim().toUpperCase();
-		if(chkv.indexOf("RCT") != -1) // found RCT - swap inv-amount and receipt
+		try
 		{
-			if(!thed[INVOICE_AMNT].equals(""))
-			{
-				thed[RECEIPT_POS] = thed[INVOICE_AMNT];
-				thed[INVOICE_AMNT] = "";
-			}
-			thed[BALANCE_POS] = "";
-		}
+			t_rentalduedate = dtf2.parse(thed[RENTAL_DUE_POS]);
 
-		if(thed[RENTAL_DUE_POS].compareTo(sttd) <= 0) // check if rental-due-date less than today's date
-		{ 
-			soaData.add(thed); numc++;
-			//for(x=0;x<thed.length;x++) { dbg += thed[x] + " :: "; } //dbg += " :: rdp=" + thed[RENTAL_DUE_POS] + " todate=" + todate + "\n";
-		}
-
-		// 13/10/2015: Mahes req, check invoice-date instead of rental-due date for processing. Also check against statement-date instead of today
-		// 15/10/2015: Mahes req to revert back to rental-due-date instead
-		/*
-			if(thed[INVOICE_DATE].compareTo(sttd) <= 0)
-			{
-				soaData.add(thed);
-				numc++;
+			//if(thed[RENTAL_DUE_POS].compareTo(sttd) <= 0) // check if rental-due-date less-or-equal than selected statement's date
+			datecomp = t_rentalduedate.compareTo(t_statementdate);
+			//debugbox.setValue(debugbox.getValue() + "\nvno: " + thed[VOUCHER_POS] + " duestri: " + thed[RENTAL_DUE_POS] + " Statd:" + t_statementdate.toString() + " rentaldue:" + t_rentalduedate.toString() + " resu: " + datecomp.toString());
+			if(datecomp <= 0)
+			{ 
+				soaData.add(thed); numc++;
 			}
-		*/
+		} catch (Exception e) {}
 	}
-	//debugbox.setValue(dbg); return;
 
 	custdetstr = "";
 	custr = getFocus_CustomerRec(global_selected_customerid); // prep customer-details
@@ -355,7 +348,8 @@ void generateExcelSOA2(int itype)
 	}
 
 	compname = custr.get("name");
-	templatefn = "rwimg/soaTemplate_2.xls";
+	templatefn = "rwimg/soaTemplate_2.xls"; // default to late-interest template
+	if(itype == 2) templatefn = "rwimg/soaTemplate_2_withoutinterest.xls"; // non-late-interest template
 
 	inpfn = session.getWebApp().getRealPath(templatefn);
 	InputStream inp = new FileInputStream(inpfn);
@@ -366,19 +360,22 @@ void generateExcelSOA2(int itype)
 	Font wfont = wwb.createFont(); wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
 	Font nfont = wwb.createFont(); nfont.setFontHeightInPoints((short)6); nfont.setFontName("Arial"); // narration-font
 
-	//sttd = kiboo.getDateFromDatebox(statement_date);
 	sttds = "Statement date: " + sttd;
 	dfints = "Late payment charges: " + customer_interest.getValue() + "%";
 
+	statementdatepos = 8; // default late-interest template statement-date worksheet column
+	if(itype == 2) statementdatepos = 6; // non-late-interest template
+
 	excelInsertString(wsheet,0,0,custdetstr); // insert customer-det into worksheet
-	excelInsertString(wsheet,0,8,sttds); // insert statement date
+	excelInsertString(wsheet,0,statementdatepos,sttds); // insert statement date
 	excelInsertString(wsheet,0,5,dfints); // insert interest rate
 
 	if(itype == 2) excelInsertString(wsheet,3,8,""); // remove "Narration" for no-narration type
 
 	rowcounter = 0;
 	totalinterest = 0.0;
-	sumundef = sum0_30 = sum31_60 = sum61_90 = sum91_120 = sum121_150 = sum150_on = 0.0;
+	// 0-30 Days” / “31-60 Days” / “61-90 Days” / “91-180 Days” / “181-360 days” / “Over 361 Days
+	sumundef = sum0_30 = sum31_60 = sum61_90 = sum91_180 = sum181_360 = sum361_on = 0.0;
 	unadjcred = 0.0;
 	Date invdate, duedate;
 
@@ -387,182 +384,137 @@ void generateExcelSOA2(int itype)
 	{
 		wop = wkarray[i];
 		pgbreakd = false;
-		if(wop[VOUCHER_POS].equals("")) continue;
+		voucherno = wop[VOUCHER_POS].trim().toUpperCase();
+		if(voucherno.equals("")) continue;
 
-		//if(wop[0].equals("Unadjusted credits")) { unadjusted = wop; continue; }
-		/*	
-			dbg = "";
-			for(k=0; k<wop.length; k++) { dbg += (k+1).toString() + ":" + wop[k] + " : "; }
-			dbg += "\n";
-			debugbox.setValue(debugbox.getValue() + dbg);
-		*/
-		chkrwi = "";
-		try { chkrwi = (wop[VOUCHER_POS].substring(0,3)).toUpperCase(); }
-		catch (Exception e) {}
+		// 19/02/2016: Inject from FOCUS raw-data into SOA template worksheet. Work on age-days and late-payment interest calc and inject
+		// Late-payment-interest based on BALANCE instead of INVOICE amount - confirmed by Rachel
 
 		currentrow = pgadder + rowcounter;
 
-		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,wop[VOUCHER_POS]),wfont,true,"");
-		excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,wop[VOUCHER_POS]);
+		excelInsertString(wsheet,currentrow,WK_VOUCHER_COL,voucherno); // Inject voucher-no. into worksheet (0)
+		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,wop[RENTAL_DUE_POS]); // Inject rental-due-date into worksheet (1)
 
-		invdstr = "";
-		if(!wop[INVOICE_DATE].equals("") && wop[INVOICE_DATE] != null)
+		invamount = 0.0;
+		try { invamount = Float.parseFloat(wop[INVOICE_AMNT]); } catch (Exception e) {}
+		invamount = (invamount < 0) ? -invamount : invamount;
+		if(invamount != 0) excelInsertNumber(wsheet,currentrow,WK_INVAMT_COL,nf2.format(invamount)); // (2)
+
+		receiptamount = 0.0;
+		try { receiptamount = Float.parseFloat(wop[RECEIPT_POS]); } catch (Exception e) {}
+		receiptamount = (receiptamount < 0) ? -receiptamount : receiptamount;
+		if(receiptamount != 0) excelInsertNumber(wsheet,currentrow,WK_RECEIPT_COL,nf2.format(receiptamount)); // (3)
+
+		balanceamount = originalbalanceamount = 0.0;
+		try { balanceamount = originalbalanceamount = Float.parseFloat(wop[BALANCE_POS]); } catch (Exception e) {}
+
+		if(wop[INVOICE_NO_POS].indexOf("OPB") != -1 && voucherno.indexOf("RCT") != -1)
 		{
-			try {
-			invdate = (Date)dtfm.parse(wop[INVOICE_DATE]);
-			invdstr = dtfm.format(invdate);
-			} catch (Exception e) {}
+			// 22/02/2016: special request by Rachel, for OPB:RCT, change balance to negative
+			balanceamount = balanceamount * -1; // make it negative for OPB:RCT
 		}
+		else
+			balanceamount = (balanceamount < 0) ? -balanceamount : balanceamount;
 
-		//excelInsertString(wsheet,pgadder+i,1,invdstr);
-		duedstr = ""; duedate = new Date();
+		if(balanceamount != 0) excelInsertNumber(wsheet,currentrow,WK_BALANCE_COL, nf2.format(balanceamount) ); // (4)
 
-		try {
-		duedate = (Date)dtfm.parse(wop[RENTAL_DUE_POS]);
-		duedstr = dtfm.format(duedate);
-		} catch (Exception e) {}
+		duedate = null;
+		latepaymentcharges = 0.0;
+		totaloutstanding = 0.0;
+		agedays = 0;
 
-		// 13/10/2015: show INVOICE DATE instead of RENTAL DUE DATE : req by Mahes
-		// 15/10/2015: mahes req to revert back to show rental-due-date
-		// excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,wop[INVOICE_DATE]);
-		kstr = duedstr; // default to invoice-due-date
-		excelInsertString(wsheet,currentrow,WK_DUEDATE_COL,kstr);
-
-		for(j=INVOICE_AMNT;j<=BALANCE_POS;j++) // inv-amt, receipt, balance
+		try { duedate = (Date)dtfm.parse(wop[RENTAL_DUE_POS]); } catch (Exception e) {}
+		if(duedate != null)
 		{
-			vak = 0;
-			try { vak = Float.parseFloat(wop[j]); } catch (Exception e) {}
-			if(vak < 0) vak = vak * -1;
-			kstr = (vak == 0) ? "" : vak.toString();
-			wop[j] = kstr;
-
-			excelInsertString(wsheet,currentrow,j-3,wop[j]);
-		}
-
-		//dydff = calcDayDiff(duedate,statement_date.getValue()) - 14; // 11/09/2013: grace period 14 days for any aging
-		dydff = calcDayDiff(duedate,statement_date.getValue());
-		if(dydff < 0) dydff = 0;
-
-		intrcs = "";
-		intrc = 0;
-
-		// 01/09/2015: calc interest for voucher these voucher type
-		if(wop[VOUCHER_POS].indexOf("SI") != -1 || wop[VOUCHER_POS].indexOf("RWP") != -1 || wop[VOUCHER_POS].indexOf("RWI") != -1 || wop[VOUCHER_POS].indexOf("JRL") != -1)
-		{
-			try {
-				intrc = (Float.parseFloat(wop[INVOICE_AMNT]) * Float.parseFloat(customer_interest.getValue()) / 100) / 365 * dydff;
-			} catch (Exception e) {}
-
-			if(intrc > 0)
+			// Only SI,RWP,RWI will calc late-payment-interest
+			if(voucherno.indexOf("SI") != -1 || voucherno.indexOf("RWP") != -1 || voucherno.indexOf("RWI") != -1)
 			{
-				totalinterest += intrc;
-				intrcs = nf2.format(intrc);
-			}
-		}
-		excelInsertString(wsheet,currentrow,WK_LATEPAYMENT_COL,intrcs); // interest - put into worksheet
+				dydff = calcDayDiff(duedate,statement_date.getValue()); // Calc age-days based on selected-statement-date
+				if(dydff > 0)
+				{
+					try { latepaymentcharges = ( (balanceamount * Float.parseFloat(customer_interest.getValue()) / 100) / 365) * dydff;
+					} catch (Exception e) {}
+				}
+				else
+					dydff = 0;
 
-		agestr = "";
-		if(dydff >= 0) // difference-days to make age
-		{
-			if(wop[VOUCHER_POS].indexOf("SI") != -1 || wop[VOUCHER_POS].indexOf("RWP") != -1 || wop[VOUCHER_POS].indexOf("RWI") != -1 || 
-				wop[VOUCHER_POS].indexOf("DNT") != -1 || wop[VOUCHER_POS].indexOf("JRL") != -1)
-				agestr = dydff.toString();
-		}
-		excelInsertString(wsheet,currentrow,WK_AGE_COL,agestr); // age - put into worksheet
+				totaloutstanding = balanceamount + latepaymentcharges; // Calc Total OutStanding
 
-		ttos = "";
+				// 22/02/2016: Rachel confirmed for late-interest, sum-up total-outstanding
+				if(itype == 1)
+				{
+					if(dydff < 31 && dydff >= 0) sum0_30 += totaloutstanding;
+					if(dydff > 30 && dydff < 61) sum31_60 += totaloutstanding;
+					if(dydff > 60 && dydff < 91) sum61_90 += totaloutstanding;
+					if(dydff > 90 && dydff < 181) sum91_180 += totaloutstanding;
+					if(dydff > 180 && dydff < 361) sum181_360 += totaloutstanding;
+					if(dydff > 360) sum361_on += totaloutstanding;
+				}
 
-		whtstr = wop[NARRATION_POS];
-		if(wop[VOUCHER_POS].indexOf("SI") != -1 || wop[VOUCHER_POS].indexOf("RWP") != -1 || wop[VOUCHER_POS].indexOf("RWI") != -1 || wop[VOUCHER_POS].indexOf("DNT") != -1 || wop[VOUCHER_POS].indexOf("JRL") != -1)
-			whtstr = wop[REMARKS_POS];
+				// 22/02/2016: Rachel confirmed, for non-late-interest, sum-up balance amount
+				if(itype == 2)
+				{
+					if(dydff < 31 && dydff >= 0) sum0_30 += balanceamount;
+					if(dydff > 30 && dydff < 61) sum31_60 += balanceamount;
+					if(dydff > 60 && dydff < 91) sum61_90 += balanceamount;
+					if(dydff > 90 && dydff < 181) sum91_180 += balanceamount;
+					if(dydff > 180 && dydff < 361) sum181_360 += balanceamount;
+					if(dydff > 360) sum361_on += balanceamount;
+				}
 
-		if(itype == 2) whtstr = ""; // no-narration type
-		//POI_CellSetAllBorders(wwb,excelInsertString(wsheet,currentrow,WK_NARRATION_COL,whtstr),nfont,false,""); // narration - put into worksheet
-		excelInsertString(wsheet,currentrow,WK_NARRATION_COL,whtstr); // narration - put into worksheet
-
-		if(wop[VOUCHER_POS].indexOf("SI") != -1 || wop[VOUCHER_POS].indexOf("RWP") != -1 || wop[VOUCHER_POS].indexOf("RWI") != -1 || wop[VOUCHER_POS].indexOf("DNT") != -1 || wop[VOUCHER_POS].indexOf("JRL") != -1)
-			if(!wop[INVOICE_AMNT].equals("")) ttos = nf2.format( Float.parseFloat(wop[INVOICE_AMNT]) + intrc );
-
-		if(wop[VOUCHER_POS].indexOf("RCT") != -1 || wop[VOUCHER_POS].indexOf("CNT") != -1)
-		{
-			if(!wop[RECEIPT_POS].equals(""))
-			{
-				tval = Float.parseFloat(wop[RECEIPT_POS]) * -1;
-				ttos = nf2.format(tval);
-				unadjcred += tval;
+				agedays = dydff;
 			}
 		}
 
-		excelInsertString(wsheet,currentrow,WK_OS_COL,ttos); // O/S column
+		if(voucherno.equals("UNADJUSTED CREDITS") || voucherno.equals("ON-ACCOUNT"))
+		{
+			unadjcred += invamount;
+		}
+
+		totaloutstanding = balanceamount + latepaymentcharges; // Calc Total OutStanding
+
+		if(itype == 1) // late-interest template
+		{
+			if(latepaymentcharges != 0) excelInsertNumber(wsheet,currentrow,WK_LATEPAYMENT_COL, nf2.format(latepaymentcharges)); // (5)
+			if(totaloutstanding != 0) excelInsertNumber(wsheet,currentrow,WK_OS_COL, nf2.format(totaloutstanding)); // (6)
+
+			//if(agedays != 0) excelInsertNumber(wsheet,currentrow,WK_AGE_COL, agedays.toString()); // (7)
+			excelInsertNumber(wsheet,currentrow,WK_AGE_COL, agedays.toString());
+			excelInsertString(wsheet,currentrow,WK_NARRATION_COL, wop[NARRATION_POS] ); // (8)
+		}
+
+		if(itype == 2) // non-late-interest template
+		{
+			excelInsertNumber(wsheet,currentrow,WK2_AGE_COL, agedays.toString());
+			excelInsertString(wsheet,currentrow,WK2_NARRATION_COL, wop[NARRATION_POS] );
+		}
 
 		rowcounter++;
 
 		if(i == page_break) { pgbreakd = true; wsheet.setRowBreak(currentrow); }
 		if(i > page_break)
 		{
-			if(( (i+page_break) % page2_break) == 0)
-			{
-				pgbreakd = true;
-				wsheet.setRowBreak(currentrow);
-			}
+			if( ((i+page_break) % page2_break) == 0) pgbreakd = true;
 		}
 
 		if(pgbreakd) // re-gen header-row - copy from first header
 		{
-			//org.apache.poi.hssf.usermodel.HSSFRow hdrow = wsheet.createRow(rowcounter+pgadder);
-			// TODO mod here if template change
-			for(ci=0;ci<9;ci++)
+			wsheet.setRowBreak(currentrow);
+			// org.apache.poi.hssf.usermodel.HSSFRow hdrow = wsheet.createRow(rowcounter+pgadder);
+			
+			columncount = 9; // default = late-interest template
+			if(itype == 2) columncount = 7; // non-late-interest template
+
+			for(ci=0;ci<columncount;ci++)
 			{
 				Cell hdcell = mainhdrow.getCell(ci);
 				hdstr = POI_GetCellContentString(hdcell,evaluator,"#").trim();
-				jhdc = excelInsertString(wsheet,rowcounter+pgadder,ci,hdstr);
-				//POI_CellSetAllBorders(wwb,jhdc,wfont,true);
+				jhdc = excelInsertString(wsheet,rowcounter+pgadder,ci,hdstr); //POI_CellSetAllBorders(wwb,jhdc,wfont,true);
 				jhdc.setCellStyle(hdcell.getCellStyle());
 			}
 			rowcounter++;
 		}
-
-		if(!wop[BALANCE_POS].equals(""))
-		{
-			ktos = 0.0;
-			try { ktos = Float.parseFloat(ttos); } catch (Exception e) {}
-			
-			//debugbox.setValue("ktos: " + ttos);
-
-			try {
-			kck = wop[VOUCHER_POS].trim().toUpperCase();
-			//if(wop[0].equals("Unadjusted credits")) { unadjcred += ktos; ktos = 0; }
-			// 08/01/2013: check for "ON-ACCOUNT"
-			if(kck.equals("UNADJUSTED CREDITS") || kck.equals("ON-ACCOUNT") ) { unadjcred += ktos; ktos = 0; }
-
-			} catch (Exception e) {}
-
-			if(dydff <= 0)
-			{
-				sumundef += ktos;
-			}
-
-			voucherno = wop[VOUCHER_POS].trim().toUpperCase();
-
-			if(dydff < 31 && dydff >= 0) sum0_30 += ktos;
-			if(dydff > 30 && dydff < 61) sum31_60 += ktos;
-			if(dydff > 60 && dydff < 91) sum61_90 += ktos;
-			if(dydff > 90 && dydff < 121) sum91_120 += ktos;
-			if(dydff > 120 && dydff < 151) sum121_150 += ktos;
-			if(dydff > 150) sum150_on += ktos;
-
-			/* debugging
-			if(dydff < 31 && dydff >= 0) { sum0_30 += ktos; dbg += wop[VOUCHER_POS] + " [sum0_30] " + voucherno + " : " + ttos + "\n"; }
-			if(dydff > 30 && dydff < 61) { sum31_60 += ktos; dbg += wop[VOUCHER_POS] + " [sum31_60] " + voucherno + " : " + ttos + "\n"; }
-			if(dydff > 60 && dydff < 91) { sum61_90 += ktos; dbg += wop[VOUCHER_POS] + " [sum61_90] " + voucherno + " : " + ttos + "\n"; }
-			if(dydff > 90 && dydff < 121) { sum91_120 += ktos; dbg += wop[VOUCHER_POS] + " [sum91_120] " + voucherno + " : " + ttos + "\n"; }
-			if(dydff > 120 && dydff < 151) { sum121_150 += ktos; dbg += wop[VOUCHER_POS] + " [sum121_150] " + voucherno + " : " + ttos + "\n"; }
-			if(dydff > 150) { sum150_on += ktos; dbg += wop[VOUCHER_POS] + " [sum150_on] " + voucherno + " : " + ttos + "\n"; }
-			*/
-		}
 	}
-
-	//debugbox.setValue(debugbox.getValue() + dbg);
 
 	tt_invamnt = tt_receipt = tt_balance = tt_latepayment = tt_totalos = 0.0;
 
@@ -585,12 +537,6 @@ void generateExcelSOA2(int itype)
 
 		kcell = checkrow.getCell(WK_OS_COL);
 		try { tt_totalos += Float.parseFloat(POI_GetCellContentString(kcell,evaluator,"#.00")); } catch (Exception e) {}
-
-		/*
-			dbg += "\n tt_receipt: " + tt_receipt.toString() + " tt_latepayment: " + tt_latepayment.toString() +
-			" tt_totalos: " + tt_totalos.toString() + " tt_balance: " + tt_balance.toString() + " tt_invamnt: " + tt_invamnt.toString();
-			debugbox.setValue(debugbox.getValue() + dbg);
-		*/
 	}
 
 	rowcounter++;
@@ -604,58 +550,53 @@ void generateExcelSOA2(int itype)
 
 	excelInsertString(wsheet,totalrw,0,"TOTAL");
 	excelInsertString(wsheet,totalrw,1,"");
-	excelInsertNumber(wsheet,totalrw, WK_INVAMT_COL, tt_invamnt.toString());
-	excelInsertNumber(wsheet,totalrw, WK_OS_COL, tt_totalos.toString());
-	excelInsertNumber(wsheet,totalrw, WK_LATEPAYMENT_COL, tt_latepayment.toString());
-	excelInsertNumber(wsheet,totalrw, WK_RECEIPT_COL, tt_receipt.toString());
+	excelInsertNumber(wsheet,totalrw, WK_INVAMT_COL, nf2.format(tt_invamnt) );
 
-	/*
-		dbg = "0_30: " + sum0_30.toString() + " 31_60: " + sum31_60.toString() + " 61_90: " + sum61_90.toString() + " 91_120: " + sum91_120.toString() + " 121_150: " + sum121_150;
-		dbg += "\n tt_receipt: " + tt_receipt.toString() + " tt_latepayment: " + tt_latepayment.toString() +
-		" tt_totalos: " + tt_totalos.toString() + " tt_balance: " + tt_balance.toString() + " tt_invamnt: " + tt_invamnt.toString();
-		debugbox.setValue(debugbox.getValue() + dbg);
-	*/
+	if(itype == 1)
+	{
+		excelInsertNumber(wsheet,totalrw, WK_OS_COL, nf2.format(tt_totalos) );
+		excelInsertNumber(wsheet,totalrw, WK_LATEPAYMENT_COL, nf2.format(tt_latepayment) );
+	}
+
+	excelInsertNumber(wsheet,totalrw, WK_RECEIPT_COL, nf2.format(tt_receipt) );
+	excelInsertNumber(wsheet,totalrw, WK_BALANCE_COL, nf2.format(tt_balance) );
 
 	rowcounter += 2;
 	totalrw = pgadder + rowcounter;
 	nxttotalrw = totalrw + 1;
 	dyclm = 0;
 
-	// insert those 0-30 days and so on at the end of the SOA
-	// 14/11/2013: req by Tony, include undefined/future-aged amount
-	// 21/11/2013: agreed by CC, put as "Unadjusted credits" instead of "UNDEFINED"
+	String[] ageheaders = { "UNADJUSTED CREDITS", "0-30 Days", "31-60 Days", "61-90 Days", "91-180 Days", "181-360 days", "Over 361 Days" };
+	Object[] agevars = { unadjcred, sum0_30, sum31_60, sum61_90, sum91_180, sum181_360, sum361_on };
 
-	String[] ageheaders = { "UNADJUSTED CREDITS", "0-30 Days", "31-60 Days", "61-90 Days", "91-120 Days", "121-150 days", "Over 150 Days" };
-	Object[] agevars = { unadjcred, sum0_30, sum31_60, sum61_90, sum91_120, sum121_150, sum150_on };
-
-	for(j=0; j<7; j++)
+	for(j=0; j<7; j++) // insert those 0-30 days and so on at the end of the SOA
 	{
 		excelInsertString(wsheet,totalrw,j,ageheaders[j]);
-		kval = (j == 0) ? nf2.format( agevars[j] * -1) : agevars[j].toString();
+		kval = nf2.format( ((agevars[j] < 0) ? -agevars[j] : agevars[j]) ) ; //kval = (j == 0) ? nf2.format( agevars[j] * -1) : agevars[j].toString();
 		excelInsertNumber(wsheet,nxttotalrw,j,kval);
 	}
 
-	kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on) + unadjcred;
-	//debugbox.setValue("unadjusted recp: " + unadjcred.toString() + " :: grand-total with receipts: " + kktot.toString());
+	kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_180 + sum181_360 + sum361_on) + unadjcred;
 
 	excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL");
-	excelInsertNumber(wsheet,nxttotalrw,dyclm+7,kktot.toString());
+	excelInsertNumber(wsheet,nxttotalrw,dyclm+7, nf2.format(kktot) );
 
-	//duetotal = (sum31_60 + sum61_90 + sum91_120 + sum121_150 + sum150_on);
 	duestr = "REMINDER:\nWe would like to bring to your attention that your account of RM" + nf3.format(kktot) +
 	" has exceeded the due date.\nWe hope to receive your payment within 14 days from the date of this statement " +
 	"to avoid service suspension.\nPlease ignore this reminder if payment has been made.";
 	excelInsertString(wsheet,1,5,duestr);
 
 	if(compname.length() > 15) compname = compname.substring(0,15).trim();
-	compname = compname.replaceAll(" ","_");
-	//compname = compname.replaceAll("\\","_");
+	compname = compname.replaceAll(" ","_"); //compname = compname.replaceAll("\\","_");
 	compname = compname.replaceAll("/","_");
 
 	DateFormat fndfmt = new SimpleDateFormat("MMMyyyy");
 	kdte = fndfmt.format(statement_date.getValue());
 
-	tfname = compname + "_SOA_" + kdte + ".xls";
+	wointerest = "";
+	if(itype == 2) wointerest = "woint_"; // non-late-interest template
+
+	tfname = compname + "_SOA_" + wointerest + kdte + ".xls";
 	outfn = session.getWebApp().getRealPath("tmp/" + tfname);
 	FileOutputStream fileOut = new FileOutputStream(outfn);
 	wwb.write(fileOut);
@@ -664,8 +605,7 @@ void generateExcelSOA2(int itype)
 	glob_processed_filename = outfn; // for later usage
 	generated_lbl.setValue(tfname);
 
-	// 14/11/2013: save a copy of the SOA by customer-id
-	// global_selected_customerid set when user select a customer from popup
+	// 14/11/2013: save a copy of the SOA by customer-id : global_selected_customerid set when user select a customer from popup
 	saveFileToDMS( FC6CUST_PREFIX + global_selected_customerid, tfname, outfn, "application/vnd.ms-excel","xls" );
 	fillDocumentsList_2(documents_holder,FC6CUST_PREFIX,global_selected_customerid);
 
@@ -765,8 +705,8 @@ void generateExcelSOA2(int itype)
 		<hbox>
 			<button id="selcustomer_b" label="Select customer" sclass="k9mo" onClick="pickcustomer_popup.open(self)" />
 			<button id="uploadsoa_b" label="Upload SOA from FOCUS6" sclass="k9mo" onClick="doFunc(self)" />
-			<button id="gensoa_narr_b" label="Gen SOA with narration" sclass="k9mo" onClick="doFunc(self)" />
-			<button id="gensoa_nonarr_b" label="Gen SOA without narration" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="gensoa_narr_b" label="Gen SOA with interest" sclass="k9mo" onClick="doFunc(self)" />
+			<button id="gensoa_nonarr_b" label="Gen SOA without interest" sclass="k9mo" onClick="doFunc(self)" />
 		</hbox>
 		<separator height="5px" />
 		<hbox>
@@ -825,7 +765,7 @@ void generateExcelSOA2(int itype)
 
 if(useraccessobj.accesslevel == 9)
 {
-	searchcust_tb.setValue("sunway biz");
+	searchcust_tb.setValue("SENARI SYNERGY");
 }
 
 /*

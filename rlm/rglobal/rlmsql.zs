@@ -13,7 +13,7 @@ import org.victor.*;
 
 Sql wms_Sql()
 {
-	String dbstring = "jdbc:mysql://52.76.64.100:3306/wms";
+	String dbstring = "jdbc:mysql://localhost:3306/wms";
 	try { return Sql.newInstance(dbstring, "wmsuser", "1qaz", "com.mysql.jdbc.Driver"); } catch (Exception e) { return null; }
 
 	// ?useUnicode=true&characterEncoding=UTF-8

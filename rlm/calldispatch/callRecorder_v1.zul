@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="callrecordlder"?>
+<zk>
+<zscript src="../rglobal/rlmsql.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "CALLS RECORDER";
+MYVERSION = "v0.1";
+MYPANEL = "callrecoderpanel";
+/**
+ * @title In-coming calls recorder for service-center
+ * @author Victor Wong
+ * @since 03/03/2016
+ * @notes
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+GENERAL_POPUP_BACKGROUND = "background:#AD9723";
+
+last_listout_type = 1;
+
+/**
+ * Call-back from caller-records listbox
+ * @param pSel : the selected item
+ */
+void callRecordLB_callback(Object pSel)
+{
+
+}
+
+Object[] callrechds =
+{
+	new listboxHeaderWidthObj("REC",true,"70px"),
+	new listboxHeaderWidthObj("DATE",true,"80px"),
+	new listboxHeaderWidthObj("CALLER",true,""),
+	new listboxHeaderWidthObj("TELEPHONE",true,""),
+	new listboxHeaderWidthObj("STATUS",true,"80px"),
+	new listboxHeaderWidthObj("ASSIGN",true,"80px"),
+	new listboxHeaderWidthObj("COMPANY",true,"90px"),
+	new listboxHeaderWidthObj("GROUP",true,"90px"),
+	new listboxHeaderWidthObj("CATEGORY",true,"90px"),
+	new listboxHeaderWidthObj("WORKORDER",true,"80px"),
+	new listboxHeaderWidthObj("WRTY",true,"60px"),
+};
+
+class callrec_dclick implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		try {
+			//glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
+			callRecordLB_callback(event.getTarget());
+		} catch (Exception e) {}
+	}
+}
+callrec_dclicker = new callrec_dclick();
+
+/**
+ * List records from db.callrecords
+ * @param itype : 1=by date,search-text if any, 
+ */
+void listCallRecords(int itype)
+{
+	startd = kiboo.getDateFromDatebox(startdate); endd = kiboo.getDateFromDatebox(enddate);
+	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
+	Listbox newlb = lbhand.makeVWListbox_Width(callslist_holder, callrechds, "callrecords_lb", 13);
+
+	sqlstm = "select origid,datecreated,callername,telephone,cstatus,callassignto,callcompany,callgroup,callcategory,workorderno,itemwarranty from callrecords " +
+	"where date(datecreated) between '" + startd + "' and '" + endd + "' ";
+
+	if(!st.equals(""))
+		sqlstm += " and (callername like '%" + st + "%' or telephone like '%" + st + "%' or calleridno like '%" + st + "%') ";
+
+	sqlstm += "order by origid";
+
+	r = gpWMS_GetRows(sqlstm);
+	if(r.size() == 0) return;
+	// newlb.setRows(20); newlb.setMultiple(true); newlb.setCheckmark(true); newlb.setMold("paging");
+
+	String[] fl = { "origid","datecreated","callername","telephone","cstatus","callassignto","callcompany","callgroup","callcategory","workorderno","itemwarranty" };
+	ArrayList kabom = new ArrayList();
+
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+	// lbhand.setDoubleClick_ListItems(newlb, stkitem_doubclik);
+}
+
+void callRecDo(String itype)
+{
+	last_listout_type = itype;
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(itype.equals("newincoming_b"))
+	{
+		sqlstm = "insert into callrecords (datecreated,username,telephone,callername,cstatus,callassignto) values ('" + todaydate + "','" + unm + "','NOPHONE','NONAME','NEW','SELF');";
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		gpWMS_execute(sqlstm);
+		listCallRecords(last_listout_type);
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+]]>
+</zscript>
+
+<popup id="listout_pop">
+	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND}" >
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${GENERAL_POPUP_BACKGROUND}">
+					<label value="From" sclass="wbo" />
+					<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<label value="Till" sclass="wbo" />
+					<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+				</row>
+				<row style="${GENERAL_POPUP_BACKGROUND}" spans="1,3">
+					<label value="Search" sclass="wbo" />
+					<textbox id="searhtxt_tb" sclass="k9" width="99%" />
+				</row>
+				<row style="${GENERAL_POPUP_BACKGROUND}" spans="4">
+					<button label="Load/Search" sclass="k9mo" onClick="listout_pop.close(); listCallRecords(1)" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
+<panelchildren style="background:#3F5367">
+<label id="debugbox" multiline="true" />
+<button label="testmy" onClick="kq = wms_Sql(); alert(kq); kq.close();" visible="false" />
+<div sclass="shadowbox" style="background:#1D4D85">
+	<hbox>
+		<button label="LIST CALLS" sclass="k9mo" onClick="listout_pop.open(self)" />
+		<separator width="5px" />
+		<button id="newincoming_b" label="INCOMING CALL" sclass="k9mo" onClick="callRecDo(self.getId())" />
+		<button id="assigncall_b" label="ASSIGN TO" sclass="k9mo" onClick="callRecDo(self.getId())" />
+		<button id="endcall_b" label="END CALL" sclass="k9mo" onClick="callRecDo(self.getId())" />
+	</hbox>
+	<separator height="3px" />
+	<div id="callslist_holder" />
+</div>
+
+<div id="workarea">
+	<tabbox id="mainaccordiantab" width="100%"  mold="accordion">
+		<tabs>
+			<tab label="A. CALLER DETAILS" />
+			<tab label="B. CALL RECORDING" />
+			<tab label="C. MISC" />
+		</tabs>
+		<tabpanels>
+			<tabpanel>
+				<button label="SAVE DETAILS" sclass="k9mo" />
+				<separator height="3px" />
+				<hbox>
+					<grid width="600px" sclass="GridLayoutNoBorder">
+						<rows>
+							<row style="background:#E55C12">
+								<label value="Telephone no." sclass="wbo" />
+								<textbox id="cd_telephone" sclass="k9" width="98%" />
+								<label value="Name" sclass="wbo" />
+								<textbox id="cd_callername" sclass="k9" width="98%" />
+								<label value="ID No." sclass="wbo" />
+								<textbox id="cd_calleridno" sclass="k9" width="98%" />
+							</row>
+							<row style="background:#3F5367" spans="1,5">
+								<label value="Address1" sclass="wbo" />
+								<textbox id="cd_calleraddress1" sclass="k9" width="99%" />
+							</row>
+							<row style="background:#3F5367" spans="1,5">
+								<label value="Address2" sclass="wbo" />
+								<textbox id="cd_calleraddress2" sclass="k9" width="99%" />
+							</row>
+							<row style="background:#3F5367" spans="1,5">
+								<label value="Address3" sclass="wbo" />
+								<textbox id="cd_calleraddress3" sclass="k9" width="99%" />
+							</row>
+							<row style="background:#3F5367" spans="1,5">
+								<label value="Address4" sclass="wbo" />
+								<textbox id="cd_calleraddress4" sclass="k9" width="99%" />
+							</row>
+						</rows>
+					</grid>
+				</hbox>
+			</tabpanel>
+
+			<tabpanel>
+				<button label="SAVE DETAILS" sclass="k9mo" />
+				<separator height="3px" />
+				<hbox>
+					<grid width="650px" sclass="GridLayoutNoBorder">
+						<rows>
+							<row style="background:#264180">
+								<label value="Company" sclass="wbo" />
+								<listbox id="cr_callcompany" sclass="k9" mold="select" width="98%" />
+								<label value="Call group" sclass="wbo" />
+								<listbox id="cr_callgroup" sclass="k9" mold="select" width="98%" />
+								<label value="Call category" sclass="wbo" />
+								<listbox id="cr_callcategory" sclass="k9" mold="select" width="98%" />
+								<label value="Assign to" sclass="wbo" />
+								<listbox id="cr_callassignto" sclass="k9" mold="select" width="98%" />
+							</row>
+							<row style="background:#264180" spans="1,7" >
+								<label value="Caller remarks" sclass="wbo" />
+								<textbox id="cr_callerremarks" sclass="k9" multiline="true" width="99%" height="80px" />
+							</row>
+							<row style="background:#264180" spans="1,7" >
+								<label value="Attendant response" sclass="wbo" />
+								<textbox id="cr_receptionremarks" sclass="k9" multiline="true" width="99%" height="80px" />
+							</row>
+						</rows>
+					</grid>
+					<grid sclass="GridLayoutNoBorder">
+						<rows>
+							<row style="background:#E55C12">
+								<label value="Item model" sclass="wbo" />
+								<textbox id="cr_itemmodel" sclass="k9" width="98%" />
+								<label value="Serial no." sclass="wbo" />
+								<textbox id="cr_itemserialno" sclass="k9" width="98%" />
+							</row>
+							<row style="background:#E55C12">
+								<label value="Purchase date" sclass="wbo" />
+								<datebox id="cr_itempurchasedate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+								<label value="Warranty" sclass="wbo" />
+								<listbox id="cr_itemwarranty" sclass="k9" mold="select" width="98%" />
+							</row>
+							<row style="background:#E55C12">
+								<label value="Workorder" sclass="wbo" />
+								<textbox id="cr_workorderno" sclass="k9" width="98%" />
+								<button label="Dig workorder" sclass="k9mo" disabled="true" />
+								<button label="Create workorder" sclass="k9mo" disabled="true" />
+							</row>
+						</rows>
+					</grid>
+				</hbox>
+			</tabpanel>
+
+			<tabpanel>
+				<label value="Follow-ups and other functionality to be placed here soon" />
+			</tabpanel>
+
+		</tabpanels>
+	</tabbox>
+</div> <!-- workarea -->
+
+<zscript>
+<![CDATA[
+
+String[] callcompany_string = { "ABIZ_MAJU","SITI_AISYAH","KULAFA","PAK_LI" };
+lbhand.populateDropdownListbox(cr_callcompany,callcompany_string);
+
+String[] callgroup_string = { "GENERAL","SERVICE","SALES","COMPLAIN" };
+lbhand.populateDropdownListbox(cr_callgroup,callgroup_string);
+
+String[] callcategory_string = { "TV", "AUDIO", "APPLIANCES", "COMPUTER" };
+lbhand.populateDropdownListbox(cr_callcategory,callcategory_string);
+
+String[] callassignto_string = { "SELF", "AH_FOOK", "AH_CHOY", "AH_BENG" };
+lbhand.populateDropdownListbox(cr_callassignto,callassignto_string);
+
+String[] warranty_string = { "OUT", "IN", "UNKNOWN" };
+lbhand.populateDropdownListbox(cr_itemwarranty,warranty_string);
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -100,7 +100,7 @@ void viewFile()
 void deleteFile(Div idiv, String iprefix, String idocudx)
 {
 	if(selected_file_id.equals("")) return;
-	if(useraccessobj.accesslevel < 9) { guihand.showMessageBox("Only admin can do hard-delete"); return; }
+	//if(useraccessobj.accesslevel < 9) { guihand.showMessageBox("Only admin can do hard-delete"); return; }
 
 	if (Messagebox.show("This is a hard-delete..", "Are you sure?", 
 		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) !=  Messagebox.YES) return;
