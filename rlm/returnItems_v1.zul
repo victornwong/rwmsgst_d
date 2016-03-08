@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="returnitemsmods"?>
+<zk>
+<zscript src="rglobal/rlmsql.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "RETURN INVENTORY";
+MYVERSION = "v0.1";
+MYPANEL = "retinventorypanel";
+/**
+ * @title Return items into inventory
+ * @author Victor Wong
+ * @since 08/03/2016
+ * @notes
+ * Initial design:
+ * - key in serial-no and qty
+ * - check serial-no exist in inventory and there's outref
+ * - if got outref and stage already DONE, proceed to increase qty in inventory by serial-no to whatever being entered
+ *   remove outref from serial-no
+ * - add audit-log by serial-no and last outref for future tracing
+ * 
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+INVENTORY_PREFIX = "IVT";
+GENERAL_POPUP_BACKGROUND = "background:#AD9723";
+
+void verifyReturn()
+{
+	tsn = kiboo.replaceSingleQuotes(mainserial_tb.getValue().trim());
+	if(tsn.equals("")) return;
+	sqlstm = "select origid, OutRefNo, OutRefDate, Itemcode from StockList where OutRefNo is not null and stage='DONE' and Itemcode='" + tsn + "' limit 1;";
+	checkr = gpWMS_FirstRow(sqlstm); // make sure serial-no got OutRefNo and stage is DONE
+	if(checkr == null) { guihand.showMessageBox("ERR: unable to verify serial-number, STKOUT is unavailable or STAGE is not DONE"); return; }
+
+	if(Messagebox.show("This will return the item into inventory database", "Are you sure?",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+	stkcode = kiboo.checkNullString(checkr.get("Itemcode"));
+	lnkcode = INVENTORY_PREFIX + stkcode;
+	auditstr = "Return item to inventory. OutRefNo: " + kiboo.checkNullString(checkr.get("OutRefNo")) + " OutRefDate: " + kiboo.dtf2.format(checkr.get("OutRefDate"));
+
+	//alert(lnkcode + " :: " + auditstr);
+	// Clear things in StockList
+	usqlstm = "update StockList set OutRefNo=null, OutRefDate=null, stage='NEW' where origid=" + checkr.get("origid").toString() + " limit 1;";
+	// Remove also from tblStockOutDetail
+	usqlstm2 = "delete from tblStockOutDetail where concat('STKOUT',parent_id)='" + kiboo.checkNullString(checkr.get("OutRefNo")) + "' " +
+	"and StockCode='" + stkcode + "' limit 1;";
+
+	alert(usqlstm + " :: " + usqlstm2);
+}
+
+]]>
+</zscript>
+
+<popup id="utilpopup">
+	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND};border-radius:3px" >
+		<vbox>
+			<button id="exportlist_b" label="Export to MSExcel" sclass="k9mo" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#EA1111;border-radius:3px" >
+		<vbox>
+		</vbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+		border-radius:3px
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
+<panelchildren style="background:#3F5367">
+<label id="debugbox" multiline="true" />
+<button label="testmy" onClick="kq = wms_Sql(); alert(kq); kq.close();" visible="false" />
+
+<div sclass="shadowbox" style="background:#F74613;border-radius:3px" width="680px">
+	<hbox>
+		<label value="Serial number" style="font-weight:bold" />
+		<textbox id="mainserial_tb" />
+		<button label="Verify and return" style="font-weight:bold" onClick="verifyReturn()" />
+		<button label="Transaction logs" style="font-weight:bold" />
+	</hbox>
+	<separator height="3px" />
+	<div id="transactlog_holder" />
+</div>
+
+<zscript>
+<![CDATA[
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -26,8 +26,34 @@ guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
 GENERAL_POPUP_BACKGROUND = "background:#AD9723";
+NEWCALL_STRING = "NEW";
+ENDCALL_STRING = "END";
 
 last_listout_type = 1;
+glob_sel_callrec = "";
+
+Object getCallRecord_Rec(String iwhat)
+{
+	sqlstm = "select * from callrecords where origid=" + iwhat;
+	return gpWMS_FirstRow(sqlstm);
+}
+
+void toggle_metaboxes(boolean iwhat)
+{
+	ngfun.disableUI_obj(callrecmetaboxes,iwhat);
+}
+
+void showCallRecord_Meta(String pNo)
+{
+	cr = getCallRecord_Rec(pNo);
+	if(cr == null) { guihand.showMessageBox("ERR: cannot retrieve call-record database"); return; }
+
+	callrecheader.setLabel("A. CALLER DETAILS :: RECORD " + pNo);
+	ngfun.populateUI_Data(callrecmetaboxes, callrecmetafields, cr);
+
+	toggle_metaboxes( (cr.get("cstatus").equals(ENDCALL_STRING)) ? true : false);
+	workarea.setVisible(true);
+}
 
 /**
  * Call-back from caller-records listbox
@@ -35,7 +61,8 @@ last_listout_type = 1;
  */
 void callRecordLB_callback(Object pSel)
 {
-
+	glob_sel_callrec = lbhand.getListcellItemLabel(pSel,CR_ORIGID);
+	showCallRecord_Meta(glob_sel_callrec);
 }
 
 Object[] callrechds =
@@ -45,22 +72,24 @@ Object[] callrechds =
 	new listboxHeaderWidthObj("CALLER",true,""),
 	new listboxHeaderWidthObj("TELEPHONE",true,""),
 	new listboxHeaderWidthObj("STATUS",true,"80px"),
-	new listboxHeaderWidthObj("ASSIGN",true,"80px"),
+	new listboxHeaderWidthObj("OWNER",true,"80px"), // 5
+	new listboxHeaderWidthObj("ASSIGN",true,"80px"), 
 	new listboxHeaderWidthObj("COMPANY",true,"90px"),
 	new listboxHeaderWidthObj("GROUP",true,"90px"),
 	new listboxHeaderWidthObj("CATEGORY",true,"90px"),
-	new listboxHeaderWidthObj("WORKORDER",true,"80px"),
+	new listboxHeaderWidthObj("WORKORDER",true,"80px"), // 10
 	new listboxHeaderWidthObj("WRTY",true,"60px"),
+	new listboxHeaderWidthObj("ENDCALL",true,"80px"),
 };
+CR_ORIGID = 0; CR_DATE = 1; CR_CALLER = 2; CR_TELEPHONE = 3; CR_STATUS = 4; CR_OWNER = 5;
+CR_ASSIGN = 6; CR_COMPANY = 7; CR_GROUP = 8; CR_CATEGORY = 9; CR_WORKORDER = 10; CR_WARRANTY = 11;
+CR_ENDCALL = 12;
 
 class callrec_dclick implements org.zkoss.zk.ui.event.EventListener
 {
 	public void onEvent(Event event) throws UiException
 	{
-		try {
-			//glob_sel_stock_code = lbhand.getListcellItemLabel(isel,0);
-			callRecordLB_callback(event.getTarget());
-		} catch (Exception e) {}
+		callRecordLB_callback(event.getTarget());
 	}
 }
 callrec_dclicker = new callrec_dclick();
@@ -71,11 +100,13 @@ callrec_dclicker = new callrec_dclick();
  */
 void listCallRecords(int itype)
 {
+	last_listout_type = itype;
 	startd = kiboo.getDateFromDatebox(startdate); endd = kiboo.getDateFromDatebox(enddate);
 	st = kiboo.replaceSingleQuotes(searhtxt_tb.getValue().trim());
 	Listbox newlb = lbhand.makeVWListbox_Width(callslist_holder, callrechds, "callrecords_lb", 13);
 
-	sqlstm = "select origid,datecreated,callername,telephone,cstatus,callassignto,callcompany,callgroup,callcategory,workorderno,itemwarranty from callrecords " +
+	sqlstm = "select origid,datecreated,callername,telephone,cstatus,username,callassignto," +
+	"callcompany,callgroup,callcategory,workorderno,itemwarranty,endcall from callrecords " +
 	"where date(datecreated) between '" + startd + "' and '" + endd + "' ";
 
 	if(!st.equals(""))
@@ -87,28 +118,86 @@ void listCallRecords(int itype)
 	if(r.size() == 0) return;
 	// newlb.setRows(20); newlb.setMultiple(true); newlb.setCheckmark(true); newlb.setMold("paging");
 
-	String[] fl = { "origid","datecreated","callername","telephone","cstatus","callassignto","callcompany","callgroup","callcategory","workorderno","itemwarranty" };
-	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid","datecreated","callername","telephone","cstatus","username","callassignto",
+		"callcompany","callgroup","callcategory","workorderno","itemwarranty","endcall" };
 
+	ArrayList kabom = new ArrayList();
 	for(d : r)
 	{
 		ngfun.popuListitems_Data(kabom,fl,d);
 		lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
 		kabom.clear();
 	}
-	// lbhand.setDoubleClick_ListItems(newlb, stkitem_doubclik);
+	lbhand.setDoubleClick_ListItems(newlb, callrec_dclicker);
 }
 
 void callRecDo(String itype)
 {
-	last_listout_type = itype;
 	todaydate =  kiboo.todayISODateTimeString();
-	sqlstm = msgtext = "";
+	sqlstm = msgtext = auditlog = "";
 	unm = useraccessobj.username;
 
 	if(itype.equals("newincoming_b"))
 	{
-		sqlstm = "insert into callrecords (datecreated,username,telephone,callername,cstatus,callassignto) values ('" + todaydate + "','" + unm + "','NOPHONE','NONAME','NEW','SELF');";
+		sqlstm = "insert into callrecords (datecreated,username,telephone,callername,cstatus,callassignto) values " +
+		"('" + todaydate + "','" + unm + "','NOPHONE','NONAME','" + NEWCALL_STRING + "','SELF');";
+	}
+
+	if(itype.equals("savecall_b") && !glob_sel_callrec.equals(""))
+	{
+		dt = ngfun.getString_fromUI(callrecmetaboxes);
+		ws = "";
+		for(i=0;i<dt.length;i++)
+		{
+			if(callrecmetafields[i].equals("itempurchasedate"))
+			{
+				if(dt[i].equals("")) dt[i] = todaydate;
+				else dt[i] = dt[i] + " 00:00:00"; // HARDCODED tweak for db.datetime string
+			} 
+			ws += callrecmetafields[i] + "='" + dt[i] + "',";
+		}
+		ws = ws.substring(0,ws.length()-1);
+		sqlstm = "update callrecords set " + ws + " where origid=" + glob_sel_callrec;
+	}
+
+	if(itype.equals("assigncall_b") && !glob_sel_callrec.equals(""))
+	{
+		asgnto = cr_callassignto.getSelectedItem().getLabel();
+		sqlstm = "update callrecords set callassignto='" + asgnto + "' where origid=" + glob_sel_callrec + " limit 1;";
+	}
+
+	if(itype.equals("endcall_b") && !glob_sel_callrec.equals(""))
+	{
+		if(Messagebox.show("Do you want to end the call, close case?", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "update callrecords set cstatus='" + ENDCALL_STRING + "', endcall='" + todaydate + "' where origid=" + glob_sel_callrec;
+		toggle_metaboxes(true);
+	}
+
+	if(itype.equals("delcallrec_b") && !glob_sel_callrec.equals(""))
+	{
+		if(Messagebox.show("This will hard-delete the selected record..", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "delete from callrecords where origid=" + glob_sel_callrec + " limit 1;";
+
+		glob_sel_callrec = ""; // delete rec, clear global var and hide workarea
+		workarea.setVisible(false);
+	}
+
+	if(itype.equals("clearassignpickup_b") && !glob_sel_callrec.equals(""))
+	{
+		sqlstm = "update callrecords set assigneepickup=null where origid=" + glob_sel_callrec + " limit 1;";
+	}
+
+	if(itype.equals("clearendcall_b") && !glob_sel_callrec.equals(""))
+	{
+		sqlstm = "update callrecords set endcall=null, cstatus='" + NEWCALL_STRING + "' where origid=" + glob_sel_callrec + " limit 1;";
+	}
+
+	if(itype.equals("exportlist_b") && !glob_sel_callrec.equals(""))
+	{
 	}
 
 	if(!sqlstm.equals(""))
@@ -117,13 +206,14 @@ void callRecDo(String itype)
 		listCallRecords(last_listout_type);
 	}
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+	// if(!auditlog.equals("")) {}
 }
 
 ]]>
 </zscript>
 
 <popup id="listout_pop">
-	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND}" >
+	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND};border-radius:3px" >
 		<grid sclass="GridLayoutNoBorder">
 			<rows>
 				<row style="${GENERAL_POPUP_BACKGROUND}">
@@ -144,12 +234,31 @@ void callRecDo(String itype)
 	</div>
 </popup>
 
+<popup id="utilpopup">
+	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND};border-radius:3px" >
+		<vbox>
+			<button id="exportlist_b" label="Export to MSExcel" sclass="k9mo" onClick="callRecDo(self.getId())" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#EA1111;border-radius:3px" >
+		<vbox>
+			<button id="delcallrec_b" label="Delete record" sclass="k9mo" onClick="callRecDo(self.getId())" />
+			<button id="clearassignpickup_b" label="Clear assignee pickup date" sclass="k9mo" onClick="callRecDo(self.getId())" />
+			<button id="clearendcall_b" label="Clear end-call date" sclass="k9mo" onClick="callRecDo(self.getId())" />
+		</vbox>
+	</div>
+</popup>
+
 <style src="/real-world.css" />
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
 	{
 		border: none; overflow: hidden; zoom: 1;
 		border-top: none; border-left: none; border-right: none; border-bottom: none;
+		border-radius:3px
 	}
 	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
 </style>
@@ -159,28 +268,32 @@ void callRecDo(String itype)
 <panelchildren style="background:#3F5367">
 <label id="debugbox" multiline="true" />
 <button label="testmy" onClick="kq = wms_Sql(); alert(kq); kq.close();" visible="false" />
-<div sclass="shadowbox" style="background:#1D4D85">
+<div sclass="shadowbox" style="background:#1D4D85;border-radius:3px">
 	<hbox>
 		<button label="LIST CALLS" sclass="k9mo" onClick="listout_pop.open(self)" />
 		<separator width="5px" />
 		<button id="newincoming_b" label="INCOMING CALL" sclass="k9mo" onClick="callRecDo(self.getId())" />
 		<button id="assigncall_b" label="ASSIGN TO" sclass="k9mo" onClick="callRecDo(self.getId())" />
 		<button id="endcall_b" label="END CALL" sclass="k9mo" onClick="callRecDo(self.getId())" />
+		<button label="UTILITY" sclass="k9mo" onClick="utilpopup.open(self)" />
+		<button id="adminbut" label="ADMIN" sclass="k9mo" style="color:#EA1111" onClick="adminpop.open(self)" visible="false" />
 	</hbox>
 	<separator height="3px" />
 	<div id="callslist_holder" />
 </div>
+<separator height="3px" />
 
-<div id="workarea">
+<div id="workarea" visible="false">
+	<separator height="3px" />
 	<tabbox id="mainaccordiantab" width="100%"  mold="accordion">
 		<tabs>
-			<tab label="A. CALLER DETAILS" />
+			<tab id="callrecheader" label="A. CALLER DETAILS" />
 			<tab label="B. CALL RECORDING" />
 			<tab label="C. MISC" />
 		</tabs>
 		<tabpanels>
 			<tabpanel>
-				<button label="SAVE DETAILS" sclass="k9mo" />
+				<button label="SAVE DETAILS" sclass="k9mo" onClick='callRecDo("savecall_b")' />
 				<separator height="3px" />
 				<hbox>
 					<grid width="600px" sclass="GridLayoutNoBorder">
@@ -215,13 +328,13 @@ void callRecDo(String itype)
 			</tabpanel>
 
 			<tabpanel>
-				<button label="SAVE DETAILS" sclass="k9mo" />
+				<button label="SAVE DETAILS" sclass="k9mo" onClick='callRecDo("savecall_b")' />
 				<separator height="3px" />
 				<hbox>
 					<grid width="650px" sclass="GridLayoutNoBorder">
 						<rows>
 							<row style="background:#264180">
-								<label value="Company" sclass="wbo" />
+								<label value="Principal" sclass="wbo" />
 								<listbox id="cr_callcompany" sclass="k9" mold="select" width="98%" />
 								<label value="Call group" sclass="wbo" />
 								<listbox id="cr_callgroup" sclass="k9" mold="select" width="98%" />
@@ -266,7 +379,7 @@ void callRecDo(String itype)
 			</tabpanel>
 
 			<tabpanel>
-				<label value="Follow-ups and other functionality to be placed here soon" />
+				<label value="Follow-ups and other functionality to be placed here soon" style="color:#ffffff" />
 			</tabpanel>
 
 		</tabpanels>
@@ -275,6 +388,18 @@ void callRecDo(String itype)
 
 <zscript>
 <![CDATA[
+
+Component[] callrecmetaboxes = {
+	cd_telephone, cd_callername, cd_calleridno, cd_calleraddress1, cd_calleraddress2, cd_calleraddress3, cd_calleraddress4 ,
+	cr_callcompany, cr_callgroup, cr_callcategory, cr_callassignto, cr_callerremarks, cr_receptionremarks,
+	cr_itemmodel, cr_itemserialno, cr_itempurchasedate, cr_itemwarranty, cr_workorderno
+};
+
+String[] callrecmetafields = {
+	"telephone", "callername", "calleridno", "calladdress1", "calladdress2", "calladdress3", "calladdress4",
+	"callcompany", "callgroup", "callcategory", "callassignto", "callerremarks", "receptionremarks",
+	"itemmodel", "itemserialno", "itempurchasedate", "itemwarranty", "workorderno"
+};
 
 String[] callcompany_string = { "ABIZ_MAJU","SITI_AISYAH","KULAFA","PAK_LI" };
 lbhand.populateDropdownListbox(cr_callcompany,callcompany_string);
@@ -290,6 +415,11 @@ lbhand.populateDropdownListbox(cr_callassignto,callassignto_string);
 
 String[] warranty_string = { "OUT", "IN", "UNKNOWN" };
 lbhand.populateDropdownListbox(cr_itemwarranty,warranty_string);
+
+if(useraccessobj.accesslevel == 9)
+{
+	adminbut.setVisible(true);
+}
 
 ]]>
 </zscript>

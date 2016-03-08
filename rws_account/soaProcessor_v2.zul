@@ -36,6 +36,7 @@ MYPANEL = "soaproc2";
  * 30/09/2015: unadjusted credit = receipts and CN, requested by Mahes to put into SOA. Check accuracy, good so far
  * 19/02/2016: Rachel assert new understanding on late-payment-interest calculation based on balance instead of invoice-amount. Reprogram the generateExcelSOA3()
  * 22/02/2016: Rachel request to have another SOA without late-payment interest. Need to create another XLS template without late-payment and outstanding column
+ * 07/03/2016: overide by Jim Khong definition of SOA total buckets
  */
 import java.util.*;
 import java.text.*;
@@ -376,6 +377,10 @@ void generateExcelSOA3(int itype)
 	totalinterest = 0.0;
 	// 0-30 Days” / “31-60 Days” / “61-90 Days” / “91-180 Days” / “181-360 days” / “Over 361 Days
 	sumundef = sum0_30 = sum31_60 = sum61_90 = sum91_180 = sum181_360 = sum361_on = 0.0;
+	
+	// 0-14 days, 15-28 days, 29-42 days, 43-60 days, 61-90 days, 91-120 days, 121-180 days, 181 days and more
+	sum0_14 = sum15_28 = sum29_42 = sum43_60 = sum61_90 = sum91_120 = sum121_180 = sum181_on = 0.0;
+
 	unadjcred = 0.0;
 	Date invdate, duedate;
 
@@ -440,27 +445,54 @@ void generateExcelSOA3(int itype)
 
 				totaloutstanding = balanceamount + latepaymentcharges; // Calc Total OutStanding
 
-				// 22/02/2016: Rachel confirmed for late-interest, sum-up total-outstanding
 				if(itype == 1)
 				{
-					if(dydff < 31 && dydff >= 0) sum0_30 += totaloutstanding;
-					if(dydff > 30 && dydff < 61) sum31_60 += totaloutstanding;
+					if(dydff < 15 && dydff >= 0) sum0_14 += totaloutstanding;
+					if(dydff > 14 && dydff < 29) sum15_28 += totaloutstanding;
+					if(dydff > 28 && dydff < 43) sum29_42 += totaloutstanding;
+					if(dydff > 42 && dydff < 61) sum43_60 += totaloutstanding;
 					if(dydff > 60 && dydff < 91) sum61_90 += totaloutstanding;
-					if(dydff > 90 && dydff < 181) sum91_180 += totaloutstanding;
-					if(dydff > 180 && dydff < 361) sum181_360 += totaloutstanding;
-					if(dydff > 360) sum361_on += totaloutstanding;
+					if(dydff > 90 && dydff < 121) sum91_120 += totaloutstanding;
+					if(dydff > 120 && dydff < 181) sum121_180 += totaloutstanding;
+					if(dydff > 180) sum181_on += totaloutstanding;
 				}
 
 				// 22/02/2016: Rachel confirmed, for non-late-interest, sum-up balance amount
 				if(itype == 2)
 				{
-					if(dydff < 31 && dydff >= 0) sum0_30 += balanceamount;
-					if(dydff > 30 && dydff < 61) sum31_60 += balanceamount;
+					if(dydff < 15 && dydff >= 0) sum0_14 += balanceamount;
+					if(dydff > 14 && dydff < 29) sum15_28 += balanceamount;
+					if(dydff > 28 && dydff < 43) sum29_42 += balanceamount;
+					if(dydff > 42 && dydff < 61) sum43_60 += balanceamount;
 					if(dydff > 60 && dydff < 91) sum61_90 += balanceamount;
-					if(dydff > 90 && dydff < 181) sum91_180 += balanceamount;
-					if(dydff > 180 && dydff < 361) sum181_360 += balanceamount;
-					if(dydff > 360) sum361_on += balanceamount;
+					if(dydff > 90 && dydff < 121) sum91_120 += balanceamount;
+					if(dydff > 120 && dydff < 181) sum121_180 += balanceamount;
+					if(dydff > 180) sum181_on += balanceamount;
 				}
+
+				/* Unused - 07/03/2016: overide by Jim Khong new sum-up bucket definitions
+					// 22/02/2016: Rachel confirmed for late-interest, sum-up total-outstanding
+					if(itype == 1)
+					{
+						if(dydff < 31 && dydff >= 0) sum0_30 += totaloutstanding;
+						if(dydff > 30 && dydff < 61) sum31_60 += totaloutstanding;
+						if(dydff > 60 && dydff < 91) sum61_90 += totaloutstanding;
+						if(dydff > 90 && dydff < 181) sum91_180 += totaloutstanding;
+						if(dydff > 180 && dydff < 361) sum181_360 += totaloutstanding;
+						if(dydff > 360) sum361_on += totaloutstanding;
+					}
+
+					// 22/02/2016: Rachel confirmed, for non-late-interest, sum-up balance amount
+					if(itype == 2)
+					{
+						if(dydff < 31 && dydff >= 0) sum0_30 += balanceamount;
+						if(dydff > 30 && dydff < 61) sum31_60 += balanceamount;
+						if(dydff > 60 && dydff < 91) sum61_90 += balanceamount;
+						if(dydff > 90 && dydff < 181) sum91_180 += balanceamount;
+						if(dydff > 180 && dydff < 361) sum181_360 += balanceamount;
+						if(dydff > 360) sum361_on += balanceamount;
+					}
+				*/
 
 				agedays = dydff;
 			}
@@ -566,22 +598,29 @@ void generateExcelSOA3(int itype)
 	nxttotalrw = totalrw + 1;
 	dyclm = 0;
 
-	String[] ageheaders = { "UNADJUSTED CREDITS", "0-30 Days", "31-60 Days", "61-90 Days", "91-180 Days", "181-360 days", "Over 361 Days" };
-	Object[] agevars = { unadjcred, sum0_30, sum31_60, sum61_90, sum91_180, sum181_360, sum361_on };
+	/* Unused - 07/03/2016: overide by Jim Khong definition of total buckets
+		String[] ageheaders = { "UNADJUSTED CREDITS", "0-30 Days", "31-60 Days", "61-90 Days", "91-180 Days", "181-360 days", "Over 361 Days" };
+		Object[] agevars = { unadjcred, sum0_30, sum31_60, sum61_90, sum91_180, sum181_360, sum361_on };
+	*/
+	//sum0_14 = sum15_28 = sum29_42 = sum43_60 = sum61_90 = sum91_120 = sum121_180 = sum181_on = 0.0;
+	String[] ageheaders = { "UNADJUSTED CREDITS", "0-14 days", "15-28 days", "29-42 days", "43-60 days", "61-90 days", "91-120 days", "121-180 days","181 days and more" };
+	Object[] agevars = { unadjcred, sum0_14, sum15_28, sum29_42, sum43_60, sum61_90, sum91_120, sum121_180, sum181_on };
 
-	for(j=0; j<7; j++) // insert those 0-30 days and so on at the end of the SOA
+	for(j=0; j<ageheaders.length; j++) // insert those 0-30 days and so on at the end of the SOA
 	{
 		excelInsertString(wsheet,totalrw,j,ageheaders[j]);
 		kval = nf2.format( ((agevars[j] < 0) ? -agevars[j] : agevars[j]) ) ; //kval = (j == 0) ? nf2.format( agevars[j] * -1) : agevars[j].toString();
 		excelInsertNumber(wsheet,nxttotalrw,j,kval);
 	}
 
-	kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_180 + sum181_360 + sum361_on) + unadjcred;
+	//kktot = (sum0_30 + sum31_60 + sum61_90 + sum91_180 + sum181_360 + sum361_on) + unadjcred;
+	kktot = unadjcred + sum0_14 + sum15_28 + sum29_42 + sum43_60 + sum61_90 + sum91_120 + sum121_180 + sum181_on;
+	kktot_over14days = sum15_28 + sum29_42 + sum43_60 + sum61_90 + sum91_120 + sum121_180 + sum181_on;
 
-	excelInsertString(wsheet,totalrw,dyclm+7,"TOTAL");
-	excelInsertNumber(wsheet,nxttotalrw,dyclm+7, nf2.format(kktot) );
+	excelInsertString(wsheet,totalrw,dyclm+9,"TOTAL");
+	excelInsertNumber(wsheet,nxttotalrw,dyclm+9, nf2.format(kktot) );
 
-	duestr = "REMINDER:\nWe would like to bring to your attention that your account of RM" + nf3.format(kktot) +
+	duestr = "REMINDER:\nWe would like to bring to your attention that your account of RM" + nf3.format(kktot_over14days) +
 	" has exceeded the due date.\nWe hope to receive your payment within 14 days from the date of this statement " +
 	"to avoid service suspension.\nPlease ignore this reminder if payment has been made.";
 	excelInsertString(wsheet,1,5,duestr);
@@ -765,7 +804,7 @@ void generateExcelSOA3(int itype)
 
 if(useraccessobj.accesslevel == 9)
 {
-	searchcust_tb.setValue("SENARI SYNERGY");
+	searchcust_tb.setValue("besi a");
 }
 
 /*
