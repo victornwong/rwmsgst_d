@@ -1,7 +1,7 @@
 .subhead3 { font-size:24px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
 .subhead2 { font-size:18px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
 .subhead1 {	font-size:16px; font-weight:bold; color:#ffffff; text-shadow: 1px 1px #000000; }
-.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px }
+.shadowbox { -moz-box-shadow: 4px 5px 7px #000000; -webkit-box-shadow: 4px 5px 7px #000000; box-shadow: 4px 5px 7px #000000;padding:3px;margin:3px;border-radius:3px; }
 .k9b { font-size:9px;color:#ffffff }
 .k9mo { font-size:9px; font-weight:bold }
 .wbo { font-size:9px;color:#444444;font-weight:bold }

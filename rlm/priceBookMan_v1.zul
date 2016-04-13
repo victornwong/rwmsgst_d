@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="pricebookmanmod"?>
+<zk>
+<zscript src="rglobal/rlmsql.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "PRICE BOOKS";
+MYVERSION = "v0.1";
+MYPANEL = "pricebookpaneld";
+/**
+ * @title Price books management module
+ * @author Victor Wong
+ * @since 09/03/2016
+ * @notes
+ * 
+*/
+import java.util.*;
+import java.text.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+useraccessobj = sechand.getUserAccessObject();
+if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
+
+]]>
+</zscript>
+
+<popup id="utilpopup">
+	<div sclass="shadowbox" style="${GENERAL_POPUP_BACKGROUND}" >
+		<vbox>
+			<button id="exportlist_b" label="Export to MSExcel" sclass="k9mo" />
+		</vbox>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#EA1111" >
+		<vbox>
+		</vbox>
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+		border-radius:3px
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
+<panelchildren style="background:#3F5367">
+<label id="debugbox" multiline="true" />
+<button label="testmy" onClick="kq = wms_Sql(); alert(kq); kq.close();" visible="false" />
+
+<div sclass="shadowbox" style="background:#F74613" width="680px">
+	<hbox>
+	</hbox>
+	<separator height="3px" />
+</div>
+
+<zscript>
+<![CDATA[
+
+if(useraccessobj.accesslevel == 9)
+{
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

@@ -63,7 +63,6 @@ Object get_JobFolders(String iwhat)
 	return vsql_FirstRow(sqlstm);
 }
 
-
 //-------- old codes
 
 Object getWorkOrderRec(String iwhat) throws SQLException

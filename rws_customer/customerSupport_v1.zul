@@ -991,7 +991,7 @@ ACTIVATY_BOXWIDTH = "500px";
 <zscript>
 <![CDATA[
 
-if(useraccessobj.username.equals("vanita")) // need to re-code this to use security lookup-table
+if(useraccessobj.username.equals("pubalan")) // need to re-code this to use security lookup-table
 {
 	chgtkstat_b.setVisible(true);
 	clroutsource.setVisible(true);
