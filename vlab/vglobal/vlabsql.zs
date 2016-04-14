@@ -647,7 +647,7 @@ void locateShiftListbox(Listbox ilb, int icolumn, String iwhat, String istyle)
 	<timer id="nagtimer" delay="${NAG_TIMER_DELAY}" repeats="true" onTimer="nagtimerFunc()" />
  */
 NAG_BAR_STYLE = "background:#EDDB25";
-NAG_TIMER_DELAY = 5000;
+NAG_TIMER_DELAY = 1000;
 nagcount = 0;
 
 /**
@@ -668,7 +668,7 @@ void putNagText(String inagtext)
 void nagtimerFunc()
 {
 	nagcount++;
-	if(nagcount > 2) nagtext.setValue(""); 
+	if(nagcount > 5) nagtext.setValue(""); 
 }
 
 /**
@@ -779,3 +779,51 @@ String getListbox_SelectedColValue(Listbox pLb, int pCol, boolean pQuoted)
 	try { retval = retval.substring(0,retval.length()-1); } catch (Exception e) {}
 	return retval;
 }
+
+/**
+ * Generic add rows to listbox. Uses listbox header def to determine how many columns. Set default empty string in pCellString
+ * @param pLb         the listbox
+ * @param pLbheader   listbox header def
+ * @param pStyle      style of list-row, "" to use default
+ * @param pHowmany    how many rows to add
+ * @param pCellString default empty string
+ */
+void add_ListboxRow_ByHeaderDef(Listbox pLb, Object[] pLbheader, String pStyle, int pHowmany, String pCellString)
+{
+	ArrayList kabom = new ArrayList();
+	for(i=0;i<pLbheader.length;i++)
+	{
+		kabom.add(pCellString);
+	}
+	lrow = kiboo.convertArrayListToStringArray(kabom);
+	for(j=0;j<pHowmany;j++)
+	{
+		lbhand.insertListItems(pLb,lrow,"false",pStyle);
+	}
+	renumberListbox(pLb,0,1,false); // assume numbering col=0 and starts from 1
+}
+
+/**
+ * Generic remove selected items from listbox. Re-number listbox if required, set which column for the re-numbering.
+ * Re-numbering starts from 1
+ * @param pLb       the listbox
+ * @param pRenum    true=renum,false=no renum
+ * @param pRenumcol renumbering column
+ * @param pDlgtext  dialog text to get user confirmation
+ */
+void removeListItem_WithConfirmation(Listbox pLb, boolean pRenum, int pRenumcol, String pDlgtext)
+{
+	if(pLb.getSelectedCount() == 0) return;
+
+	if(Messagebox.show(pDlgtext, "Are you sure?",
+		Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+	kl = pLb.getSelectedItems().toArray();
+	for(i=0;i<kl.length;i++)
+	{
+		kl[i].setParent(null);
+	}
+	if(pRenum) renumberListbox(pLb,pRenumcol,1,false);
+}
+
+

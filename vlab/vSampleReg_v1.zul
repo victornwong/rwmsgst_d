@@ -40,6 +40,9 @@ myincludeid = Executions.getCurrent().getParameter("myid");
 AREA_BOX_STYLE = "background:#E49529;";
 WORKAREA_BOX_STYLE = "background:#216F92";
 
+FOLDER_LISTBOX_ID = "jobfolders_lb";
+SAMPLES_LISTBOX_ID = "samples_lb";
+
 useraccessobj = null;
 
 try {
@@ -96,13 +99,6 @@ void findcustomer_Callback(Object isel, String icid, String iarcode, String icus
 void jobnote_onSelect_callBack(Object isel)
 {}
 
-Object[] sampleshds1 =
-{
-	new listboxHeaderWidthObj("NO.",true,"90px"),
-	new listboxHeaderWidthObj("MARKING",true,""),
-	new listboxHeaderWidthObj("NOTES",true,""),
-};
-
 /**
  * Call-back from job-folders listbox onselect and double-clicker
  * @param isel [description]
@@ -116,16 +112,23 @@ void jobfolders_callBack(Object isel)
 	showJobFolder_Metadata(jfr);
 }
 
+Object[] sampleshds1 =
+{
+	new listboxHeaderWidthObj("NO.",true,"90px"),
+	new listboxHeaderWidthObj("MARKING",true,""),
+	new listboxHeaderWidthObj("NOTES",true,""),
+};
+
 void showJob_Samples(String pJn)
 {
-	Listbox newlb = lbhand.makeVWListbox_Width(samples_holder, sampleshds1, "samples_lb", 13); // always start with empty samples listbox
+	Listbox newlb = lbhand.makeVWListbox_Width(samples_holder, sampleshds1, SAMPLES_LISTBOX_ID, 13); // always start with empty samples listbox
 	newlb.setCheckmark(true); newlb.setMultiple(true);
 }
 
 void jobFoldersFunc(String iwhat)
 {
 	todaydate =  kiboo.todayISODateTimeString();
-	sqlstm = msgtext = ""; renum = refresh = false;
+	sqlstm = msgtext = thenagtext = ""; renum = refresh = false;
 	unm = "tester"; try { unm = useraccessobj.username; } catch (Exception e) {}
 
 	if(iwhat.equals("newjob_b")) // insert new job-folder
@@ -146,6 +149,7 @@ void jobFoldersFunc(String iwhat)
 	{
 		saveFolderMetadata(glob_sel_jobfolder);
 		refresh = true;
+		thenagtext = "Folder metadata saved";
 	}
 
 	if(iwhat.equals("deletefolder_b") && !glob_sel_jobfolder.equals("")) // delete job-folder, only ADMIN
@@ -156,25 +160,44 @@ void jobFoldersFunc(String iwhat)
 		sqlstm = "delete from JobFolders where origid=" + glob_sel_jobfolder;
 		refresh = true;
 		glob_sel_jobfolder = "";
+		thenagtext = "Folder deleted";
 		//workarea.setVisible(false);
 	}
 
 	if(!sqlstm.equals("")) vsql_execute(sqlstm);
-	if(refresh) listJobFolders(last_listjob_type, folders_holder, "jobfolder_lb");
+	if(refresh) listJobFolders(last_listjob_type, folders_holder, FOLDER_LISTBOX_ID);
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+	if(!thenagtext.equals("")) putNagText(thenagtext);
 }
 
 void samplesFuncDo(String iwhat)
 {
 	todaydate =  kiboo.todayISODateTimeString();
-	sqlstm = msgtext = ""; renum = false;
+	sqlstm = msgtext = thenagtext = ""; renum = false;
 	unm = "tester"; try { unm = useraccessobj.username; } catch (Exception e) {}
+	samplelb = samples_holder.getFellowIfAny(SAMPLES_LISTBOX_ID);
+
+	if(iwhat.equals("addsample_b") && samplelb != null) // add a sample into folder
+	{
+		try
+		{
+			k = Integer.parseInt(addsamplecount_tb.getValue().trim());
+			if(k == 0) return;
+			add_ListboxRow_ByHeaderDef(samplelb,sampleshds1,"",k,"");
+		} catch (Exception e) {}
+	}
+
+	if(iwhat.equals("removesample_b") && samplelb != null) // remove selected samples from folder
+	{
+		removeListItem_WithConfirmation(samplelb,true,0,"This will remove the selected samples from the folder");
+	}
 
 	if(!sqlstm.equals(""))
 	{
 		vsql_execute(sqlstm);
 	}
 	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+	if(!thenagtext.equals("")) putNagText(thenagtext);
 }
 
 ]]>
@@ -192,11 +215,11 @@ void samplesFuncDo(String iwhat)
 				</row>
 				<row style="${LISTPOBACKGROUND}" spans="3,1">
 					<textbox id="searhtxt_tb" sclass="k9" width="95%" />
-					<button label="Load/Find" sclass="k9mo" onClick='listpopop.close(); listJobFolders(1,folders_holder,"jobfolder_lb");' />
+					<button label="Load/Find" sclass="k9mo" onClick='listpopop.close(); listJobFolders(1,folders_holder,FOLDER_LISTBOX_ID);' />
 				</row>
 				<row style="${LISTPOBACKGROUND}" spans="3,1">
 					<textbox id="byjob_tb" sclass="k9" width="50%" />
-					<button label="by job-folder" sclass="k9mo" onClick='listpopop.close(); listJobFolders(2,folders_holder,"jobfolder_lb");' />
+					<button label="by job-folder" sclass="k9mo" onClick='listpopop.close(); listJobFolders(2,folders_holder,FOLDER_LISTBOX_ID);' />
 				</row>
 			</rows>
 		</grid>
@@ -225,7 +248,7 @@ void samplesFuncDo(String iwhat)
 		<hbox>
 			<label value="Count" />
 			<textbox id="addsamplecount_tb" width="60px" value="1" />
-			<button id="addsample_b" label="Add" onClick="samplesFuncDo(self.getId())" />
+			<button id="addsample_b" label="ADD" onClick="addsample_pop.close(); samplesFuncDo(self.getId())" />
 		</hbox>
 	</div>
 </popup>
@@ -435,16 +458,42 @@ void samplesFuncDo(String iwhat)
 					<hbox>
 						<button label="ADD SAMPLES" sclass="k9mo" onClick="addsample_pop.open(self)" />
 						<button label="MPF" sclass="k9mo" onClick="samplesmpf_pop.open(self)" />
-						<button label="REMOVE" sclass="k9mo" />
+						<button id="removesample_b" label="REMOVE" sclass="k9mo" onClick="samplesFuncDo(self.getId())" />
 					</hbox>
 					<separator height="3px" />
-					<div id="samples_holder" width="600px" />
+					<hbox>
+						<div id="samples_holder" width="600px" sclass="shadowbox" style="${AREA_BOX_STYLE}" />
+						<div sclass="shadowbox" style="${AREA_BOX_STYLE}">
+							<grid sclass="GridLayoutNoBorder" width="480px">
+								<rows>
+									<row style="${AREA_BOX_STYLE}">
+										<label value="Index" sclass="k9" />
+										<label id="sm_localindex" style="font-weight:bold" />
+									</row>
+									<row style="${AREA_BOX_STYLE}">
+										<label value="Sample marking" sclass="k9" />
+										<textbox id="sm_samplemarking" sclass="k9" width="99%" />
+									</row>
+									<row style="${AREA_BOX_STYLE}">
+										<label value="Notes / instruction" sclass="k9" />
+										<textbox id="sm_extranotes" sclass="k9" width="99%" />
+									</row>
+								</rows>
+							</grid>
+						</div>
+					</hbox>
 				</tabpanel>
 				<tabpanel> <!-- ATTACHMENTS -->
 				</tabpanel>
 			</tabpanels>
 		</tabbox>
 	</div>
+	<div id="nagbar" style="${NAG_BAR_STYLE}">
+		<hbox>
+			<label id="nagtext" multiline="true" sclass="blink" style="font-size:9px;font-weight:bold" />
+		</hbox>
+	</div>
+	<timer id="nagtimer" delay="${NAG_TIMER_DELAY}" repeats="true" onTimer="nagtimerFunc()" />
 
 <zscript>
 <![CDATA[
