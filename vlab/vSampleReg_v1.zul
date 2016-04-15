@@ -6,6 +6,7 @@
 <zscript src="vglobal/customerSelector.zs" />
 <zscript src="vglobal/jobnotes_v2.zs" />
 <zscript src="samplereg/jobfolder_func.zs" />
+<zscript src="samplereg/samplereg_funcs.zs" />
 <zscript>
 <![CDATA[
 MYTITLE = "SR";
@@ -16,6 +17,9 @@ MYPANEL = "vsamepregpanel";
  * @author Victor Wong
  * @since 06/01/2016
  * @notes
+ *
+ * lookups : PRIORITY_LISTS , TRANSPORTER_COURIER
+ * 
 */
 import java.util.*;
 import java.text.*;
@@ -44,6 +48,7 @@ FOLDER_LISTBOX_ID = "jobfolders_lb";
 SAMPLES_LISTBOX_ID = "samples_lb";
 
 useraccessobj = null;
+jobfolder_dirtyflag = false; // to be set by any func that update things - metadata,samples,etc. So that when panel is close, get user confirmation on saving changes
 
 try {
 useraccessobj = sechand.getUserAccessObject();
@@ -60,6 +65,9 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
 gridhand = new GridHandler(); ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
+Object selected_jf_record = null;
+Object selected_jobfolder_listitem = null;
+Object selected_sample_listitem = null;
 glob_sel_jobfolder = glob_sel_arcode = "";
 
 String JN_linkcode()
@@ -105,24 +113,24 @@ void jobnote_onSelect_callBack(Object isel)
  */
 void jobfolders_callBack(Object isel)
 {
+	selected_jobfolder_listitem = isel;
 	glob_sel_jobfolder = lbhand.getListcellItemLabel(isel,JF_ORIGID);
-	jfr = get_JobFolders(glob_sel_jobfolder);
-	if(jfr == null) { guihand.showMessageBox("ERR: Cannot access job-folder database.."); return; }
+	selected_jf_record = get_JobFolders(glob_sel_jobfolder);
+	if(selected_jf_record == null) { guihand.showMessageBox("ERR: Cannot access job-folder database.."); return; }
 
-	showJobFolder_Metadata(jfr);
+	showJobFolder_Metadata(selected_jf_record);
 }
 
-Object[] sampleshds1 =
+/**
+ * Samples listbox onselect call-back
+ * @param isel selected sample list-item
+ */
+void samples_callBack(Object isel)
 {
-	new listboxHeaderWidthObj("NO.",true,"90px"),
-	new listboxHeaderWidthObj("MARKING",true,""),
-	new listboxHeaderWidthObj("NOTES",true,""),
-};
-
-void showJob_Samples(String pJn)
-{
-	Listbox newlb = lbhand.makeVWListbox_Width(samples_holder, sampleshds1, SAMPLES_LISTBOX_ID, 13); // always start with empty samples listbox
-	newlb.setCheckmark(true); newlb.setMultiple(true);
+	selected_sample_listitem = isel;
+	sm_localindex.setValue("Sample: " + lbhand.getListcellItemLabel(isel,SMP_INDEXNO));
+	sm_samplemarking.setValue(lbhand.getListcellItemLabel(isel,SMP_MARKING));
+	sm_extranotes.setValue(lbhand.getListcellItemLabel(isel,SMP_NOTES));
 }
 
 void jobFoldersFunc(String iwhat)
@@ -139,10 +147,27 @@ void jobFoldersFunc(String iwhat)
 
 	if(iwhat.equals("commitjob_b") && !glob_sel_jobfolder.equals("")) // commit job-folder
 	{
+		if(Messagebox.show("When job-folder is committed, modification will be disabled", "Are you sure?",
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "update JobFolders set folderstatus='" + FOLDER_COMMIT + "' where origid=" + glob_sel_jobfolder;
+		disable_Butts(true); refresh = true;
+		thenagtext = "Job folder set to " + FOLDER_COMMIT;
 	}
 
-	if(iwhat.equals("canceljob_b") && !glob_sel_jobfolder.equals("")) // cancel job-folder, only un-committed ones can cancel. Else, need authorization
+	if(iwhat.equals("canceljob_b") && !glob_sel_jobfolder.equals("")) // cancel job-folder
 	{
+		jls = kiboo.checkNullString(selected_jf_record.get("labfolderstatus")); 
+		if(!jls.equals(""))
+		{
+			// TODO would need authorization
+			msgtext = "ERR: Job-folder is in " + jls + " stage, cannot cancel";
+		}
+		else
+		{
+			sqlstm = "update JobFolders set folderstatus='" + FOLDER_CANCEL + "' where origid=" + glob_sel_jobfolder;
+			thenagtext = "Job folder is cancel";
+		}
 	}
 
 	if(iwhat.equals("savefoldermeta_b") && !glob_sel_jobfolder.equals("")) // save folder metadata
@@ -150,6 +175,12 @@ void jobFoldersFunc(String iwhat)
 		saveFolderMetadata(glob_sel_jobfolder);
 		refresh = true;
 		thenagtext = "Folder metadata saved";
+	}
+
+	if(iwhat.equals("setfoldertodaydate_b") && !glob_sel_jobfolder.equals("")) // set folder to today's date
+	{
+		sqlstm = "update JobFolders set datecreated='" + todaydate + "' where origid=" + glob_sel_jobfolder;
+		refresh = true;
 	}
 
 	if(iwhat.equals("deletefolder_b") && !glob_sel_jobfolder.equals("")) // delete job-folder, only ADMIN
@@ -162,6 +193,13 @@ void jobFoldersFunc(String iwhat)
 		glob_sel_jobfolder = "";
 		thenagtext = "Folder deleted";
 		//workarea.setVisible(false);
+	}
+
+	if(iwhat.equals("setfolderdraft_b") && !glob_sel_jobfolder.equals(""))
+	{
+		sqlstm = "update JobFolders set folderstatus='" + FOLDER_DRAFT + "' where origid=" + glob_sel_jobfolder;
+		disable_Butts(false); refresh = true;
+		thenagtext = "Job folder set to " + FOLDER_DRAFT;
 	}
 
 	if(!sqlstm.equals("")) vsql_execute(sqlstm);
@@ -183,13 +221,29 @@ void samplesFuncDo(String iwhat)
 		{
 			k = Integer.parseInt(addsamplecount_tb.getValue().trim());
 			if(k == 0) return;
-			add_ListboxRow_ByHeaderDef(samplelb,sampleshds1,"",k,"");
+			add_ListboxRow_ByHeaderDef(samplelb,sampleshds1,"",k,"BLANK");
 		} catch (Exception e) {}
 	}
 
 	if(iwhat.equals("removesample_b") && samplelb != null) // remove selected samples from folder
 	{
 		removeListItem_WithConfirmation(samplelb,true,0,"This will remove the selected samples from the folder");
+	}
+
+	if(iwhat.equals("updatesample_b") && selected_sample_listitem != null)
+	{
+		smk = kiboo.replaceSingleQuotes( sm_samplemarking.getValue().trim() );
+		snt = kiboo.replaceSingleQuotes( sm_extranotes.getValue().trim() );
+		lbhand.setListcellItemLabel(selected_sample_listitem,SMP_MARKING,smk);
+		lbhand.setListcellItemLabel(selected_sample_listitem,SMP_NOTES,snt);
+
+		jobfolder_dirtyflag = true;
+	}
+
+	if(iwhat.equals("savesamples_b") && samplelb != null) // save them samples added to the folder
+	{
+		saveFolder_Samples(glob_sel_jobfolder,samplelb);
+		thenagtext = "Samples saved";
 	}
 
 	if(!sqlstm.equals(""))
@@ -261,7 +315,11 @@ void samplesFuncDo(String iwhat)
 
 <popup id="adminpop">
 	<div sclass="shadowbox" style="background:#ED1C1C">
-		<button id="deletefolder_b" label="Delete job-folder" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+		<vbox>
+			<button id="setfolderdraft_b" label="Set DRAFT" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+			<button id="setfoldertodaydate_b" label="Set folder today's date" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+			<button id="deletefolder_b" label="Delete job-folder" sclass="k9mo" onClick="jobFoldersFunc(self.getId())" />
+		</vbox>
 	</div>
 </popup>
 
@@ -384,7 +442,6 @@ void samplesFuncDo(String iwhat)
 								<div id="auditlog_holder" />
 							</div>
 						</vbox>
-
 						<vbox>
 							<div sclass="shadowbox" style="${AREA_BOX_STYLE}" width="500px">
 								<grid sclass="GridLayoutNoBorder">
@@ -393,7 +450,7 @@ void samplesFuncDo(String iwhat)
 											<label value="Project ref" sclass="k9" />
 											<hbox>
 												<textbox id="jf_projectref" sclass="k9" />
-												<button label="Project" sclass="k9mo" />
+												<button id="setproject_b" label="Project" sclass="k9mo" />
 											</hbox>
 											<label value="Site ref" sclass="k9" />
 											<textbox id="jf_projectsiteref" sclass="k9" />
@@ -412,13 +469,13 @@ void samplesFuncDo(String iwhat)
 										</row>
 										<row style="${AREA_BOX_STYLE}">
 											<label value="Priority" sclass="k9" />
-											<listbox id="jf_priority" mold="select" sclass="k9" />
+											<listbox id="jf_priority" mold="select" sclass="k9" width="99%" />
 											<separator />
 											<separator />
 										</row>
 										<row style="${AREA_BOX_STYLE}">
 											<label value="Delivery" sclass="k9" />
-											<listbox id="jf_deliverymode" sclass="k9" mold="select" />
+											<listbox id="jf_deliverymode" sclass="k9" mold="select" width="99%" />
 											<checkbox id="jf_securityseal" label="Security seal" style="font-size:9px" />
 											<separator />
 										</row>
@@ -456,8 +513,9 @@ void samplesFuncDo(String iwhat)
 				</tabpanel>
 				<tabpanel> <!-- SAMPLES -->
 					<hbox>
-						<button label="ADD SAMPLES" sclass="k9mo" onClick="addsample_pop.open(self)" />
-						<button label="MPF" sclass="k9mo" onClick="samplesmpf_pop.open(self)" />
+						<button id="addsamppop_b" label="ADD SAMPLES" sclass="k9mo" onClick="addsample_pop.open(self)" />
+						<button id="savesamples_b" label="SAVE" sclass="k9mo" onClick="samplesFuncDo(self.getId())" />
+						<button id="foldermpf_b" label="MPF" sclass="k9mo" onClick="samplesmpf_pop.open(self)" />
 						<button id="removesample_b" label="REMOVE" sclass="k9mo" onClick="samplesFuncDo(self.getId())" />
 					</hbox>
 					<separator height="3px" />
@@ -480,6 +538,7 @@ void samplesFuncDo(String iwhat)
 									</row>
 								</rows>
 							</grid>
+							<button id="updatesample_b" label="UPDATE" sclass="k9mo" onClick="samplesFuncDo(self.getId())" />
 						</div>
 					</hbox>
 				</tabpanel>
@@ -497,6 +556,10 @@ void samplesFuncDo(String iwhat)
 
 <zscript>
 <![CDATA[
+
+Object[] module_butts = { setcustomer_b, savefoldermeta_b, setproject_b, addsamppop_b, addsample_b,
+	savesamples_b, removesample_b, foldermpf_b
+};
 
 Object[] jobmetaboxes = { jf_ar_code, jf_projectref, jf_projectsiteref, jf_customerpo, jf_customercoc, jf_tat, jf_duedate, jf_priority,
 	jf_deliverymode, jf_securityseal, jf_noboxes, jf_temperature, jf_samplesdamaged, jf_paperworknot, jf_paperworksamplesnot, jf_allgoodorder,
@@ -516,10 +579,15 @@ String[] customerdetails_fields = { "ar_code", "customer_name", "address1", "add
 	"telephone_no", "fax_no", "E_mail", "contact_person1", "p_ph1", "Designation1", "contact_person2", "p_ph2", "Designation2"
 };
 
+Object[] samplesmetaboxes = { sm_samplemarking, sm_extranotes, updatesample_b };
+
 if(useraccessobj.accesslevel == 9)
 {
 	admin_butt.setVisible(true);
 }
+
+luhand.populateListbox_ByLookup(jf_priority, "PRIORITY_LISTS", 2);
+luhand.populateListbox_ByLookup(jf_deliverymode, "TRANSPORTER_COURIER", 2);
 
 ]]>
 </zscript>

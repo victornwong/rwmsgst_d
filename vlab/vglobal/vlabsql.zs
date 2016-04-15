@@ -167,7 +167,7 @@ void massDisableComponents(Object[] icomps, boolean iwhat)
 {
 	for(i=0;i<icomps.length;i++)
 	{
-		icomps[i].setDisabled(iwhat);
+		if(!(icomps[i] instanceof Label)) icomps[i].setDisabled(iwhat);
 	}
 }
 
@@ -656,10 +656,12 @@ nagcount = 0;
  */
 void putNagText(String inagtext)
 {
-	k = nagtext.getValue();
-	if(k.equals("")) k = inagtext;
-	else k = k + "\n" + inagtext;
-	nagcount = 0; nagtext.setValue(k);
+	/* use these if need appending nag-text, else just overwrite 
+		k = nagtext.getValue();
+		if(k.equals("")) k = inagtext;
+		else k = k + "\n" + inagtext;
+	*/
+	nagcount = 0; nagtext.setValue(inagtext);
 }
 
 /**

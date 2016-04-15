@@ -4,6 +4,14 @@
  * @since 14/04/2016
  */
 
+void disable_Butts(boolean iwhat)
+{
+	massDisableComponents(module_butts,iwhat); // components array defined in main
+	massDisableComponents(jobmetaboxes,iwhat);
+	massDisableComponents(customerdetails_boxes,iwhat);
+	massDisableComponents(samplesmetaboxes,iwhat);
+}
+
 Object[] jobfolderhds1 =
 {
 	new listboxHeaderWidthObj("JOB",true,"80px"),
@@ -11,12 +19,13 @@ Object[] jobfolderhds1 =
 	new listboxHeaderWidthObj("CUSTOMER",true,""),
 	new listboxHeaderWidthObj("SC",true,"60px"),
 	new listboxHeaderWidthObj("STAT",true,"70px"),
-	new listboxHeaderWidthObj("PRTY",true,"70px"),
+	new listboxHeaderWidthObj("PRTY",true,"70px"), // 5
 	new listboxHeaderWidthObj("USER",true,"70px"),
+	new listboxHeaderWidthObj("STAGE",true,"70px"),
 	new listboxHeaderWidthObj("arcode",false,""),
 };
 JF_ORIGID = 0; JF_DATED = 1; JF_CUSTOMER = 2; JF_SAMPLECOUNT = 3;
-JF_STATUS = 4; JF_PRIORITY = 5; JF_USER = 6; JF_ARCODE = 7;
+JF_STATUS = 4; JF_PRIORITY = 5; JF_USER = 6; JF_LABSTATUS_STAGE = 7; JF_ARCODE = 8;
 
 last_listjob_type = 0;
 
@@ -50,7 +59,7 @@ void listJobFolders(int pType, Div pDiv, String pLbid)
 	newlb.setMold("paging"); // newlb.setMultiple(true); newlb.setCheckmark(true); 
 	newlb.addEventListener("onSelect", joblb_onselect);
 
-	sqlstm = "select j.origid,j.ar_code,j.datecreated,j.folderstatus,j.priority,j.createdby," +
+	sqlstm = "select j.origid,j.ar_code,j.datecreated,j.folderstatus,j.priority,j.createdby,j.labfolderstatus," +
 	"CAST((select count(origid) from JobSamples where jobfolders_id=j.origid) as DECIMAL(0)) as samplecount, c.customer_name " +
 	"from JobFolders j " +
 	"left join Customer c on c.ar_code=j.ar_code ";
@@ -164,9 +173,11 @@ void showJobFolder_Metadata(Object pJfr)
 		{
 			ngfun.populateUI_Data(customerdetails_boxes,customerdetails_fields,cr);
 		}
-	} 
+	}
 
-	showJob_Samples(pJfr.get("origid").toString()); // show samples
+	disable_Butts( (pJfr.get("folderstatus").equals(FOLDER_DRAFT)) ? false : true ); // Check job-folder status, if not DRAFT, disable all butts
+
+	showJob_Samples(pJfr.get("origid").toString(),samples_holder,SAMPLES_LISTBOX_ID,sampleshds1,13); // show samples
 	showJobNotes(JN_linkcode(),jobnotes_holder,"folderjobnotes_lb"); // show job-notes (jobnotes_v2.zs)
 	// show attachments
 }
