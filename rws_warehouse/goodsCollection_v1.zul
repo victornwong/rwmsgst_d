@@ -164,7 +164,7 @@ void doFunc(Object iwhat)
 		disableButts(1,true);
 		disableItemsTextbox(true);
 
-		topeople = "logistics@rentwise.com";
+		topeople = "logistics@rentwise.com,helpdesk@rentwise.com,dinita@rentwise.com";
 		emailsubj = "RE: New " + lnkc + " submitted!!";
 		emailmsg = "A new GCO has been submitted. Do take the appropriate action ASAP.";
 		gmail_sendEmail("", GMAIL_username, GMAIL_password, GMAIL_username, topeople, emailsubj, emailmsg);

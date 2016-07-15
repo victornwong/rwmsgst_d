@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?page id="labinvnetpmdol"?>
+<zk>
+<zscript src="vglobal/vglobaldefs.zs" />
+<zscript src="vglobal/vlabsql.zs" />
+<zscript src="vglobal/customerSelector.zs" />
+<zscript src="vglobal/jobnotes_v2.zs" />
+<zscript src="samplereg/jobfolder_func.zs" />
+<zscript src="samplereg/samplereg_funcs.zs" />
+<zscript>
+<![CDATA[
+MYTITLE = "LBIM";
+MYVERSION = "v0.1.0";
+MYPANEL = "labinenvoroapnale";
+/**
+ * @title Lab inventory management
+ * @author Victor Wong
+ * @since 24/05/2016
+ * @notes
+ *
+ * lookups : PRIORITY_LISTS , TRANSPORTER_COURIER
+ * 
+*/
+import java.util.*;
+import java.text.*;
+import java.io.*;
+import java.sql.*;
+import java.sql.Date;
+import java.lang.Float;
+import groovy.sql.Sql;
+import org.zkoss.zk.ui.*;
+import org.zkoss.zk.zutl.*;
+import java.math.BigDecimal;
+import java.awt.Color;
+import org.zkoss.util.media.AMedia;
+import org.zkoss.zul.*;
+import org.apache.poi.hssf.usermodel.*;
+import org.apache.poi.hssf.util.*;
+import org.apache.poi.ss.util.*;
+import org.victor.*;
+sechand = new SecurityFuncs();
+myincludeid = Executions.getCurrent().getParameter("myid");
+
+useraccessobj = null;
+jobfolder_dirtyflag = false; // to be set by any func that update things - metadata,samples,etc. So that when panel is close, get user confirmation on saving changes
+
+try {
+useraccessobj = sechand.getUserAccessObject();
+//if(useraccessobj == null) Executions.sendRedirect(MAINLOGIN_PAGE);
+} catch (Exception e) {}
+
+if(useraccessobj == null)
+{
+	useraccessobj = new userAccessObj();
+	useraccessobj.username = "tester";
+}
+
+kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
+guihand = new GuiFuncs(); luhand = new LookupFuncs(); dmshand = new DMSFuncs();
+gridhand = new GridHandler(); ngfun = new NGfuncs();
+
+LABINVTITEMS_LISTBOX_ID = "lbitems_lb";
+LABINVTCATEGORY_LISTBOX_ID = "lbitemscategory_lb";
+
+glob_sel_labitem = glob_sel_labitemcategory = "";
+
+last_list_type = 1; last_list_searchtext = "";
+
+String JN_linkcode()
+{
+	if(glob_sel_jobfolder.equals("")) return "";
+	return FOLDER_PREFIX + glob_sel_jobfolder;
+}
+
+void refresh_Combos()
+{
+	fillComboboxUniq("lb_inventory_items","category",m_category);
+	fillComboboxUniq("lb_inventory_items","project",m_project);
+	fillComboboxUniq("lb_inventory_items","uom",m_uom);
+
+	fillComboboxUniq("lb_inventory_items","category",u_category);
+	fillComboboxUniq("lb_inventory_items","project",u_project);
+	fillComboboxUniq("lb_inventory_items","uom",u_uom);
+}
+
+Object getLabInventory_rec(String iwhat) throws SQLException
+{
+	return vsql_FirstRow("select * from lb_inventory_items where origid=" + iwhat);
+}
+
+/**
+ * Call-back from lab-inventory listbox item select
+ * @param isel : selected list-item
+ */
+void labitemlb_callBack(Object isel)
+{
+	glob_sel_labitem = lbhand.getListcellItemLabel(isel,LBI_ORIGID);
+}
+
+/**
+ * Double-click call-back from lab-inventory listbox
+ * @param isel : selected list-item
+ */
+void labitemlb_dClickCallBack(Object isel)
+{
+	glob_sel_labitem = lbhand.getListcellItemLabel(isel,LBI_ORIGID);
+	r = getLabInventory_rec(glob_sel_labitem);
+	if(r == null) return;
+	populateUI_Data(upditemmetabox,upditemfields,r);
+	updlbinvtitem_pop.open(isel); // popup update box
+}
+
+void labitemcategorylb_callBack(Object isel)
+{
+	glob_sel_labitemcategory = lbhand.getListcellItemLabel(isel,0);
+	list_labInventory(2,lbitems_holder,LABINVTITEMS_LISTBOX_ID,glob_sel_labitemcategory);
+}
+
+Object[] labinvthds =
+{
+	new listboxHeaderWidthObj("ID",true,"70px"),
+	new listboxHeaderWidthObj("ITEM",true,""),
+	new listboxHeaderWidthObj("CATE",true,"80px"),
+	new listboxHeaderWidthObj("QTY",true,"50px"),
+	new listboxHeaderWidthObj("LOW",true,"50px"),
+	new listboxHeaderWidthObj("PRJ",true,"80px"),
+};
+LBI_ORIGID = 0; LBI_ITEMNAME = 1; LBI_CATEGORY = 2; LBI_QTY = 3; LBI_LOWLEVEL = 4; LBI_PROJECT = 5;
+
+class lbitemkliker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{ labitemlb_callBack(event.getReference()); }
+}
+labitemonselect = new lbitemkliker();
+
+class lbitemdkliker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{ labitemlb_dClickCallBack(event.getTarget()); }
+}
+labitem_doubleclicker = new lbitemdkliker();
+
+void list_labInventory(int itype, Div pDiv, String pLbid, String pSearch)
+{
+	last_list_type = itype; last_list_searchtext = pSearch;
+
+	Listbox newlb = lbhand.makeVWListbox_Width(pDiv, labinvthds, pLbid, 13);
+	sqlstm = "select origid,item_name,category,qty,project,low_level from lb_inventory_items ";
+
+	switch(itype)
+	{
+		case 1: // by search string
+			if(!pSearch.equals("")) sqlstm += "where item_name like '%" + pSearch + "%' or category like '%" + pSearch + "%' or project like '%" + pSearch + "%' ";
+			break;
+		case 2: // by category
+			sqlstm += "where category='" + pSearch + "' ";
+			break;
+	}
+
+	r = vsql_GetRows(sqlstm); if(r.size() == 0) return;
+	newlb.addEventListener("onSelect", labitemonselect);
+	newlb.setMultiple(true); newlb.setCheckmark(true);
+	//newlb.setMold("paging"); newlb.setRows(20);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "origid", "item_name", "category", "qty", "low_level", "project" };
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		ki = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		//lbhand.setListcellItemLabel(ki, ITEMDESC_IDX, kiboo.checkNullString(d.get("brand")) + " " + kiboo.checkNullString(d.get("model")) ); // put in brand+model
+		kabom.clear();
+	}
+	lbhand.setDoubleClick_ListItems(newlb, labitem_doubleclicker);
+}
+
+Object[] labitemcatprojhds =
+{
+	new listboxHeaderWidthObj("CATEGORY",true,""),
+	new listboxHeaderWidthObj("PROJECT",true,""),
+};
+
+class lbitemcatekliker implements org.zkoss.zk.ui.event.EventListener
+{
+	public void onEvent(Event event) throws UiException
+	{
+		labitemcategorylb_callBack(event.getReference());
+	}
+}
+labitemcategory_onselect = new lbitemcatekliker();
+
+void list_labInventoryCategory(int itype, Div pDiv, String pLbid)
+{
+	Listbox newlb = lbhand.makeVWListbox_Width(pDiv, labitemcatprojhds, pLbid, 13);
+	sqlstm = "select category, project from lb_inventory_items group by category;";
+	r = vsql_GetRows(sqlstm); if(r.size() == 0) return;
+	newlb.addEventListener("onSelect", labitemcategory_onselect);
+	ArrayList kabom = new ArrayList();
+	String[] fl = { "category", "project" };
+	for(d : r)
+	{
+		ngfun.popuListitems_Data(kabom,fl,d);
+		ki = lbhand.insertListItems(newlb,kiboo.convertArrayListToStringArray(kabom),"false","");
+		kabom.clear();
+	}
+}
+
+void labinventory_doFunc(String iwhat)
+{
+	todaydate =  kiboo.todayISODateTimeString();
+	sqlstm = msgtext = "";
+	unm = useraccessobj.username;
+
+	if(iwhat.equals("newlbitem_b"))
+	{
+		dt = getString_fromUI(insitemmetabox);
+		dt[0] = (dt[0].equals("")) ? "NEW ITEM" : dt[0];
+		dt[1] = (dt[1].equals("")) ? "CATEGORY" : dt[1];
+		try { kk = Integer.parseInt(dt[3]); } catch (Exception e) { dt[3] = "0"; }
+		try { kk = Integer.parseInt(dt[5]); } catch (Exception e) { dt[5] = "0"; }
+
+		sqlstm = "insert into lb_inventory_items (item_name,category,project,qty,low_level,last_user) values " +
+		"('" + dt[0] + "','" + dt[1] + "','" + dt[2] + "'," + dt[3] + "," + dt[4] + ",'" + unm + "');";
+	}
+
+	if(iwhat.equals("removelbitem_b") && !glob_sel_labitem.equals(""))
+	{
+		// TODO need to do multi-item
+		if(Messagebox.show("Delete selected item(s)", "Are you sure?", 
+			Messagebox.YES | Messagebox.NO, Messagebox.QUESTION) != Messagebox.YES) return;
+
+		sqlstm = "delete from lb_inventory_items where origid=" + glob_sel_labitem;
+	}
+
+	if(iwhat.equals("updlbitem_b") && !glob_sel_labitem.equals("")) // update inventory item
+	{
+		dt = getString_fromUI(upditemmetabox);
+		try { kk = Integer.parseInt(dt[3]); } catch (Exception e) { dt[3] = "0"; }
+		try { kk = Integer.parseInt(dt[5]); } catch (Exception e) { dt[5] = "0"; }
+
+		// TODO recode this
+		sqlstm = "update lb_inventory_items set item_name='" + dt[0] + "',category='" + dt[1] + "',project='" + dt[2] + "',qty=" + dt[3] + ",uom='" + dt[4] + "',low_level=" + dt[5] + " where origid=" + glob_sel_labitem;
+	}
+
+	if(!sqlstm.equals(""))
+	{
+		vsql_execute(sqlstm);
+		list_labInventory(last_list_type,lbitems_holder,LABINVTITEMS_LISTBOX_ID,last_list_searchtext);
+		list_labInventoryCategory(1,itemcate_holder,LABINVTCATEGORY_LISTBOX_ID);
+		refresh_Combos();
+	}
+	if(!msgtext.equals("")) guihand.showMessageBox(msgtext);
+}
+
+/*
+item_name	varchar(200)
+qty	int(11)
+uom	varchar(20)
+low_level	int(11)
+category	varchar(100)
+project	varchar(100)
+last_restock	datetime
+last_user	varchar(45)
+
+CREATE TABLE `lb_inventory_items` (
+  `origid` int(11) NOT NULL AUTO_INCREMENT,
+  `item_name` varchar(200) DEFAULT NULL,
+  `qty` int(11) DEFAULT NULL,
+  `uom` varchar(20) DEFAULT NULL,
+  `low_level` int(11) DEFAULT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `project` varchar(100) DEFAULT NULL,
+  `last_restock` datetime DEFAULT NULL,
+  `last_user` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`origid`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1;
+
+*/
+
+]]>
+</zscript>
+
+<popup id="listpopop">
+	<div sclass="shadowbox" style="${LISTPOBACKGROUND}">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${LISTPOBACKGROUND}">
+					<textbox id="searhtxt_tb" sclass="k9" width="95%" />
+					<button label="Load/Find" sclass="k9mo" onClick="listpopop.close();list_labInventory(1,lbitems_holder,LABINVTITEMS_LISTBOX_ID,searhtxt_tb.getValue().trim())" />
+				</row>
+			</rows>
+		</grid>
+	</div>
+</popup>
+
+<popup id="adminpop">
+	<div sclass="shadowbox" style="background:#ED1C1C">
+		<vbox>
+		</vbox>
+	</div>
+</popup>
+
+<popup id="newlbinvtitem_pop">
+	<div sclass="shadowbox" style="${WORKAREA_BOX_STYLE}" width="230px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Item" sclass="wbo" />
+					<textbox id="m_item_name" sclass="k9" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Category" sclass="wbo" />
+					<combobox id="m_category" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Project" sclass="wbo" />
+					<combobox id="m_project" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Quantity" sclass="wbo" />
+					<textbox id="m_qty" sclass="k9" width="50%" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="UOM" sclass="wbo" />
+					<combobox id="m_uom" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Low level" sclass="wbo" />
+					<textbox id="m_low_level" sclass="k9" width="50%" />
+				</row>
+			</rows>
+		</grid>
+		<button id="newlbitem_b" label="INSERT" sclass="k9mo" onClick="labinventory_doFunc(self.getId())" />
+	</div>
+</popup>
+
+<popup id="updlbinvtitem_pop">
+	<div sclass="shadowbox" style="${WORKAREA_BOX_STYLE}" width="230px">
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Item" sclass="wbo" />
+					<textbox id="u_item_name" sclass="k9" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Category" sclass="wbo" />
+					<combobox id="u_category" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Project" sclass="wbo" />
+					<combobox id="u_project" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Quantity" sclass="wbo" />
+					<textbox id="u_qty" sclass="k9" width="50%" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="UOM" sclass="wbo" />
+					<combobox id="u_uom" style="font-size:9px" />
+				</row>
+				<row style="${WORKAREA_BOX_STYLE}">
+					<label value="Low level" sclass="wbo" />
+					<textbox id="u_low_level" sclass="k9" width="50%" />
+				</row>
+			</rows>
+		</grid>
+		<button id="updlbitem_b" label="UPDATE" sclass="k9mo" onClick="labinventory_doFunc(self.getId())" />
+	</div>
+</popup>
+
+<style src="/real-world.css" />
+<style>
+	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
+	{
+		border: none; overflow: hidden; zoom: 1;
+		border-top: none; border-left: none; border-right: none; border-bottom: none;
+	}
+	.wbo { font-size:9px;color:#ffffff;font-weight:bold }
+</style>
+
+<div width="1200px">
+<panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
+<panelchildren style="${PANEL_STYLE}">
+	<label id="debugbox" sclass="wbo" multiline="true" />
+
+	<hbox>
+		<div sclass="shadowbox" style="${WORKAREA_BOX_STYLE}" width="280px">
+			<hbox>
+				<button id="removeitemcategory_b" label="REMOVE CATEGORY" sclass="k9mo" onClick="labinventory_doFunc(self.getId())" />
+			</hbox>
+			<separator height="3px" />
+			<div id="itemcate_holder" />
+		</div>
+
+		<div sclass="shadowbox" style="${WORKAREA_BOX_STYLE}" width="450px">
+			<hbox>
+				<button label="LIST" sclass="k9mo" onClick="listpopop.open(self)" />
+				<button label="NEW ITEM" sclass="k9mo" onClick="newlbinvtitem_pop.open(self)" />
+				<button id="removelbitem_b" label="REMOVE ITEM" sclass="k9mo" onClick="labinventory_doFunc(self.getId())" />
+			</hbox>
+			<separator height="3px" />
+			<div id="lbitems_holder" />
+			<separator height="3px" />
+		</div>
+	</hbox>
+
+	<div id="nagbar" sclass="shadowbox" style="${NAG_BAR_STYLE}">
+		<hbox>
+			<label id="nagtext" multiline="true" sclass="blink" style="font-size:9px;font-weight:bold" />
+		</hbox>
+	</div>
+	<!-- <timer id="nagtimer" delay="${NAG_TIMER_DELAY}" repeats="true" onTimer="nagtimerFunc()" /> -->
+
+<zscript>
+<![CDATA[
+
+Object[] insitemmetabox = {
+	m_item_name, m_category, m_project, m_qty, m_uom, m_low_level
+};
+
+Object[] upditemmetabox = {
+	u_item_name, u_category, u_project, u_qty, u_uom, u_low_level
+};
+
+String[] upditemfields = {
+	"item_name", "category", "project", "qty", "uom", "low_level"
+};
+
+list_labInventoryCategory(1,itemcate_holder,LABINVTCATEGORY_LISTBOX_ID);
+refresh_Combos();
+
+if(useraccessobj.accesslevel == 9)
+{
+	//admin_butt.setVisible(true);
+}
+
+]]>
+</zscript>
+</panelchildren>
+</panel>
+</div>
+</zk>

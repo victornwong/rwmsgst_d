@@ -720,6 +720,8 @@ void impRWI_Extra()
 	"left join mr000 c on c.masterid = d.bookno " +
 	"where d.voucherno = '" + lcn + "' and d.vouchertype=3329;";
 
+	//debugbox.setValue(sqlstm); return;
+
 	drc = sqlhand.rws_gpSqlFirstRow(sqlstm);
 
 	if(drc == null) return;

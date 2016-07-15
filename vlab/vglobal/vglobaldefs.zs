@@ -11,6 +11,12 @@ FOLDER_APPROVAL = "APPR";
 FOLDER_DONE = "DONE";
 FOLDER_CANCEL = "CANCEL";
 
+PANEL_STYLE = "background:#2E3748";
 REDTEXTSTYLE = "color:#E51B0F";
 LISTPOBACKGROUND = "background:#E8C61F";
+AREA_BOX_STYLE = "background:#E49529;";
+WORKAREA_BOX_STYLE = "background:#216F92";
+
+FOLDER_LISTBOX_ID = "jobfolders_lb";
+SAMPLES_LISTBOX_ID = "samples_lb";
 

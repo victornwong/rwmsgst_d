@@ -45,6 +45,41 @@ GroovyRowResult vsql_FirstRow(String isqlstm)
 	sql.close(); return retval;
 }
 
+Sql wms_Sql()
+{
+	String dbstring = "jdbc:mysql://localhost:3306/wms";
+	try { return Sql.newInstance(dbstring, "wmsuser", "1qaz", "com.mysql.jdbc.Driver"); } catch (Exception e) { return null; }
+
+	// ?useUnicode=true&characterEncoding=UTF-8
+	//String dbstring = "jdbc:mysql://vwdbinstanceoregon.cxadgyaubug5.us-west-2.rds.amazonaws.com:3306/wfmdb?useUnicode=true&characterEncoding=UTF-8";
+}
+
+void gpWMS_execute(String isqlstm)
+{
+	Sql sql = v_Sql();
+	if(sql == null) return;
+	sql.execute(isqlstm);
+	sql.close();
+}
+
+ArrayList gpWMS_GetRows(String isqlstm)
+{
+	Sql sql = v_Sql();
+	if(sql == null) return null;
+	ArrayList retval = (ArrayList)sql.rows(isqlstm);
+	sql.close();
+	return retval;
+}
+
+GroovyRowResult gpWMS_FirstRow(String isqlstm)
+{
+	Sql sql = v_Sql();
+	if(sql == null) return null;
+	GroovyRowResult retval = (GroovyRowResult)sql.firstRow(isqlstm);
+	sql.close();
+	return retval;
+}
+
 Object getCustomer_Rec(String iwhat)
 {
 	sqlstm = "select * from Customer where Id=" + iwhat;

@@ -825,6 +825,7 @@ G.Stat = GCO status
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#2e3436">
+	<label id="debugbox" multiline="true" style="color:#ffffff" />
 
 	<div sclass="shadowbox" style="background:#2e3436;" >
 		<hbox>
@@ -876,7 +877,6 @@ G.Stat = GCO status
 		<div style="background:#e58512;padding:3px">
 			<label id="recnum_lbl" style="font-size:9px" />
 		</div>
-
 		<tabbox> <!-- WORKAREA accordion -->
 			<tabs>
 				<tab id="tab0" label="LC / ROC Metadata" />
@@ -886,6 +886,7 @@ G.Stat = GCO status
 			<tabpanels>
 			<tabpanel> <!-- lc-roc meta -->
 				<hbox>
+					<button label="DO items list" onClick="i_product_name.setValue(getDOitemsDesc(glob_selected_lc))" />
 					<button id="updlcmeta_b" label="Update metadata" style="font-weight:bold" onClick="doFunc(self)" />
 					<button id="chkdup_b" label="Check dups" style="font-weight:bold" onClick="doFunc(self)" />
 					<button id="imprwie_b" label="Import FC6 RWI" style="font-weight:bold" onClick="impRWI_Extra()" />
@@ -896,7 +897,6 @@ G.Stat = GCO status
 				<separator height="5px" />
 				<hbox>
 					<div id="lcrocmeta_formholder" width="700px" />
-
 					<vbox>
 						<div sclass="shadowbox" style="background:#2e3436;" width="450px" id="jobnotes_div" >
 							<label sclass="subhead1" value="JOB NOTES" />
@@ -963,7 +963,6 @@ G.Stat = GCO status
 						<button label="HELP" sclass="k9" onClick="lilhelp_pop.open(self)" />
 					</hbox>
 				</div>
-
 				<separator height="3px" />
 				<hbox>
 					<div id="lcasset_holder" width="650px" />
@@ -991,7 +990,6 @@ G.Stat = GCO status
 	</div>
 
 <div id="winsholder" visible="false" />
-
 <zscript>
 <![CDATA[
 
@@ -1022,7 +1020,7 @@ assigncustomer_b.addEventListener("onClick", kbuttcliker ); // in form-xml
 batchlc_b.addEventListener("onClick", kbuttcliker);
 batchlcsuck_b.addEventListener("onClick", kbuttcliker);
 
-if(useraccessobj.username.equals("shopa"))
+if(useraccessobj.username.equals("shopa") || useraccessobj.username.equals("nurul"))
 {
 	admin_b.setVisible(true);	
 }
@@ -1046,4 +1044,3 @@ if(useraccessobj.accesslevel == 9)
 </panel>
 </div>
 </zk>
-

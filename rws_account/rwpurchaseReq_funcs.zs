@@ -240,7 +240,7 @@ void showPRList(int itype)
 			break;
 
 		case 4: // non-approved
-			sqlstm += whdts + "and pr_status in ('SUBMIT','DRAFT')";
+			sqlstm += whdts + "and pr_status in ('SUBMIT','DRAFT','VERIFY')";
 			break;
 	}
 

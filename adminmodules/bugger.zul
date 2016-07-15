@@ -500,6 +500,25 @@ void showselfile()
 	} catch (Exception e) {}
 }
 
+void loadIframe(int itype)
+{
+	switch(itype)
+	{
+		case 1:
+			theiframe.setSrc("http://localhost:8888/rlm_d2/");
+			break;
+		case 2:
+			theiframe.setSrc("http://localhost:8888/vlab_d/");
+			break;
+		case 3:
+			theiframe.setSrc("http://localhost:8080/rlm_d3/index.zul?loc=1");
+			break;
+		case 4:
+			theiframe.setSrc("http://localhost:8080/vld/index.zul?dev=1");
+			break;
+	}
+}
+
 ]]>
 </zscript>
 
@@ -520,51 +539,20 @@ void showselfile()
 <panelchildren style="background:#094D7F">
 
 <hbox>
-	<listbox id="ttfiles_lb" mold="select" sclass="k9" />
-	<button label="dang" onClick="showselfile()" />
-
-	<listbox id="calltype_dd" mold="select" sclass="k9" />
-	<label value="From" sclass="wbo" /> <datebox id="callstart" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-	<label value="To" sclass="wbo" /> <datebox id="callend" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-
-	<button label="Load" sclass="k9o" onClick="loadTalkTimeRecords(calltype_dd.getSelectedItem().getLabel(), kiboo.getDateFromDatebox(callstart), kiboo.getDateFromDatebox(callend))" />
+	<button label="loc_Rl" onClick="loadIframe(3)" />
+	<button label="loc_Vl" onClick="loadIframe(4)" />
+	<button label="Rl" onClick="loadIframe(1)" />
+	<button label="Vl" onClick="loadIframe(2)" />
 </hbox>
 
-<div id="talktime_holder"  />
-
-
-<!--
-	<grid width="480px">
-		<rows>
-			<row>
-				<label id="condition_code" />
-				<label id="problem_code" />
-				<label id="extended_code" />
-			</row>
-			<row>
-				<listbox id="iris_condition" mold="select" style="font-size:9px" width="130px" />
-				<hbox>
-					<listbox id="iris_code1" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(self,iris_code2,iriscode_dd)" />
-					<listbox id="iris_code2" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(iris_code1,self,iriscode_dd)" />
-				</hbox>
-				<listbox id="iris_extended" mold="select" style="font-size:9px" width="130px" />
-			</row>
-			<row>
-				<separator />
-				<listbox id="iriscode_dd" mold="select" style="font-size:9px" width="140px" />
-				<separator />
-			</row>
-		</rows>
-	</grid>
--->
+<iframe id="theiframe" style="width:1300px;height:2000px" />
 
 <zscript>
 <![CDATA[
 
 String[] calltype_string = { "ALL","INCOMING","OUTGOING","MISSCALL" };
-lbhand.populateDropdownListbox(calltype_dd,calltype_string);
-
-listDirectoryFiles(ttfiles_lb, "/var/lib/tomcat7/webapps/rwmsgst_d/tmp",null);
+//lbhand.populateDropdownListbox(calltype_dd,calltype_string);
+// listDirectoryFiles(ttfiles_lb, "/var/lib/tomcat7/webapps/rwmsgst_d/tmp",null);
 
 //listdirfiles("/var/lib/tomcat7/webapps/rwmsgst_d/tmp",ttfiles_holder,"ttfiles_lb");
 //fillupIRIS_selector(iris_condition,iris_code1,iris_code2,iriscode_dd,1);
@@ -636,6 +624,47 @@ class divdropp implements org.zkoss.zk.ui.event.EventListener
 <separator height="3px" />
 <div id="frogholder" droppable="true" />
 -->
+
+<!--
+<hbox>
+	<listbox id="ttfiles_lb" mold="select" sclass="k9" />
+	<button label="dang" onClick="showselfile()" />
+
+	<listbox id="calltype_dd" mold="select" sclass="k9" />
+	<label value="From" sclass="wbo" /> <datebox id="callstart" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+	<label value="To" sclass="wbo" /> <datebox id="callend" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+
+	<button label="Load" sclass="k9o" onClick="loadTalkTimeRecords(calltype_dd.getSelectedItem().getLabel(), kiboo.getDateFromDatebox(callstart), kiboo.getDateFromDatebox(callend))" />
+</hbox>
+
+<div id="talktime_holder"  />
+-->
+
+<!--
+	<grid width="480px">
+		<rows>
+			<row>
+				<label id="condition_code" />
+				<label id="problem_code" />
+				<label id="extended_code" />
+			</row>
+			<row>
+				<listbox id="iris_condition" mold="select" style="font-size:9px" width="130px" />
+				<hbox>
+					<listbox id="iris_code1" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(self,iris_code2,iriscode_dd)" />
+					<listbox id="iris_code2" mold="select" style="font-size:9px" width="70px" onSelect="irisCodeOnSelect(iris_code1,self,iriscode_dd)" />
+				</hbox>
+				<listbox id="iris_extended" mold="select" style="font-size:9px" width="130px" />
+			</row>
+			<row>
+				<separator />
+				<listbox id="iriscode_dd" mold="select" style="font-size:9px" width="140px" />
+				<separator />
+			</row>
+		</rows>
+	</grid>
+-->
+
 */
 
 ]]>

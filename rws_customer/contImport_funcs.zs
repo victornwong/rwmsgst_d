@@ -71,19 +71,27 @@ void impFC6_DO_Assets(String ilc, int itype)
 			break;
 	}
 
-	String[] k = new String[11];
+	String[] k = new String[13];
 	sqlstm = "";
 	kx = mylb.getItems().toArray();
 	for(i=0;i<kx.length;i++)
 	{
 		lx = kx[i];
-		for(j=0;j<11;j++)
+		for(j=0;j<13;j++)
 		{
 			k[j] = kiboo.replaceSingleQuotes( lbhand.getListcellItemLabel(lx,j) );
 		}
-		sqlstm += "insert into rw_lc_equips (asset_tag,serial_no,brand,model,type,color,hdd,ram,lc_parent,cust_location,billable,buyout) values " +
-		"('" + k[0] + "', '" + k[1] + "','" + k[3] + "','" + k[4] + "','" + k[5] + "'," +
-		"'" + k[6] + "','" + k[7] + "','" + k[8] + "'," + ilc + ",'" + k[10] + "',0,0);";
+
+/*
+FDO_ASSETTAG = 0; FDO_SNUM = 1; FDO_PRODUCT = 2; FDO_BRAND = 3; FDO_MODEL = 4;
+FDO_ITEMTYPE = 5; FDO_COLOR = 6; FDO_HDDSIZE = 7; FDO_RAMSIZE = 8; FDO_DO = 9;
+FDO_COA1 = 10; FDO_COA2 = 11; FDO_DELIVERADDR = 12;
+*/
+		sqlstm += "insert into rw_lc_equips (asset_tag,serial_no,brand,model,type,color,hdd,ram,lc_parent,cust_location,billable,buyout," + 
+		"coa1,coa2,osversion,offapps) values " +
+		"('" + k[FDO_ASSETTAG] + "', '" + k[FDO_SNUM] + "','" + k[FDO_BRAND] + "','" + k[FDO_MODEL] + "','" + k[FDO_ITEMTYPE] + "'," +
+		"'" + k[FDO_COLOR] + "','" + k[FDO_HDDSIZE] + "','" + k[FDO_RAMSIZE] + "'," + ilc + ",'" + k[FDO_DELIVERADDR] + "',0,0," +
+		"'" + k[FDO_COA1] + "','" + k[FDO_COA2] + "','" + k[FDO_COA1] + "','" + k[FDO_COA2] + "');";
 	}
 
 	if(!sqlstm.equals(""))
@@ -241,6 +249,29 @@ glob_asset_butt_click = new assbtnclik();
 glob_dorder_butt_click = new dobtnclik();
 glob_rma_butt_click = new rmabtnclik();
 
+String getDOitemsDesc(String pParent)
+{
+	sqlstm = "select distinct brand, model from rw_lc_equips where lc_parent=" + pParent;
+	r = sqlhand.gpSqlGetRows(sqlstm);
+	remstring = "";
+	for(d : r)
+	{
+		if(d.get("brand") != null)
+			if(!d.get("brand").equals(""))
+				remstring += d.get("brand").trim();
+
+		if(d.get("model") != null)
+			if(!d.get("model").equals(""))
+				remstring += " " + d.get("model").trim();
+
+		remstring += "\n";
+	}
+
+	remstring = remstring.trim();
+	//debugbox.setValue("remstring: " + remstring);
+	return remstring;
+}
+
 Object[] ido_hds =
 {
 	new listboxHeaderWidthObj("Asset.Tag",true,"80px"),
@@ -248,13 +279,19 @@ Object[] ido_hds =
 	new listboxHeaderWidthObj("Product",true,""),
 	new listboxHeaderWidthObj("brandyh",false,""),
 	new listboxHeaderWidthObj("modelyh",false,""),
-	new listboxHeaderWidthObj("itemtypeyh",false,""),
+	new listboxHeaderWidthObj("itemtypeyh",false,""), // 5
 	new listboxHeaderWidthObj("colouryh",false,""),
 	new listboxHeaderWidthObj("hddsizeyh",false,""),
 	new listboxHeaderWidthObj("ramsizeyh",false,""),
 	new listboxHeaderWidthObj("DO",true,"60px"),
+	new listboxHeaderWidthObj("COA1",true,"60px"), // 10
+	new listboxHeaderWidthObj("COA2",true,"60px"),
 	new listboxHeaderWidthObj("Dlvr",false,""),
 };
+
+FDO_ASSETTAG = 0; FDO_SNUM = 1; FDO_PRODUCT = 2; FDO_BRAND = 3; FDO_MODEL = 4;
+FDO_ITEMTYPE = 5; FDO_COLOR = 6; FDO_HDDSIZE = 7; FDO_RAMSIZE = 8; FDO_DO = 9;
+FDO_COA1 = 10; FDO_COA2 = 11; FDO_DELIVERADDR = 12;
 
 /**
  * [show_FC_DO description]
@@ -263,11 +300,11 @@ Object[] ido_hds =
  * @param iassholder assets holder
  * @param ilbid      listbox ID string
  */
-
 void show_FC_DO(Object iwher, int itype, Div iassholder, String ilbid )
 {
 	sqlstm = "select d.voucherno, p.name, p.code, p.code2, " +
-	"pd.brandyh, pd.modelyh, pd.itemtypeyh, pd.colouryh, pd.hddsizeyh, pd.ramsizeyh " +
+	"pd.brandyh, pd.modelyh, pd.itemtypeyh, pd.colouryh, pd.hddsizeyh, pd.ramsizeyh, " +
+	"pd.COA1YH, pd.COA2YH " +
 	"from data d left join mr001 p on p.masterid = d.productcode " +
 	"left join u0001 pd on pd.extraid = d.productcode " +
 	"where d.vouchertype=6144 and productcode<>0 ";
@@ -345,7 +382,7 @@ void show_FC_DO(Object iwher, int itype, Div iassholder, String ilbid )
 	imp_do_lbl.setValue("FC6 DO : " + dorf);
 	Listbox newlb = lbhand.makeVWListbox_Width(iassholder, ido_hds, ilbid, 13);
 
-	String[] flds = { "code2","code","name","brandyh","modelyh","itemtypeyh","colouryh","hddsizeyh","ramsizeyh","voucherno" };
+	String[] flds = { "code2","code","name","brandyh","modelyh","itemtypeyh","colouryh","hddsizeyh","ramsizeyh","voucherno","COA1YH","COA2YH" };
 	ArrayList kabom = new ArrayList();
 	for(d : prds)
 	{
