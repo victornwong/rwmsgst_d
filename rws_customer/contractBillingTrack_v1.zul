@@ -1022,7 +1022,7 @@ batchlcsuck_b.addEventListener("onClick", kbuttcliker);
 
 if(useraccessobj.username.equals("shopa") || useraccessobj.username.equals("nurul"))
 {
-	admin_b.setVisible(true);	
+	admin_b.setVisible(true);
 }
 
 if(useraccessobj.accesslevel == 9)

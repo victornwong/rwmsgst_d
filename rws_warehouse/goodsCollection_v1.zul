@@ -630,7 +630,7 @@ BOXWIDTH = "800px";
 			<button id="print_b" sclass="k9mo" label="Print" onClick="doFunc(self)" />
 			<!-- <button id="complete_b" label="Complete" onClick="doFunc(self)" /> -->
 			<button id="recvback_b" label="Items received" sclass="k9mo" onClick="doFunc(self)" />
-			<button id="setnew_b" label="SET NEW" sclass="k9mo" style="color:#F52222" onClick="adminFunc(self)" visible="false" />
+			<button id="setnew_b" label="SET NEW" sclass="k9mo" style="color:#F52222" onClick="adminFunc(self)" />
 			<button label="Export EXCEL" sclass="k9mo" onClick="exportGCOList()" />
 			<button label="Generate GCO items list" sclass="k9mo" onClick="gcoitems_pop.open(self)" />
 			<separator width="20px" />

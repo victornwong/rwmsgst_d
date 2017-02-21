@@ -89,7 +89,7 @@ void showTicketMetadata(String iwhat)
 {
 	tkr = getHelpTicket_rec(iwhat);
 	if(tkr == null) { guihand.showMessageBox("ERR: Cannot access database.."); return; }
-
+	alert(tkr);
 	t_origid.setValue(TICKETSV_PREFIX + iwhat);
 	global_selected_customerid = kiboo.checkNullString(tkr.get("fc6_custid"));
 	global_selected_customername = kiboo.checkNullString(tkr.get("cust_name"));
@@ -112,11 +112,14 @@ void showTicketMetadata(String iwhat)
 
 	String[] fl = { "cust_caller", "cust_caller_phone", "cust_caller_des", "cust_caller_email", "cust_location",
 	"asset_tag", "serial_no", "product_name", "assign_to", "problem", "action", "resolved_by", "resolve_type",
-	"resolution", "os_id", "os_user", "os_pickup", "os_resolvedate", "os_resolution", "priority", "priority", "tstatus", "ticketclass" };
+	"resolution", "os_id", "os_user", "os_pickup", "os_resolvedate", "os_resolution", "priority", "priority", "tstatus", "ticketclass",
+	"help_category", "help_subcategory", "help_type", "help_subtype" };
 
 	Object[] ob = { t_cust_caller, t_cust_caller_phone, t_cust_caller_des, t_cust_caller_email, t_cust_location,
 	t_asset_tag, t_serial_no, t_product_name, t_assign_to, t_problem, t_action, t_resolved_by, t_resolve_type,
-	t_resolution, t_os_id, t_os_user, t_os_pickup, t_os_resolve, t_os_resolution, t_priority, hd_priority, hd_tstatus, t_ticketclass };
+	t_resolution, t_os_id, t_os_user, t_os_pickup, t_os_resolve, t_os_resolution, t_priority, hd_priority, hd_tstatus, t_ticketclass,
+	t_help_category, t_help_subcategory, t_help_type, t_help_subtype
+	};
 
 	ngfun.populateUI_Data(ob,fl,tkr);
 

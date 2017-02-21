@@ -505,16 +505,19 @@ void loadIframe(int itype)
 	switch(itype)
 	{
 		case 1:
-			theiframe.setSrc("http://localhost:8888/rlm_d2/");
+			theiframe.setSrc("http://buruh.ml:8080/rlm_d/");
 			break;
 		case 2:
-			theiframe.setSrc("http://localhost:8888/vlab_d/");
+			theiframe.setSrc("http://vlms.ml:8080/vlab_d/index.zul?dev=0");
 			break;
 		case 3:
 			theiframe.setSrc("http://localhost:8080/rlm_d3/index.zul?loc=1");
 			break;
 		case 4:
-			theiframe.setSrc("http://localhost:8080/vld/index.zul?dev=1");
+			theiframe.setSrc("http://localhost:8080/vld/index.zul?dev=0");
+			break;
+		case 5:
+			theiframe.setSrc("http://localhost:8080/kp/");
 			break;
 	}
 }
@@ -539,10 +542,11 @@ void loadIframe(int itype)
 <panelchildren style="background:#094D7F">
 
 <hbox>
+	<button label="loc_Kp" onClick="loadIframe(5)" />
+	<button label="rem_Rl" onClick="loadIframe(1)" />
+	<button label="rem_Vl" onClick="loadIframe(2)" />
 	<button label="loc_Rl" onClick="loadIframe(3)" />
 	<button label="loc_Vl" onClick="loadIframe(4)" />
-	<button label="Rl" onClick="loadIframe(1)" />
-	<button label="Vl" onClick="loadIframe(2)" />
 </hbox>
 
 <iframe id="theiframe" style="width:1300px;height:2000px" />

@@ -171,10 +171,12 @@ void showFCROCs(int itype, int dtype)
 		dost = checkDOs_Delivered_byROC_2( d.get("voucherno"), glob_vtype ); // 08/06/2015: modif to use new func
 		kabom.add(dost);
 
-		rdo = (!jid.equals("")) ? getDOLinkToJob(6,jid) : "";
+		//rdo = (!jid.equals("")) ? getDOLinkToJob(6,jid) : "";
+		rdo = "";
 		kabom.add(rdo); // 13/10/2014: RDO things
 
-		rdostat = (!jid.equals("")) ? getRDO_DeliveryStatus(jid) : ""; // rwjobfuncs.zs
+		//rdostat = (!jid.equals("")) ? getRDO_DeliveryStatus(jid) : ""; // rwjobfuncs.zs
+		rdostat = "";
 		kabom.add(rdostat);
 
 		dinv = getInv_fromROC(d.get("voucherno"), glob_vtype);

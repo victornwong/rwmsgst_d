@@ -17,7 +17,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Customer Support / Helpdesk-tickets";
-MYVERSION = "v0.3.4";
+MYVERSION = "v0.3.5";
 MYPANEL = "custsupp1";
 /*
 @Title Customer support / help-tickets
@@ -32,7 +32,7 @@ NOTES:
 18/09/2014: vanita req , add extra field to classify ticket RMA,REMARKETING,AUDIT,DEPLOYMENT
 27/10/2014: button to source asset details from FC6
 24/06/2015: admin func to remove outsource partner resolutions etc
-
+17/02/2017: Praba request to add 4 drop-downs , Category, Sub-category, Type, Sub-Type
 */
 import java.util.*;
 import java.text.*;
@@ -104,7 +104,7 @@ void doFunc(Object iwhat)
 
 		Object[] ob = { t_cust_caller, t_cust_caller_phone, t_cust_caller_des, t_cust_caller_email, t_cust_location,
 		t_asset_tag, t_serial_no, t_product_name, t_assign_to, t_priority, t_problem, t_action,
-		t_resolved_by, t_resolve_type, t_resolution, t_os_id, t_os_user, t_ticketclass
+		t_resolved_by, t_resolve_type, t_resolution, t_os_id, t_os_user, t_ticketclass, t_help_category, t_help_subcategory, t_help_type, t_help_subtype
 		};
 
 		dt = ngfun.getString_fromUI(ob);
@@ -120,7 +120,7 @@ void doFunc(Object iwhat)
 		"asset_tag='" + dt[5] + "',serial_no='" + dt[6] + "',product_name='" + dt[7] + "',assign_to='" + dt[8] + "'," + 
 		"priority='" + dt[9] + "',problem='" + dt[10] + "',action='" + dt[11] + "',resolved_by='" + dt[12] + "'," + 
 		"resolve_type='" + dt[13] + "',resolution='" + dt[14] + "',os_id='" + dt[15] + "',os_user='" + dt[16] + "', " +
-		"ticketclass='" + dt[17] + "' " +
+		"ticketclass='" + dt[17] + "', help_category='" + dt[18] + "', help_subcategory='" + dt[19] + "', help_type='" + dt[20] + "', help_subtype='" + dt[21] + "' " +
 		"where origid=" + glob_selected_ticket;
 
 		refreshtickets = true;
@@ -693,8 +693,8 @@ ACTIVATY_BOXWIDTH = "500px";
 			<button id="emailnoti_b" label="Send notification" sclass="k9" onClick="doFunc(self)" />
 			<button id="viewsof_b" label="View SOF" sclass="k9" onClick="doFunc(self)" />
 			<button id="canceltick_b" label="CANCEL ticket" sclass="k9" onClick="checkOpenCancel()" />
-			<button id="chgtkstat_b" label="Set NEW" sclass="k9" onClick="adminFunc(self)" visible="false" />
-			<button id="clroutsource" label="Clear outsource resolution" sclass="k9" onClick="adminFunc(self)" visible="false" />
+			<button id="chgtkstat_b" label="Set NEW" sclass="k9" onClick="adminFunc(self)" />
+			<button id="clroutsource" label="Clear outsource resolution" sclass="k9" onClick="adminFunc(self)" />
 			<button id="admin_b" label="Admin" visible="false" style="color:#cc0000" onClick="adminpopup.open(self)" />
 		</hbox>
 		<separator height="3px" />
@@ -815,6 +815,18 @@ ACTIVATY_BOXWIDTH = "500px";
 										<listbox id="t_priority" mold="select" sclass="k9" />
 										<label value="Classfication" sclass="k9" />
 										<listbox id="t_ticketclass" mold="select" sclass="k9" />
+									</row>
+									<row>
+										<label value="Category" sclass="k9" />
+										<listbox id="t_help_category" sclass="k9" mold="select" />
+										<label value="Sub-category" sclass="k9" />
+										<listbox id="t_help_subcategory" sclass="k9" mold="select" />
+									</row>
+									<row>
+										<label value="Type" sclass="k9" />
+										<listbox id="t_help_type" sclass="k9" mold="select" />
+										<label value="Sub-type" sclass="k9" />
+										<listbox id="t_help_subtype" sclass="k9" mold="select" />
 									</row>
 									<row spans="1,5">
 										<label value="Problem" sclass="k9" />
@@ -991,11 +1003,13 @@ ACTIVATY_BOXWIDTH = "500px";
 <zscript>
 <![CDATA[
 
+/*
 if(useraccessobj.username.equals("pubalan") || useraccessobj.username.equals("prabakaran")) // need to re-code this to use security lookup-table
 {
 	chgtkstat_b.setVisible(true);
 	clroutsource.setVisible(true);
 }
+*/
 
 luhand.populateListbox_ByLookup(t_priority, "PRIORITY_LISTS", 2);
 luhand.populateListbox_ByLookup(t_chargeable, "YESNO_DEF", 2);
@@ -1007,6 +1021,11 @@ luhand.populateListbox_ByLookup(c_customer_rate2, "CUSTOMER_RATE_US", 2);
 luhand.populateListbox_ByLookup(c_customer_rate3, "CUSTOMER_RATE_US", 2);
 
 luhand.populateListbox_ByLookup(t_ticketclass, "TICKET_CLASSIFICATION", 2);
+
+luhand.populateListbox_ByLookup(t_help_category, "HELPDESK_CATEGORY", 2);
+luhand.populateListbox_ByLookup(t_help_subcategory, "HELPDESK_SUBCATEGORY", 2);
+luhand.populateListbox_ByLookup(t_help_type, "HELPDESK_TYPE", 2);
+luhand.populateListbox_ByLookup(t_help_subtype, "HELPDESK_SUBTYPE", 2);
 
 //luhand.populateListbox_ByLookup(i_collected,"YESNO_DEF",2); // LC/asset-tag check popup
 // TODO confirmquote_b <-- hide/show depending on user's ability to confirm service-items quote

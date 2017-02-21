@@ -34,6 +34,7 @@ MYPANEL = "salcolcla";
  * 04/01/2016: change all occurance of tham@ to umananthini@rentwise.com
  * 19/01/2016: Mandy request, add column "LEAD SOURCE" and "CAMPAIGN" : genColdCallDump()
  * 15/02/2016: Put leanneooi@rentwise.com in notification emailing
+ * 20/07/2016: Mandy request, lead-source must be selected - set default first lookup LEAD_SOURCES = "EMPTY"
  */
 import java.util.*;
 import java.text.*;
@@ -77,6 +78,13 @@ void contFunc(Object iwhat)
 		a_cust_tel, a_cust_fax, a_cust_email, a_coldcdv, a_businessroc, a_leadsource, a_campaign, a_grading_remarks };
 
 		dt = ngfun.getString_fromUI(ob);
+		// 20/07/2016: Mandy request, lead-source must be selected - set first lookup = "EMPTY". Check this as default
+		ldso = a_leadsource.getSelectedItem().getLabel();
+		if(ldso.equals("EMPTY")) {
+			guihand.showMessageBox("ERR: Lead source cannot be EMPTY");
+			return;
+		}
+
 		cntn = a_cont_temp.getSelectedItem().getLabel() + " " + kiboo.replaceSingleQuotes(a_contact_person.getValue().trim());
 
 		sqlstm = "update rw_activities_contacts set cust_name='" + dt[0] + "', industry='" + dt[1] + "'," +
@@ -216,7 +224,7 @@ void sendNotifEmail_aftergrading(String iwhat)
 		return;
 	}
 
-	topeople = "rent@rentwise.com,victor@rentwise.com";
+	topeople = "rent@rentwise.com,victor@rentwise.com,creditcontrol@rentwise.com";
 	subj = "Customer evaluation : " + custn;
 	msgb = "Notification email for customer evaluation." +
 	"\n-----------------------------------------------------------------------" +
@@ -487,11 +495,13 @@ if(sechand.allowedUser(useraccessobj.username,"CAN_UPDATE_GRADE"))
 	notifaftergrade_b.setDisabled(false);
 }
 
-if(useraccessobj.username.equals("mandy") || useraccessobj.username.equals("james") || useraccessobj.username.equals("leanne")) // 16/02/2016: add leanne
+// 16/02/2016: add leanne. 22/07/2016: add brandon
+/*if(useraccessobj.username.equals("wongxy") || useraccessobj.username.equals("james") || useraccessobj.username.equals("leanne") || useraccessobj.username.equals("brandon"))
 {
 	expdump_b.setDisabled(false);
 }
-
+*/
+expdump_b.setDisabled(false);
 if(useraccessobj.accesslevel == 9)
 {
 	expdump_b.setDisabled(false);

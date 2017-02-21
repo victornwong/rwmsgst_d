@@ -15,7 +15,7 @@ void disableButts(int itype, boolean iwhat)
 		case 1:
 			for(i=0;i<ibuts.length;i++)
 			{
-				ibuts[i].setDisabled(iwhat);
+				try { ibuts[i].setDisabled(iwhat); } catch (Exception e) {}
 			}
 			//importitems_b.setDisabled(iwhat);
 			break;
@@ -115,8 +115,8 @@ void showGCOMeta(String iwhat)
 	if(!kst.equals("NEW")) lkk = true;
 	if(kst.equals("COMPLETE")) lkk2 = true;
 
-	disableButts(1,lkk);
-	disableButts(2,lkk2);
+	//disableButts(1,lkk);
+	//disableButts(2,lkk2);
 	//disableItemsTextbox(lkk);
 
 	ktg = sqlhand.clobToString(grc.get("items_code"));

@@ -47,7 +47,7 @@ kiboo = new Generals(); sqlhand = new SqlFuncs(); lbhand = new ListboxHandler();
 luhand = new LookupFuncs(); gridhand = new GridHandler(); dmshand = new DMSFuncs();
 ngfun = new NGfuncs(); rwsqlfun = new RWMS_sql();
 
-NOTIF_EMAILS = "satish@rentwise.com,navin@rentwise.com,leanneooi@rentwise.com"; // TODO HARDCODED 29/11/2013
+NOTIF_EMAILS = "satish@rentwise.com,lanz.boo@rentwise.com,leanneooi@rentwise.com"; // TODO HARDCODED 29/11/2013
 
 Object glob_pr_rec = null; // to store sql-rec -- see if can speed up some things..
 global_selected_customerid = ""; // set in fc6_CustomerSelector.zs
@@ -698,21 +698,26 @@ popuSupplierCombo(repsupname_tb);
 if(useraccessobj.accesslevel == 9)
 {
 	admin_bb.setVisible(true);
-	setnewpr_b.setDisabled(false);
-	verifypr_b.setDisabled(false);
 }
 
+setnewpr_b.setDisabled(false);
+verifypr_b.setDisabled(false);
+
+/*
 if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navinkumar") || useraccessobj.username.equals("shopa"))
 {
 	setnewpr_b.setDisabled(false);
 }
+*/
 
 // 18/11/2015: req by navin, only satish can verify a PR
 // 08/12/2015: req by navin, add also himself to be able to verify a PR.. haha
+/*
 if(useraccessobj.username.equals("satish") || useraccessobj.username.equals("navinkumar"))
 {
 	verifypr_b.setDisabled(false);
 }
+*/
 
 ]]>
 </zscript>
