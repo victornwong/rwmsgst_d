@@ -1,0 +1,1389 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"setV",
+				"setVisible"
+			],
+			[
+				"SAA",
+				"SARAWAK_GDEX"
+			],
+			[
+				"found",
+				"foundsarawak"
+			],
+			[
+				"must",
+				"mustsarawak"
+			],
+			[
+				"debg",
+				"debugstr"
+			],
+			[
+				"deb",
+				"debugstr"
+			],
+			[
+				"cust",
+				"custaddr"
+			],
+			[
+				"SARA",
+				"SARAWAK_GDEX"
+			],
+			[
+				"sql",
+				"sqlhand"
+			],
+			[
+				"prevq",
+				"prevqty_togrid"
+			],
+			[
+				"ordeq",
+				"orderqty"
+			],
+			[
+				"POSTKINP",
+				"POSTKIN_GRID_PREVPOST"
+			],
+			[
+				"POSTGRIDP",
+				"POSTKIN_GRID_POSTFLAG"
+			],
+			[
+				"BLAN",
+				"BLANK_STRING	(rglobal.zs)"
+			],
+			[
+				"bol",
+				"boldwhite	(real-world.css)"
+			],
+			[
+				"WO_MANA",
+				"WO_MANAGEMENT_REPORT_DATERANGE"
+			],
+			[
+				"refre",
+				"refresh_workorders_things	(workOrderMan_v2.zul)"
+			],
+			[
+				"OUTW",
+				"OUTWARRANTY_MARKUP_FACTOR"
+			],
+			[
+				"counter",
+				"counterprice"
+			],
+			[
+				"getLis",
+				"getListcellItemLabel"
+			],
+			[
+				"getSe",
+				"getSelectedItems	(ListboxHandler.java)"
+			],
+			[
+				"kbol",
+				"kbold	(real-world.css)"
+			],
+			[
+				"WOPR_I_S",
+				"WOPR_I_STOCKCODE"
+			],
+			[
+				"stock",
+				"stockcode"
+			],
+			[
+				"WO_PR_",
+				"WO_PR_THINGS"
+			],
+			[
+				"setL",
+				"setListcellItemLabel"
+			],
+			[
+				"WOPR_I_",
+				"WOPR_I_STOCKCODE"
+			],
+			[
+				"pL",
+				"pLb"
+			],
+			[
+				"e_pr_",
+				"e_pr_qty_tb"
+			],
+			[
+				"sep",
+				"separator"
+			],
+			[
+				"get_wo",
+				"get_wo_stockouts_stage"
+			],
+			[
+				"Work",
+				"WorksOrder"
+			],
+			[
+				"pWo",
+				"pWOnum	(wo_partsreq.zs)"
+			],
+			[
+				"stk",
+				"stkids"
+			],
+			[
+				"ret",
+				"retval"
+			],
+			[
+				"re",
+				"refresh"
+			],
+			[
+				"submi",
+				"submitflag"
+			],
+			[
+				"glob_",
+				"glob_partsrequest_status"
+			],
+			[
+				"Gir",
+				"GridLayoutNoBorder"
+			],
+			[
+				"fir",
+				"firstRow"
+			],
+			[
+				"custom",
+				"customer_name	(workOrderMan_v2.zul)"
+			],
+			[
+				"upri",
+				"uprice"
+			],
+			[
+				"pW",
+				"pWOnum"
+			],
+			[
+				"gpEx",
+				"gpWMS_execute"
+			],
+			[
+				"st",
+				"stkids"
+			],
+			[
+				"sq",
+				"sqty"
+			],
+			[
+				"user",
+				"username"
+			],
+			[
+				"gpW",
+				"gpWMS_GetRows	(stocklister.zs)"
+			],
+			[
+				"quick",
+				"quick_new_partsrequest"
+			],
+			[
+				"exe",
+				"execute	(SqlFuncs.java)"
+			],
+			[
+				"bold",
+				"boldwhite"
+			],
+			[
+				"even",
+				"event"
+			],
+			[
+				"LIST",
+				"LIST_STOCKITEMS_BYCAT"
+			],
+			[
+				"getS",
+				"getSelectedItem"
+			],
+			[
+				"q_",
+				"q_stock_cat_lb"
+			],
+			[
+				"DARK",
+				"DARK_LESS_BACKGROUND	(rglobal.zs)"
+			],
+			[
+				"servi",
+				"servicecenters	(servicecenters_v1.zul)"
+			],
+			[
+				"getLs",
+				"getListcellItemLabel"
+			],
+			[
+				"service",
+				"servicecenters"
+			],
+			[
+				"reg",
+				"region"
+			],
+			[
+				"scin",
+				"scinsertboxes"
+			],
+			[
+				"gpfir",
+				"gpSqlFirstRow	(SqlFuncs.java)"
+			],
+			[
+				"then",
+				"thenagtext"
+			],
+			[
+				"getL",
+				"getListcellItemLabel	(announcements_v1.zul)"
+			],
+			[
+				"sc",
+				"scinsertboxes"
+			],
+			[
+				"DA",
+				"DARK_LESS_BACKGROUND	(rglobal.zs)"
+			],
+			[
+				"Grid",
+				"GridLayoutNoBorder"
+			],
+			[
+				"po",
+				"popup"
+			],
+			[
+				"insur",
+				"insurance_premium"
+			],
+			[
+				"insu",
+				"insurance_premium"
+			],
+			[
+				"field",
+				"fieldslabel_def"
+			],
+			[
+				"child",
+				"childlookup_labels"
+			],
+			[
+				"fiel",
+				"field_tbs"
+			],
+			[
+				"fie",
+				"field_tbs"
+			],
+			[
+				"lookup",
+				"lookups"
+			],
+			[
+				"gp",
+				"gpSqlGetRows"
+			],
+			[
+				"heae",
+				"headerText	(appstyles.js)"
+			],
+			[
+				"se",
+				"select"
+			],
+			[
+				"jobfo",
+				"jobfolder	(GlobalDefs.java)"
+			],
+			[
+				"col",
+				"column"
+			],
+			[
+				"runit",
+				"runitm_origid"
+			],
+			[
+				"assi",
+				"assigntest_id"
+			],
+			[
+				"LS_BA",
+				"LS_BACKLOG_SAMPLES_BYTEST"
+			],
+			[
+				"pSq",
+				"pSqlstm"
+			],
+			[
+				"bk_sam",
+				"bk_samples_holder"
+			],
+			[
+				"check",
+				"checkNullString"
+			],
+			[
+				"bk_test",
+				"bk_test_method_lbl"
+			],
+			[
+				"kb",
+				"kbold"
+			],
+			[
+				"due",
+				"duedate"
+			],
+			[
+				"BLA",
+				"BLANK_STRING"
+			],
+			[
+				"glob_sel",
+				"glob_sel_teststkid"
+			],
+			[
+				"BLN",
+				"BLANK_STRING	(vglobaldefs.zs)"
+			],
+			[
+				"sel",
+				"select"
+			],
+			[
+				"eval",
+				"eval_formula	(LabWorksheet.java)"
+			],
+			[
+				"lws_re",
+				"lws_rec_obj"
+			],
+			[
+				"eva",
+				"eval_js	(JavaScriptEngine.java)"
+			],
+			[
+				"idate",
+				"idatebox"
+			],
+			[
+				"Global",
+				"GlobalDefs	(bugger.zul)"
+			],
+			[
+				"imp",
+				"implements	(runBatching_v1.zul)"
+			],
+			[
+				"VLIMS",
+				"VLIMS_Constants	(TestHandling.java)"
+			],
+			[
+				"Java",
+				"JavaScriptEngine"
+			],
+			[
+				"JavaScr",
+				"JavaScriptEngine	(JavaScriptEngine.java)"
+			],
+			[
+				"JAva",
+				"JavaScriptEngine"
+			],
+			[
+				"Script",
+				"ScriptEngineManager"
+			],
+			[
+				"scrip",
+				"script_output_label"
+			],
+			[
+				"multi",
+				"multiline"
+			],
+			[
+				"script",
+				"script_input_tb"
+			],
+			[
+				"replace",
+				"replaceAll"
+			],
+			[
+				"formu",
+				"formula_final_result"
+			],
+			[
+				"parse",
+				"parsed_formula"
+			],
+			[
+				"lws_r",
+				"lws_rec_obj	(LabWorksheet.java)"
+			],
+			[
+				"lws_rec",
+				"lws_rec_no"
+			],
+			[
+				"glob_sel_lw",
+				"glob_sel_labwks_name"
+			],
+			[
+				"labw",
+				"labworksheet	(runBatching_v1.zul)"
+			],
+			[
+				"vdf",
+				"vdbf"
+			],
+			[
+				"Lab",
+				"LabWorksheet"
+			],
+			[
+				"value",
+				"valueOf"
+			],
+			[
+				"ilb",
+				"ilbhds"
+			],
+			[
+				"runbaob",
+				"runbatch_items_rec_obj"
+			],
+			[
+				"SQL",
+				"SQLException"
+			],
+			[
+				"usera",
+				"useraccessobj"
+			],
+			[
+				"param",
+				"parameters"
+			],
+			[
+				"gui",
+				"guihand"
+			],
+			[
+				"pDiv",
+				"pDivholder"
+			],
+			[
+				"global",
+				"globalActivateWindow"
+			],
+			[
+				"BLANK",
+				"BLANK_STRING	(vglobaldefs.zs)"
+			],
+			[
+				"audi",
+				"auditstr"
+			],
+			[
+				"prepa",
+				"prepareStatement"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "rws_warehouse/goodsCollection_v1.zul",
+			"settings":
+			{
+				"buffer_size": 33192,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "adminmodules/bugger.zul",
+			"settings":
+			{
+				"buffer_size": 19770,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "javasrc/SqlFuncs.java",
+			"settings":
+			{
+				"buffer_size": 17485,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rwglobal/uploadedWorksheet_v1.zs",
+			"settings":
+			{
+				"buffer_size": 7758,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "rws_warehouse/goodsCollection_funcs.zs",
+			"settings":
+			{
+				"buffer_size": 21734,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"command_palette":
+	{
+		"height": 390.0,
+		"selected_items":
+		[
+			[
+				"Package Control: ",
+				"Package Control: Install Package"
+			],
+			[
+				"YES",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"yes",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"listbox",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"list",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"listbo",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"dialog",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"listb",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"dialo",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"double",
+				"Snippet: LB doubleclicker codes"
+			],
+			[
+				"panel",
+				"Snippet: ZUL panel module def codes"
+			],
+			[
+				"doubl",
+				"Snippet: LB doubleclicker codes"
+			],
+			[
+				"snippet mak",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"snippet m",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"snippet ma",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"blank",
+				"Trimmer: Remove blank spaces."
+			],
+			[
+				"zul",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"snippet man",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"git log",
+				"Git: Log All"
+			],
+			[
+				"git co",
+				"Git: Quick Commit"
+			],
+			[
+				"git s",
+				"Git: Status"
+			],
+			[
+				"git add",
+				"Git: Add..."
+			],
+			[
+				"git status",
+				"Git: Status"
+			],
+			[
+				"git ad",
+				"Git: Add..."
+			],
+			[
+				"git",
+				"Git: Status"
+			],
+			[
+				"snip",
+				"Snippet: ZURB Ink Block Grid"
+			],
+			[
+				"pack",
+				"Package Control: Install Package"
+			],
+			[
+				"snipp",
+				"Snippet: ZURB Ink Boilerplate"
+			],
+			[
+				"doc",
+				"Snippet: <?php foreach (…) … <?php endforeach ?>"
+			],
+			[
+				"dock",
+				"DocBlockr: Decorate line comment"
+			],
+			[
+				"pac",
+				"Package Control: Install Package"
+			],
+			[
+				"sni",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"dbl",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"snippe",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"tr",
+				"Trimmer: Delete empty lines."
+			],
+			[
+				"tri",
+				"Trimmer: Collapse empty lines."
+			],
+			[
+				"t",
+				"Trimmer: Trim trailing whitespace."
+			],
+			[
+				"trim",
+				"Trimmer: Trim leading whitespace."
+			],
+			[
+				"termin",
+				"Preferences: Terminal Settings – Default"
+			],
+			[
+				"package ",
+				"Package Control: Install Package"
+			],
+			[
+				"color",
+				"Color Picker"
+			],
+			[
+				"packa",
+				"Package Control: Install Package"
+			],
+			[
+				"package",
+				"Package Control: Install Package"
+			],
+			[
+				"conso",
+				"Color Picker: Insert Color"
+			],
+			[
+				"log",
+				"Git: Log All"
+			],
+			[
+				"status",
+				"Git: Status"
+			],
+			[
+				"add",
+				"Git: Add..."
+			],
+			[
+				"package con",
+				"Package Control: Install Package"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 449.0
+	},
+	"console":
+	{
+		"height": 139.0
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/uploadedWorksheet_v1.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/GlobalDefs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/POIHelper.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/VLIMS.java",
+		"/home/victor/tomcat/webapps/rwmsgst_d/javasrc/bytecomp_melportal.xml",
+		"/home/victor/tomcat/webapps/rwmsgst_d/javasrc/bytecomp_rwms.xml",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_sales/marketPricebook_v1.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/auditQC_v1.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_account/insuranceMan_v1.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/f0j0.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwglobaldefs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwsqlfuncs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/auditQC_funcs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/checkParts_v2.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/callrecorder_funcs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/pabxtalktime.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/wo_partsreq.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/purchaseOrderNG_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/calldispatch/callRecorder_v2.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/googlecalender_funcs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/LookupFuncs.java",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/ListboxHandler.java",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/NGfuncs.java",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/SqlFuncs.java",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/po_stockin_funcs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/stocklister.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/wofuncs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/woFullfilment_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/workOrderMan_v2.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/warehouse/outboundFill_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/worepgen.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/outboundlister.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/inventory_qtymethod.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/RealmFun.java",
+		"/home/victor/tomcat/webapps/rlm_d3/dbchanges.txt",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/GlobalDefs.java",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/jobnotes_v2.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/rlmsql.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/pricebookfunc.zs",
+		"/home/victor/.config/sublime-text-2/Packages/Default/Preferences.sublime-settings",
+		"/home/victor/tomcat/webapps/ewms_d/ews/global/rglobal.zs",
+		"/home/victor/Developments/ewmsa/components/subscribe_ew_3.js",
+		"/home/victor/Developments/ewmsa/components/subscribe_ew_2.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/subscribew.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/priceBookEW_v2.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/ewb.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/userhandler.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/tmol.php",
+		"/var/www/html/tmol.php",
+		"/home/victor/tomcat/webapps/ewms_d/adminmodules/staticlookupman.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/util/lookupJuggler_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/customerManEW_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/adminmodules/lookupFieldsEditor_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/inboundStock_v2.zul",
+		"/home/victor/Developments/ewmsa/components/splashscreen.js",
+		"/home/victor/Developments/ewmsa/components/loginsystem.js",
+		"/home/victor/Developments/ewmsa/components/registeruser_ew.js",
+		"/home/victor/Developments/ewapp/ewapp/globals.js",
+		"/home/victor/Developments/ewapp/ewapp/appstyles.js",
+		"/home/victor/Developments/ewapp/ewapp/index.android.js",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/runlist_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/runBatching_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/batchResultEntry_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/utils/labWorksheetMan_v1.zul",
+		"/home/victor/tomcat/webapps/vld/adminmodules/menueditor_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/labworksheet.zs",
+		"/home/victor/tomcat/webapps/vld/adminmodules/bugger.zul",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/LabWorksheet.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/JavaScriptEngine.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/Generals.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/SampleReg.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/DirectoryTree.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/TestHandling.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/SamplesHandling.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/JobFolders.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/SqlFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/vDBFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/NGfuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/rlmSqlFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/GridHandler.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/VLIMS_Constants.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/RWMS_sql.java",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/lws_generator_class.zs",
+		"/home/victor/tomcat/webapps/vld/dbchanges.txt",
+		"/home/victor/tomcat/webapps/vld/javasrc/SecurityFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/listboxHeaderWidthObj.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/GuiFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/ListboxHandler.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/FormXMLSplicer.java.notfit",
+		"/home/victor/tomcat/webapps/vld/vlab/static/testplansManagement_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/utils/lookupJuggler_v1.zul",
+		"/home/victor/tomcat/webapps/vld/index.zul",
+		"/home/victor/tomcat/webapps/vld/adminmodules/usercontroller.zul",
+		"/home/victor/tomcat/webapps/vld/vplay.zul",
+		"/home/victor/tomcat/webapps/vld/javasrc/DMSFuncs.java",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/systemAudit.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/uploadDocu_v1_rlm.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vSampleReg_v1.zul",
+		"/home/victor/tomcat/webapps/vld/adminmodules/staticlookupman.zul",
+		"/home/victor/tomcat/webapps/melportal_d/mel_mods/MEL_specUpdate_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/documents/viewfile.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/samplereg_funcs.zs",
+		"/home/victor/tomcat/webapps/melportal_d/mel_mods/MEL_specUpdate_v2.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/jobfolder_func.zs",
+		"/home/victor/tomcat/webapps/vld/rlm/stockManf/stocklister.zs",
+		"/home/victor/tomcat/webapps/vld/rlm/rglobal/customerlist.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/static/customerMan_v2.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/customerSelector.zs",
+		"/home/victor/tomcat/webapps/vld/rlm/rglobal/joblinkbp.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/rglobal.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/real-world.css",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/workOrderMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/priceBookMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/outboundReq_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/eqtDefMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/customerMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockMasterMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/warehouse/stockInbound_byPO_v1.zul",
+		"/home/victor/tomcat/webapps/rwssimple/index_23052017.zul",
+		"/home/victor/tomcat/webapps/rwssimple/rws_reporting/birtReportViewer_v2.zul",
+		"/home/victor/tomcat/webapps/ewms_d/dbchanges.txt",
+		"/home/victor/tomcat/webapps/vld/real-world.css",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/vglobaldefs.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/testmanfuncs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/poitemsfunc.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/reporting/reporting_virtlab_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/real-world.css",
+		"/home/victor/tomcat/webapps/ewms_d/ews/global/rlmsql.zs"
+	],
+	"find":
+	{
+		"height": 38.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"newcollection_b",
+			"genGCO_template",
+			"print_b",
+			"GETWORKSHEET_POS_COLUMN",
+			"importMarketPrice_worksheet",
+			"0j0",
+			"showMe",
+			"alert",
+			"0j0",
+			"listAudits",
+			"insu",
+			"general",
+			"insurance",
+			"m_searchtext_tb",
+			"push",
+			"postPOStockin_inventory",
+			"saveTempPO_StockinQty",
+			"POSTKIN_GRID_STOCKNAME",
+			"postPOStockin_inventory",
+			"postpoitems_b",
+			"generateWO_managementReport",
+			"gpMakeCheckbox",
+			"combo",
+			"uniq",
+			"showWorkOrder_meta",
+			"populateListBox_ValueSelection",
+			"refresh_workorders_things",
+			"show_partsrequests_list",
+			"woTogButts",
+			"setListcellItemLabel",
+			"claim_submit_Confirm",
+			"checkWarranty_byModel",
+			"fast_save_wo_metadata",
+			"showWorkOrder_meta",
+			"listWorkOrders",
+			"wo_lb",
+			"listWorkOrders",
+			"todaydate",
+			"things_lb",
+			"things_holder",
+			"WorksOrder_ref",
+			"clear_wo_partreq_things",
+			"showWorkOrder_meta",
+			"clear_wo_partreq_things",
+			"exist",
+			"form_request_things_by_listbox",
+			"setListcellItemLabel",
+			"glob_sel_reqitem_listitem",
+			"ITM_ID",
+			"listWorkOrders",
+			"folderjobnotes_lb",
+			"glob_sel_reqitem",
+			"show_partsrequests_list",
+			"glob_sel_workorder_record",
+			"qreq_remove_btn",
+			"submitWHOutbound",
+			"submittowh_b",
+			"show_partsrequests_list",
+			"list_partsreq_items",
+			"show_partreq_items_list",
+			"showWorkOrder_meta",
+			"fillStockMasterSelectorDropdowns",
+			"stock_items_lb",
+			"listStockItems",
+			"resetcustpwd_b",
+			"show_CaptureContractForm_dialog",
+			"priceitemselect_callback",
+			"setDoubleClick_ListItems",
+			"40026ef27088b71d2db4580c9ae34d92",
+			"product_group",
+			"submit_form",
+			"/*\n	load_product_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/product\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				product_group_array: json,\n				product_group_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.product} value={b.product} key={b.product} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_category_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/category\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				category_array: json,\n				category_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.category} value={b.category} key={b.category} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_insuranceplan_items()\n	{\n		let fetchstring = globals.API_SERVER + \"/getlu/E_PLANS\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				insurance_plan_array: json,\n				insurance_plan_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.disptext} value={b.disptext} key={b.disptext} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_warrantyplan_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/warranty_plan\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				insurance_plan_array: json,\n				insurance_plan_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.warranty_plan} value={b.warranty_plan} key={b.warranty_plan} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n*/\n/*\n	load_product_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/product\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				product_group_array: json,\n				product_group_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.product} value={b.product} key={b.product} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_category_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/category\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				category_array: json,\n				category_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.category} value={b.category} key={b.category} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_insuranceplan_items()\n	{\n		let fetchstring = globals.API_SERVER + \"/getlu/E_PLANS\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				insurance_plan_array: json,\n				insurance_plan_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.disptext} value={b.disptext} key={b.disptext} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n\n	load_warrantyplan_items_2()\n	{\n		let fetchstring = globals.API_SERVER + \"/getds/ews_pricebook_2/warranty_plan\";\n		fetch(fetchstring, {method: 'GET'})\n		.then(response => response.json())\n		.then(json => {\n			this.setState({\n				insurance_plan_array: json,\n				insurance_plan_pickeritems: json.map(b => {\n					return <Picker.Item style={{color:'#fff'}} label={b.warranty_plan} value={b.warranty_plan} key={b.warranty_plan} />;\n				})\n			});\n		})\n		.catch(error => {\n			ToastAndroid.show(\"ERR Server unavailable\", ToastAndroid.SHORT);\n		});\n	}\n*/\nsubscribew",
+			"insertnewprice_b",
+			"getPlanPrice_2",
+			"lookupOnSelect",
+			"resetFieldsLabels",
+			"showFieldsDefLabels",
+			"fieldslabel",
+			"RB_TESTNAME",
+			"RB_ORIGID",
+			"list_backlog_samples",
+			"img_container",
+			"jobmetaboxes",
+			"button",
+			"JN_linkcode",
+			"refresh_runlist_things",
+			"batching_refresh_combobox",
+			"runitemlb",
+			"glob_sel_runlist",
+			"addSamples_RunList",
+			"bk_samples_holder",
+			"removeSamples_RunList",
+			"loadBacklogSamples",
+			"runmetaboxes",
+			"getRunlist_Rec",
+			"RB_TEST_STKID",
+			"runmetaboxes",
+			"listBatch",
+			"loadBacklogSamples",
+			"list_test_reset",
+			"refresh_runlist_things",
+			"batching_refresh_combobox",
+			"addSamples_RunList",
+			"addsampbatch_b",
+			"loadBacklogSamples",
+			"GETWORKSHEET_POS_COLUMN",
+			"uniq",
+			"glob_labworksheet_obj",
+			"JST_STKID",
+			"BOM_DO",
+			"save_labworksheet_details",
+			"get_labworksheet_rec",
+			"LabWorksheetGenerator",
+			"glob_labworksheet_obj",
+			"LabWorksheetGenerator",
+			"gridMakeRows",
+			"LabWorksheetGenerator",
+			"get_Worksheet_pos",
+			"downloadFile",
+			"get_Worksheet_pos",
+			"kiboo",
+			"price",
+			"loginwin",
+			"sechand",
+			"activateModule",
+			"globalActivateWindow",
+			"mainPlayground",
+			"setUserAccessObj"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"",
+			"true",
+			"",
+			"appstyles.a",
+			"ANN_LB_ORIGID",
+			"",
+			"rlfun",
+			"DEBUG_MODE",
+			"",
+			"guihand._kiboo.",
+			"pR",
+			"",
+			"rws_Sql",
+			"\"",
+			"",
+			"style=\"opacity:0.8\">",
+			"sclass=\"wbo\"",
+			"sclass=\"k9\"",
+			"Focus50J1",
+			"glob_stkin_post",
+			"glob_stkin_user",
+			"glob_stkin_ref",
+			"glob_stkin_description",
+			"glob_stkin_id",
+			"glob_stkin_stkid",
+			"gpWMS_FirstRow",
+			"wms_Sql",
+			"\\n;",
+			"global_selected_build",
+			"ASS_PREFIX",
+			"CONFIG_SECTION",
+			"glob_selected_lc",
+			"RESEND_EMAILMSG",
+			"",
+			"sclass=\"k9\"",
+			",",
+			"DO_VOUCHERTYPE",
+			"DO_EXTRAOFF",
+			"DO_EXTRAHEADEROFF",
+			"glob_sel_csgn",
+			"MEL_CSGN_PREFIX",
+			"sclass=\"k9\"",
+			"toggButts_specupdate",
+			"sclass=\"k9\"",
+			"",
+			"sclass=\"k9\"",
+			"glob_sel_outsouce",
+			"ADTPREFIX",
+			"String sqlstm =",
+			"public final GroovyRowResult ",
+			"sclass=\"k9\"",
+			"extra1",
+			"APPROVE_STR",
+			"${WINBACKGROUND}",
+			"sclass=\"k9\"",
+			"sclass=\"k9b\"",
+			"sclass=\"k9\"",
+			"sclass=\"k9mo\"",
+			"sclass=\"k9\"",
+			"sclass=\"k9b\"",
+			"sclass=\"k9\"",
+			"subhead1"
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "rws_warehouse/goodsCollection_v1.zul",
+					"settings":
+					{
+						"buffer_size": 33192,
+						"regions":
+						{
+							"bookmarks":
+							{
+								"flags": 144,
+								"icon": "bookmark",
+								"regions":
+								[
+									[
+										13363,
+										13363
+									],
+									[
+										27596,
+										27596
+									]
+								],
+								"scope": "bookmarks"
+							}
+						},
+						"selection":
+						[
+							[
+								10538,
+								10557
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 4955.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "adminmodules/bugger.zul",
+					"settings":
+					{
+						"buffer_size": 19770,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								14946,
+								14946
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 7293.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 2,
+			"sheets":
+			[
+				{
+					"buffer": 2,
+					"file": "javasrc/SqlFuncs.java",
+					"settings":
+					{
+						"buffer_size": 17485,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								367,
+								367
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "rwglobal/uploadedWorksheet_v1.zs",
+					"settings":
+					{
+						"buffer_size": 7758,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								285,
+								285
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "rws_warehouse/goodsCollection_funcs.zs",
+					"settings":
+					{
+						"buffer_size": 21734,
+						"regions":
+						{
+							"bookmarks":
+							{
+								"flags": 144,
+								"icon": "bookmark",
+								"regions":
+								[
+									[
+										4694,
+										4694
+									]
+								],
+								"scope": "bookmarks"
+							}
+						},
+						"selection":
+						[
+							[
+								11703,
+								11703
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 3960.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 34.0
+	},
+	"input":
+	{
+		"height": 33.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			0.665279817258,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 112.0
+	},
+	"output.git":
+	{
+		"height": 152.0
+	},
+	"replace":
+	{
+		"height": 64.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"selected_items":
+		[
+			[
+				"",
+				"/home/victor/tomcat/webapps/vld/virtlab.sublime-project"
+			]
+		],
+		"width": 380.0
+	},
+	"show_minimap": false,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": false,
+	"side_bar_width": 88.0,
+	"status_bar_visible": true
+}

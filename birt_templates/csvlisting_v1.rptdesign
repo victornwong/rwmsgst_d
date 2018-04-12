@@ -1,0 +1,2477 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report xmlns="http://www.eclipse.org/birt/2005/design" version="3.2.20" id="1">
+    <property name="createdBy">Eclipse BIRT Designer Version 2.5.0.v20090603 Build &lt;2.5.0.v20090617-0630></property>
+    <property name="units">in</property>
+    <list-property name="propertyBindings">
+        <structure>
+            <property name="name">queryText</property>
+            <property name="id">1125</property>
+        </structure>
+        <structure>
+            <property name="name">queryTimeOut</property>
+            <property name="id">1125</property>
+        </structure>
+    </list-property>
+    <method name="initialize"><![CDATA[linecount = 0;
+]]></method>
+    <property name="iconFile">/templates/blank_report.gif</property>
+    <property name="bidiLayoutOrientation">ltr</property>
+    <parameters>
+        <scalar-parameter name="startdate" id="963">
+            <text-property name="promptText">From date (yyyy-mm-dd)</text-property>
+            <property name="valueType">static</property>
+            <property name="dataType">string</property>
+            <simple-property-list name="defaultValue">
+                <value type="constant">2015-01-01</value>
+            </simple-property-list>
+            <property name="paramType">simple</property>
+            <property name="controlType">text-box</property>
+            <property name="distinct">true</property>
+            <structure name="format">
+                <property name="category">Unformatted</property>
+            </structure>
+        </scalar-parameter>
+        <scalar-parameter name="enddate" id="964">
+            <text-property name="promptText">to (yyyy-mm-dd)</text-property>
+            <property name="valueType">static</property>
+            <property name="dataType">string</property>
+            <simple-property-list name="defaultValue">
+                <value type="constant">2015-01-31</value>
+            </simple-property-list>
+            <property name="paramType">simple</property>
+            <property name="controlType">text-box</property>
+            <property name="distinct">true</property>
+            <structure name="format">
+                <property name="category">Unformatted</property>
+            </structure>
+        </scalar-parameter>
+    </parameters>
+    <data-sources>
+        <oda-data-source extensionID="org.eclipse.birt.report.data.oda.jdbc" name="Data Source" id="7">
+            <property name="odaDriverClass">net.sourceforge.jtds.jdbc.Driver</property>
+            <property name="odaURL">jdbc:jtds:sqlserver://192.168.100.201:1433/rwsdb2</property>
+            <property name="odaUser">testme</property>
+            <encrypted-property name="odaPassword" encryptionID="base64">OTA5MA==</encrypted-property>
+        </oda-data-source>
+    </data-sources>
+    <data-sets>
+        <oda-data-set extensionID="org.eclipse.birt.report.data.oda.jdbc.JdbcSelectDataSet" name="list_csv_1" id="1125">
+            <list-property name="columnHints">
+                <structure>
+                    <property name="columnName">origid</property>
+                    <property name="displayName">origid</property>
+                </structure>
+                <structure>
+                    <property name="columnName">fc6_custid</property>
+                    <property name="displayName">fc6_custid</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_name</property>
+                    <property name="displayName">cust_name</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_caller</property>
+                    <property name="displayName">cust_caller</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_caller_des</property>
+                    <property name="displayName">cust_caller_des</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_caller_phone</property>
+                    <property name="displayName">cust_caller_phone</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_caller_email</property>
+                    <property name="displayName">cust_caller_email</property>
+                </structure>
+                <structure>
+                    <property name="columnName">cust_location</property>
+                    <property name="displayName">cust_location</property>
+                </structure>
+                <structure>
+                    <property name="columnName">calldatetime</property>
+                    <property name="displayName">calldatetime</property>
+                </structure>
+                <structure>
+                    <property name="columnName">createdby</property>
+                    <property name="displayName">createdby</property>
+                </structure>
+                <structure>
+                    <property name="columnName">priority</property>
+                    <property name="displayName">priority</property>
+                </structure>
+                <structure>
+                    <property name="columnName">assign_to</property>
+                    <property name="displayName">assign_to</property>
+                </structure>
+                <structure>
+                    <property name="columnName">tstatus</property>
+                    <property name="displayName">tstatus</property>
+                </structure>
+                <structure>
+                    <property name="columnName">asset_tag</property>
+                    <property name="displayName">asset_tag</property>
+                </structure>
+                <structure>
+                    <property name="columnName">serial_no</property>
+                    <property name="displayName">serial_no</property>
+                </structure>
+                <structure>
+                    <property name="columnName">product_name</property>
+                    <property name="displayName">product_name</property>
+                </structure>
+                <structure>
+                    <property name="columnName">problem</property>
+                    <property name="displayName">problem</property>
+                </structure>
+                <structure>
+                    <property name="columnName">action</property>
+                    <property name="displayName">action</property>
+                </structure>
+                <structure>
+                    <property name="columnName">resolution</property>
+                    <property name="displayName">resolution</property>
+                </structure>
+                <structure>
+                    <property name="columnName">resolved_by</property>
+                    <property name="displayName">resolved_by</property>
+                </structure>
+                <structure>
+                    <property name="columnName">resolved_on</property>
+                    <property name="displayName">resolved_on</property>
+                </structure>
+                <structure>
+                    <property name="columnName">resolve_type</property>
+                    <property name="displayName">resolve_type</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_id</property>
+                    <property name="displayName">os_id</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_pickup</property>
+                    <property name="displayName">os_pickup</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_resolvedate</property>
+                    <property name="displayName">os_resolvedate</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_resolution</property>
+                    <property name="displayName">os_resolution</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_user</property>
+                    <property name="displayName">os_user</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_do_items</property>
+                    <property name="displayName">os_do_items</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_do_codes</property>
+                    <property name="displayName">os_do_codes</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_do_qty</property>
+                    <property name="displayName">os_do_qty</property>
+                </structure>
+                <structure>
+                    <property name="columnName">os_do_stat</property>
+                    <property name="displayName">os_do_stat</property>
+                </structure>
+                <structure>
+                    <property name="columnName">rma_id</property>
+                    <property name="displayName">rma_id</property>
+                </structure>
+                <structure>
+                    <property name="columnName">chargeable</property>
+                    <property name="displayName">chargeable</property>
+                </structure>
+                <structure>
+                    <property name="columnName">charge_items</property>
+                    <property name="displayName">charge_items</property>
+                </structure>
+                <structure>
+                    <property name="columnName">charge_unitprice</property>
+                    <property name="displayName">charge_unitprice</property>
+                </structure>
+                <structure>
+                    <property name="columnName">charge_qty</property>
+                    <property name="displayName">charge_qty</property>
+                </structure>
+                <structure>
+                    <property name="columnName">customer_rate</property>
+                    <property name="displayName">customer_rate</property>
+                </structure>
+                <structure>
+                    <property name="columnName">customer_rate_notes</property>
+                    <property name="displayName">customer_rate_notes</property>
+                </structure>
+                <structure>
+                    <property name="columnName">customer_rate2</property>
+                    <property name="displayName">customer_rate2</property>
+                </structure>
+                <structure>
+                    <property name="columnName">customer_rate3</property>
+                    <property name="displayName">customer_rate3</property>
+                </structure>
+                <structure>
+                    <property name="columnName">gco_id</property>
+                    <property name="displayName">gco_id</property>
+                </structure>
+                <structure>
+                    <property name="columnName">ticketclass</property>
+                    <property name="displayName">ticketclass</property>
+                </structure>
+            </list-property>
+            <list-property name="parameters">
+                <structure>
+                    <property name="name">param_1</property>
+                    <property name="paramName">startdate</property>
+                    <property name="nativeName"></property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">1</property>
+                    <property name="position">1</property>
+                    <property name="isInput">true</property>
+                    <property name="isOutput">false</property>
+                </structure>
+                <structure>
+                    <property name="name">param_2</property>
+                    <property name="paramName">enddate</property>
+                    <property name="nativeName"></property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">1</property>
+                    <property name="position">2</property>
+                    <property name="isInput">true</property>
+                    <property name="isOutput">false</property>
+                </structure>
+            </list-property>
+            <structure name="cachedMetaData">
+                <list-property name="resultSet">
+                    <structure>
+                        <property name="position">1</property>
+                        <property name="name">origid</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">2</property>
+                        <property name="name">fc6_custid</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">3</property>
+                        <property name="name">cust_name</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">4</property>
+                        <property name="name">cust_caller</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">5</property>
+                        <property name="name">cust_caller_des</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">6</property>
+                        <property name="name">cust_caller_phone</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">7</property>
+                        <property name="name">cust_caller_email</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">8</property>
+                        <property name="name">cust_location</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">9</property>
+                        <property name="name">calldatetime</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">10</property>
+                        <property name="name">createdby</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">11</property>
+                        <property name="name">priority</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">12</property>
+                        <property name="name">assign_to</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">13</property>
+                        <property name="name">tstatus</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">14</property>
+                        <property name="name">asset_tag</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">15</property>
+                        <property name="name">serial_no</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">16</property>
+                        <property name="name">product_name</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">17</property>
+                        <property name="name">problem</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">18</property>
+                        <property name="name">action</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">19</property>
+                        <property name="name">resolution</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">20</property>
+                        <property name="name">resolved_by</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">21</property>
+                        <property name="name">resolved_on</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">22</property>
+                        <property name="name">resolve_type</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">23</property>
+                        <property name="name">os_id</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">24</property>
+                        <property name="name">os_pickup</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">25</property>
+                        <property name="name">os_resolvedate</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">26</property>
+                        <property name="name">os_resolution</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">27</property>
+                        <property name="name">os_user</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">28</property>
+                        <property name="name">os_do_items</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">29</property>
+                        <property name="name">os_do_codes</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">30</property>
+                        <property name="name">os_do_qty</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">31</property>
+                        <property name="name">os_do_stat</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">32</property>
+                        <property name="name">rma_id</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">33</property>
+                        <property name="name">chargeable</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">34</property>
+                        <property name="name">charge_items</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">35</property>
+                        <property name="name">charge_unitprice</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">36</property>
+                        <property name="name">charge_qty</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">37</property>
+                        <property name="name">customer_rate</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">38</property>
+                        <property name="name">customer_rate_notes</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">39</property>
+                        <property name="name">customer_rate2</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">40</property>
+                        <property name="name">customer_rate3</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">41</property>
+                        <property name="name">gco_id</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">42</property>
+                        <property name="name">ticketclass</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                </list-property>
+            </structure>
+            <property name="dataSource">Data Source</property>
+            <list-property name="resultSet">
+                <structure>
+                    <property name="position">1</property>
+                    <property name="name">origid</property>
+                    <property name="nativeName">origid</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">4</property>
+                </structure>
+                <structure>
+                    <property name="position">2</property>
+                    <property name="name">fc6_custid</property>
+                    <property name="nativeName">fc6_custid</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">3</property>
+                    <property name="name">cust_name</property>
+                    <property name="nativeName">cust_name</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">4</property>
+                    <property name="name">cust_caller</property>
+                    <property name="nativeName">cust_caller</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">5</property>
+                    <property name="name">cust_caller_des</property>
+                    <property name="nativeName">cust_caller_des</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">6</property>
+                    <property name="name">cust_caller_phone</property>
+                    <property name="nativeName">cust_caller_phone</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">7</property>
+                    <property name="name">cust_caller_email</property>
+                    <property name="nativeName">cust_caller_email</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">8</property>
+                    <property name="name">cust_location</property>
+                    <property name="nativeName">cust_location</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">9</property>
+                    <property name="name">calldatetime</property>
+                    <property name="nativeName">calldatetime</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">10</property>
+                    <property name="name">createdby</property>
+                    <property name="nativeName">createdby</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">11</property>
+                    <property name="name">priority</property>
+                    <property name="nativeName">priority</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">12</property>
+                    <property name="name">assign_to</property>
+                    <property name="nativeName">assign_to</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">13</property>
+                    <property name="name">tstatus</property>
+                    <property name="nativeName">tstatus</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">14</property>
+                    <property name="name">asset_tag</property>
+                    <property name="nativeName">asset_tag</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">15</property>
+                    <property name="name">serial_no</property>
+                    <property name="nativeName">serial_no</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">16</property>
+                    <property name="name">product_name</property>
+                    <property name="nativeName">product_name</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">17</property>
+                    <property name="name">problem</property>
+                    <property name="nativeName">problem</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">18</property>
+                    <property name="name">action</property>
+                    <property name="nativeName">action</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">19</property>
+                    <property name="name">resolution</property>
+                    <property name="nativeName">resolution</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">20</property>
+                    <property name="name">resolved_by</property>
+                    <property name="nativeName">resolved_by</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">21</property>
+                    <property name="name">resolved_on</property>
+                    <property name="nativeName">resolved_on</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">22</property>
+                    <property name="name">resolve_type</property>
+                    <property name="nativeName">resolve_type</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">23</property>
+                    <property name="name">os_id</property>
+                    <property name="nativeName">os_id</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">24</property>
+                    <property name="name">os_pickup</property>
+                    <property name="nativeName">os_pickup</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">25</property>
+                    <property name="name">os_resolvedate</property>
+                    <property name="nativeName">os_resolvedate</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">26</property>
+                    <property name="name">os_resolution</property>
+                    <property name="nativeName">os_resolution</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">27</property>
+                    <property name="name">os_user</property>
+                    <property name="nativeName">os_user</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">28</property>
+                    <property name="name">os_do_items</property>
+                    <property name="nativeName">os_do_items</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">2005</property>
+                </structure>
+                <structure>
+                    <property name="position">29</property>
+                    <property name="name">os_do_codes</property>
+                    <property name="nativeName">os_do_codes</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">2005</property>
+                </structure>
+                <structure>
+                    <property name="position">30</property>
+                    <property name="name">os_do_qty</property>
+                    <property name="nativeName">os_do_qty</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">2005</property>
+                </structure>
+                <structure>
+                    <property name="position">31</property>
+                    <property name="name">os_do_stat</property>
+                    <property name="nativeName">os_do_stat</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">-7</property>
+                </structure>
+                <structure>
+                    <property name="position">32</property>
+                    <property name="name">rma_id</property>
+                    <property name="nativeName">rma_id</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">4</property>
+                </structure>
+                <structure>
+                    <property name="position">33</property>
+                    <property name="name">chargeable</property>
+                    <property name="nativeName">chargeable</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">-7</property>
+                </structure>
+                <structure>
+                    <property name="position">34</property>
+                    <property name="name">charge_items</property>
+                    <property name="nativeName">charge_items</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">35</property>
+                    <property name="name">charge_unitprice</property>
+                    <property name="nativeName">charge_unitprice</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">36</property>
+                    <property name="name">charge_qty</property>
+                    <property name="nativeName">charge_qty</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">37</property>
+                    <property name="name">customer_rate</property>
+                    <property name="nativeName">customer_rate</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">38</property>
+                    <property name="name">customer_rate_notes</property>
+                    <property name="nativeName">customer_rate_notes</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">39</property>
+                    <property name="name">customer_rate2</property>
+                    <property name="nativeName">customer_rate2</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">40</property>
+                    <property name="name">customer_rate3</property>
+                    <property name="nativeName">customer_rate3</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">41</property>
+                    <property name="name">gco_id</property>
+                    <property name="nativeName">gco_id</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">4</property>
+                </structure>
+                <structure>
+                    <property name="position">42</property>
+                    <property name="name">ticketclass</property>
+                    <property name="nativeName">ticketclass</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+            </list-property>
+            <xml-property name="queryText"><![CDATA[select
+*
+from rw_helptickets
+where calldatetime between ? and ?]]></xml-property>
+            <xml-property name="designerValues"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<model:DesignValues xmlns:design="http://www.eclipse.org/datatools/connectivity/oda/design" xmlns:model="http://www.eclipse.org/birt/report/model/adapter/odaModel">
+  <Version>1.0</Version>
+  <design:DataSetParameters>
+    <design:parameterDefinitions>
+      <design:inOutMode>In</design:inOutMode>
+      <design:attributes>
+        <design:name></design:name>
+        <design:position>1</design:position>
+        <design:nativeDataTypeCode>1</design:nativeDataTypeCode>
+        <design:precision>38</design:precision>
+        <design:scale>0</design:scale>
+        <design:nullability>Unknown</design:nullability>
+      </design:attributes>
+    </design:parameterDefinitions>
+    <design:parameterDefinitions>
+      <design:inOutMode>In</design:inOutMode>
+      <design:attributes>
+        <design:name></design:name>
+        <design:position>2</design:position>
+        <design:nativeDataTypeCode>1</design:nativeDataTypeCode>
+        <design:precision>38</design:precision>
+        <design:scale>0</design:scale>
+        <design:nullability>Unknown</design:nullability>
+      </design:attributes>
+    </design:parameterDefinitions>
+  </design:DataSetParameters>
+  <design:ResultSets derivedMetaData="true">
+    <design:resultSetDefinitions>
+      <design:resultSetColumns>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>origid</design:name>
+            <design:position>1</design:position>
+            <design:nativeDataTypeCode>4</design:nativeDataTypeCode>
+            <design:precision>10</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>NotNullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>origid</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>origid</design:label>
+            <design:formattingHints>
+              <design:displaySize>11</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>fc6_custid</design:name>
+            <design:position>2</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>fc6_custid</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>fc6_custid</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_name</design:name>
+            <design:position>3</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>200</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_name</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_name</design:label>
+            <design:formattingHints>
+              <design:displaySize>200</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_caller</design:name>
+            <design:position>4</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>100</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_caller</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_caller</design:label>
+            <design:formattingHints>
+              <design:displaySize>100</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_caller_des</design:name>
+            <design:position>5</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_caller_des</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_caller_des</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_caller_phone</design:name>
+            <design:position>6</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_caller_phone</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_caller_phone</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_caller_email</design:name>
+            <design:position>7</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>100</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_caller_email</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_caller_email</design:label>
+            <design:formattingHints>
+              <design:displaySize>100</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>cust_location</design:name>
+            <design:position>8</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>200</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>cust_location</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>cust_location</design:label>
+            <design:formattingHints>
+              <design:displaySize>200</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>calldatetime</design:name>
+            <design:position>9</design:position>
+            <design:nativeDataTypeCode>93</design:nativeDataTypeCode>
+            <design:precision>23</design:precision>
+            <design:scale>3</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>calldatetime</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>calldatetime</design:label>
+            <design:formattingHints>
+              <design:displaySize>23</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>createdby</design:name>
+            <design:position>10</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>createdby</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>createdby</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>priority</design:name>
+            <design:position>11</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>priority</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>priority</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>assign_to</design:name>
+            <design:position>12</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>assign_to</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>assign_to</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>tstatus</design:name>
+            <design:position>13</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>tstatus</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>tstatus</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>asset_tag</design:name>
+            <design:position>14</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>asset_tag</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>asset_tag</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>serial_no</design:name>
+            <design:position>15</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>serial_no</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>serial_no</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>product_name</design:name>
+            <design:position>16</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>200</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>product_name</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>product_name</design:label>
+            <design:formattingHints>
+              <design:displaySize>200</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>problem</design:name>
+            <design:position>17</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>problem</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>problem</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>action</design:name>
+            <design:position>18</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>action</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>action</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>resolution</design:name>
+            <design:position>19</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>resolution</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>resolution</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>resolved_by</design:name>
+            <design:position>20</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>resolved_by</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>resolved_by</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>resolved_on</design:name>
+            <design:position>21</design:position>
+            <design:nativeDataTypeCode>93</design:nativeDataTypeCode>
+            <design:precision>23</design:precision>
+            <design:scale>3</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>resolved_on</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>resolved_on</design:label>
+            <design:formattingHints>
+              <design:displaySize>23</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>resolve_type</design:name>
+            <design:position>22</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>resolve_type</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>resolve_type</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_id</design:name>
+            <design:position>23</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_id</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_id</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_pickup</design:name>
+            <design:position>24</design:position>
+            <design:nativeDataTypeCode>93</design:nativeDataTypeCode>
+            <design:precision>23</design:precision>
+            <design:scale>3</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_pickup</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_pickup</design:label>
+            <design:formattingHints>
+              <design:displaySize>23</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_resolvedate</design:name>
+            <design:position>25</design:position>
+            <design:nativeDataTypeCode>93</design:nativeDataTypeCode>
+            <design:precision>23</design:precision>
+            <design:scale>3</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_resolvedate</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_resolvedate</design:label>
+            <design:formattingHints>
+              <design:displaySize>23</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_resolution</design:name>
+            <design:position>26</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_resolution</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_resolution</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_user</design:name>
+            <design:position>27</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_user</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_user</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_do_items</design:name>
+            <design:position>28</design:position>
+            <design:nativeDataTypeCode>2005</design:nativeDataTypeCode>
+            <design:precision>1073741823</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_do_items</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_do_items</design:label>
+            <design:formattingHints>
+              <design:displaySize>1073741823</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_do_codes</design:name>
+            <design:position>29</design:position>
+            <design:nativeDataTypeCode>2005</design:nativeDataTypeCode>
+            <design:precision>1073741823</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_do_codes</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_do_codes</design:label>
+            <design:formattingHints>
+              <design:displaySize>1073741823</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_do_qty</design:name>
+            <design:position>30</design:position>
+            <design:nativeDataTypeCode>2005</design:nativeDataTypeCode>
+            <design:precision>1073741823</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_do_qty</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_do_qty</design:label>
+            <design:formattingHints>
+              <design:displaySize>1073741823</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>os_do_stat</design:name>
+            <design:position>31</design:position>
+            <design:nativeDataTypeCode>-7</design:nativeDataTypeCode>
+            <design:precision>1</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>os_do_stat</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>os_do_stat</design:label>
+            <design:formattingHints>
+              <design:displaySize>1</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>rma_id</design:name>
+            <design:position>32</design:position>
+            <design:nativeDataTypeCode>4</design:nativeDataTypeCode>
+            <design:precision>10</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>rma_id</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>rma_id</design:label>
+            <design:formattingHints>
+              <design:displaySize>11</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>chargeable</design:name>
+            <design:position>33</design:position>
+            <design:nativeDataTypeCode>-7</design:nativeDataTypeCode>
+            <design:precision>1</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>chargeable</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>chargeable</design:label>
+            <design:formattingHints>
+              <design:displaySize>1</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>charge_items</design:name>
+            <design:position>34</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>charge_items</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>charge_items</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>charge_unitprice</design:name>
+            <design:position>35</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>charge_unitprice</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>charge_unitprice</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>charge_qty</design:name>
+            <design:position>36</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>3000</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>charge_qty</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>charge_qty</design:label>
+            <design:formattingHints>
+              <design:displaySize>3000</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>customer_rate</design:name>
+            <design:position>37</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>customer_rate</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>customer_rate</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>customer_rate_notes</design:name>
+            <design:position>38</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>300</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>customer_rate_notes</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>customer_rate_notes</design:label>
+            <design:formattingHints>
+              <design:displaySize>300</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>customer_rate2</design:name>
+            <design:position>39</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>customer_rate2</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>customer_rate2</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>customer_rate3</design:name>
+            <design:position>40</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>customer_rate3</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>customer_rate3</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>gco_id</design:name>
+            <design:position>41</design:position>
+            <design:nativeDataTypeCode>4</design:nativeDataTypeCode>
+            <design:precision>10</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>gco_id</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>gco_id</design:label>
+            <design:formattingHints>
+              <design:displaySize>11</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+        <design:resultColumnDefinitions>
+          <design:attributes>
+            <design:name>ticketclass</design:name>
+            <design:position>42</design:position>
+            <design:nativeDataTypeCode>12</design:nativeDataTypeCode>
+            <design:precision>50</design:precision>
+            <design:scale>0</design:scale>
+            <design:nullability>Nullable</design:nullability>
+            <design:uiHints>
+              <design:displayName>ticketclass</design:displayName>
+            </design:uiHints>
+          </design:attributes>
+          <design:usageHints>
+            <design:label>ticketclass</design:label>
+            <design:formattingHints>
+              <design:displaySize>50</design:displaySize>
+            </design:formattingHints>
+          </design:usageHints>
+        </design:resultColumnDefinitions>
+      </design:resultSetColumns>
+    </design:resultSetDefinitions>
+  </design:ResultSets>
+</model:DesignValues>]]></xml-property>
+        </oda-data-set>
+    </data-sets>
+    <styles>
+        <style name="report" id="4">
+            <property name="fontFamily">"Verdana"</property>
+            <property name="fontSize">10pt</property>
+        </style>
+        <style name="crosstab-cell" id="5">
+            <property name="borderBottomColor">#CCCCCC</property>
+            <property name="borderBottomStyle">solid</property>
+            <property name="borderBottomWidth">1pt</property>
+            <property name="borderLeftColor">#CCCCCC</property>
+            <property name="borderLeftStyle">solid</property>
+            <property name="borderLeftWidth">1pt</property>
+            <property name="borderRightColor">#CCCCCC</property>
+            <property name="borderRightStyle">solid</property>
+            <property name="borderRightWidth">1pt</property>
+            <property name="borderTopColor">#CCCCCC</property>
+            <property name="borderTopStyle">solid</property>
+            <property name="borderTopWidth">1pt</property>
+        </style>
+        <style name="crosstab" id="6">
+            <property name="borderBottomColor">#CCCCCC</property>
+            <property name="borderBottomStyle">solid</property>
+            <property name="borderBottomWidth">1pt</property>
+            <property name="borderLeftColor">#CCCCCC</property>
+            <property name="borderLeftStyle">solid</property>
+            <property name="borderLeftWidth">1pt</property>
+            <property name="borderRightColor">#CCCCCC</property>
+            <property name="borderRightStyle">solid</property>
+            <property name="borderRightWidth">1pt</property>
+            <property name="borderTopColor">#CCCCCC</property>
+            <property name="borderTopStyle">solid</property>
+            <property name="borderTopWidth">1pt</property>
+        </style>
+    </styles>
+    <page-setup>
+        <simple-master-page name="Simple MasterPage" id="2">
+            <property name="type">a4</property>
+            <property name="orientation">landscape</property>
+            <property name="topMargin">0.1in</property>
+            <property name="bottomMargin">0.1in</property>
+            <property name="headerHeight">0.1in</property>
+            <property name="footerHeight">0.1in</property>
+        </simple-master-page>
+    </page-setup>
+    <body>
+        <table id="1126">
+            <property name="dataSet">list_csv_1</property>
+            <list-property name="boundDataColumns">
+                <structure>
+                    <property name="name">origid</property>
+                    <property name="displayName">origid</property>
+                    <expression name="expression">dataSetRow["origid"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">fc6_custid</property>
+                    <property name="displayName">fc6_custid</property>
+                    <expression name="expression">dataSetRow["fc6_custid"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_name</property>
+                    <property name="displayName">cust_name</property>
+                    <expression name="expression">dataSetRow["cust_name"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_caller</property>
+                    <property name="displayName">cust_caller</property>
+                    <expression name="expression">dataSetRow["cust_caller"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_caller_des</property>
+                    <property name="displayName">cust_caller_des</property>
+                    <expression name="expression">dataSetRow["cust_caller_des"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_caller_phone</property>
+                    <property name="displayName">cust_caller_phone</property>
+                    <expression name="expression">dataSetRow["cust_caller_phone"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_caller_email</property>
+                    <property name="displayName">cust_caller_email</property>
+                    <expression name="expression">dataSetRow["cust_caller_email"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">cust_location</property>
+                    <property name="displayName">cust_location</property>
+                    <expression name="expression">dataSetRow["cust_location"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">calldatetime</property>
+                    <property name="displayName">calldatetime</property>
+                    <expression name="expression">dataSetRow["calldatetime"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">createdby</property>
+                    <property name="displayName">createdby</property>
+                    <expression name="expression">dataSetRow["createdby"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">priority</property>
+                    <property name="displayName">priority</property>
+                    <expression name="expression">dataSetRow["priority"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">assign_to</property>
+                    <property name="displayName">assign_to</property>
+                    <expression name="expression">dataSetRow["assign_to"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">tstatus</property>
+                    <property name="displayName">tstatus</property>
+                    <expression name="expression">dataSetRow["tstatus"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">asset_tag</property>
+                    <property name="displayName">asset_tag</property>
+                    <expression name="expression">dataSetRow["asset_tag"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">serial_no</property>
+                    <property name="displayName">serial_no</property>
+                    <expression name="expression">dataSetRow["serial_no"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">product_name</property>
+                    <property name="displayName">product_name</property>
+                    <expression name="expression">dataSetRow["product_name"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">problem</property>
+                    <property name="displayName">problem</property>
+                    <expression name="expression">dataSetRow["problem"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">action</property>
+                    <property name="displayName">action</property>
+                    <expression name="expression">dataSetRow["action"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">resolution</property>
+                    <property name="displayName">resolution</property>
+                    <expression name="expression">dataSetRow["resolution"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">resolved_by</property>
+                    <property name="displayName">resolved_by</property>
+                    <expression name="expression">dataSetRow["resolved_by"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">resolved_on</property>
+                    <property name="displayName">resolved_on</property>
+                    <expression name="expression">dataSetRow["resolved_on"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">resolve_type</property>
+                    <property name="displayName">resolve_type</property>
+                    <expression name="expression">dataSetRow["resolve_type"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_id</property>
+                    <property name="displayName">os_id</property>
+                    <expression name="expression">dataSetRow["os_id"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_pickup</property>
+                    <property name="displayName">os_pickup</property>
+                    <expression name="expression">dataSetRow["os_pickup"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">os_resolvedate</property>
+                    <property name="displayName">os_resolvedate</property>
+                    <expression name="expression">dataSetRow["os_resolvedate"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">os_resolution</property>
+                    <property name="displayName">os_resolution</property>
+                    <expression name="expression">dataSetRow["os_resolution"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_user</property>
+                    <property name="displayName">os_user</property>
+                    <expression name="expression">dataSetRow["os_user"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_do_items</property>
+                    <property name="displayName">os_do_items</property>
+                    <expression name="expression">dataSetRow["os_do_items"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_do_codes</property>
+                    <property name="displayName">os_do_codes</property>
+                    <expression name="expression">dataSetRow["os_do_codes"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_do_qty</property>
+                    <property name="displayName">os_do_qty</property>
+                    <expression name="expression">dataSetRow["os_do_qty"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">os_do_stat</property>
+                    <property name="displayName">os_do_stat</property>
+                    <expression name="expression">dataSetRow["os_do_stat"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">rma_id</property>
+                    <property name="displayName">rma_id</property>
+                    <expression name="expression">dataSetRow["rma_id"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">chargeable</property>
+                    <property name="displayName">chargeable</property>
+                    <expression name="expression">dataSetRow["chargeable"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">charge_items</property>
+                    <property name="displayName">charge_items</property>
+                    <expression name="expression">dataSetRow["charge_items"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">charge_unitprice</property>
+                    <property name="displayName">charge_unitprice</property>
+                    <expression name="expression">dataSetRow["charge_unitprice"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">charge_qty</property>
+                    <property name="displayName">charge_qty</property>
+                    <expression name="expression">dataSetRow["charge_qty"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">customer_rate</property>
+                    <property name="displayName">customer_rate</property>
+                    <expression name="expression">dataSetRow["customer_rate"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">customer_rate_notes</property>
+                    <property name="displayName">customer_rate_notes</property>
+                    <expression name="expression">dataSetRow["customer_rate_notes"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">customer_rate2</property>
+                    <property name="displayName">customer_rate2</property>
+                    <expression name="expression">dataSetRow["customer_rate2"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">customer_rate3</property>
+                    <property name="displayName">customer_rate3</property>
+                    <expression name="expression">dataSetRow["customer_rate3"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">gco_id</property>
+                    <property name="displayName">gco_id</property>
+                    <expression name="expression">dataSetRow["gco_id"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">ticketclass</property>
+                    <property name="displayName">ticketclass</property>
+                    <expression name="expression">dataSetRow["ticketclass"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+            </list-property>
+            <column id="1340"/>
+            <column id="1341"/>
+            <column id="1342"/>
+            <column id="1343"/>
+            <column id="1344"/>
+            <column id="1345"/>
+            <column id="1346"/>
+            <column id="1347"/>
+            <column id="1348"/>
+            <column id="1349"/>
+            <column id="1350"/>
+            <column id="1351"/>
+            <column id="1352"/>
+            <column id="1353"/>
+            <column id="1354"/>
+            <column id="1355"/>
+            <column id="1356"/>
+            <column id="1357"/>
+            <column id="1358"/>
+            <column id="1359"/>
+            <column id="1360"/>
+            <column id="1361"/>
+            <column id="1362"/>
+            <column id="1363"/>
+            <column id="1364"/>
+            <column id="1365"/>
+            <column id="1366"/>
+            <column id="1367"/>
+            <column id="1368"/>
+            <column id="1369"/>
+            <column id="1370"/>
+            <column id="1371"/>
+            <column id="1372"/>
+            <column id="1373"/>
+            <column id="1374"/>
+            <column id="1375"/>
+            <column id="1376"/>
+            <column id="1377"/>
+            <column id="1378"/>
+            <column id="1379"/>
+            <column id="1380"/>
+            <column id="1381"/>
+            <header>
+                <row id="1127">
+                    <cell id="1128">
+                        <label id="1129">
+                            <text-property name="text">origid</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1130">
+                        <label id="1131">
+                            <text-property name="text">fc6_custid</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1132">
+                        <label id="1133">
+                            <text-property name="text">cust_name</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1134">
+                        <label id="1135">
+                            <text-property name="text">cust_caller</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1136">
+                        <label id="1137">
+                            <text-property name="text">cust_caller_des</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1138">
+                        <label id="1139">
+                            <text-property name="text">cust_caller_phone</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1140">
+                        <label id="1141">
+                            <text-property name="text">cust_caller_email</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1142">
+                        <label id="1143">
+                            <text-property name="text">cust_location</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1144">
+                        <label id="1145">
+                            <text-property name="text">calldatetime</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1146">
+                        <label id="1147">
+                            <text-property name="text">createdby</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1148">
+                        <label id="1149">
+                            <text-property name="text">priority</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1150">
+                        <label id="1151">
+                            <text-property name="text">assign_to</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1152">
+                        <label id="1153">
+                            <text-property name="text">tstatus</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1154">
+                        <label id="1155">
+                            <text-property name="text">asset_tag</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1156">
+                        <label id="1157">
+                            <text-property name="text">serial_no</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1158">
+                        <label id="1159">
+                            <text-property name="text">product_name</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1160">
+                        <label id="1161">
+                            <text-property name="text">problem</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1162">
+                        <label id="1163">
+                            <text-property name="text">action</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1164">
+                        <label id="1165">
+                            <text-property name="text">resolution</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1166">
+                        <label id="1167">
+                            <text-property name="text">resolved_by</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1168">
+                        <label id="1169">
+                            <text-property name="text">resolved_on</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1170">
+                        <label id="1171">
+                            <text-property name="text">resolve_type</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1172">
+                        <label id="1173">
+                            <text-property name="text">os_id</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1174">
+                        <label id="1175">
+                            <text-property name="text">os_pickup</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1176">
+                        <label id="1177">
+                            <text-property name="text">os_resolvedate</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1178">
+                        <label id="1179">
+                            <text-property name="text">os_resolution</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1180">
+                        <label id="1181">
+                            <text-property name="text">os_user</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1182">
+                        <label id="1183">
+                            <text-property name="text">os_do_items</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1184">
+                        <label id="1185">
+                            <text-property name="text">os_do_codes</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1186">
+                        <label id="1187">
+                            <text-property name="text">os_do_qty</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1188">
+                        <label id="1189">
+                            <text-property name="text">os_do_stat</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1190">
+                        <label id="1191">
+                            <text-property name="text">rma_id</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1192">
+                        <label id="1193">
+                            <text-property name="text">chargeable</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1194">
+                        <label id="1195">
+                            <text-property name="text">charge_items</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1196">
+                        <label id="1197">
+                            <text-property name="text">charge_unitprice</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1198">
+                        <label id="1199">
+                            <text-property name="text">charge_qty</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1200">
+                        <label id="1201">
+                            <text-property name="text">customer_rate</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1202">
+                        <label id="1203">
+                            <text-property name="text">customer_rate_notes</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1204">
+                        <label id="1205">
+                            <text-property name="text">customer_rate2</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1206">
+                        <label id="1207">
+                            <text-property name="text">customer_rate3</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1208">
+                        <label id="1209">
+                            <text-property name="text">gco_id</text-property>
+                        </label>
+                    </cell>
+                    <cell id="1210">
+                        <label id="1211">
+                            <text-property name="text">ticketclass</text-property>
+                        </label>
+                    </cell>
+                </row>
+            </header>
+            <detail>
+                <row id="1212">
+                    <cell id="1213">
+                        <data id="1214">
+                            <property name="resultSetColumn">origid</property>
+                        </data>
+                    </cell>
+                    <cell id="1215">
+                        <data id="1216">
+                            <property name="resultSetColumn">fc6_custid</property>
+                        </data>
+                    </cell>
+                    <cell id="1217">
+                        <data id="1218">
+                            <property name="resultSetColumn">cust_name</property>
+                        </data>
+                    </cell>
+                    <cell id="1219">
+                        <data id="1220">
+                            <property name="resultSetColumn">cust_caller</property>
+                        </data>
+                    </cell>
+                    <cell id="1221">
+                        <data id="1222">
+                            <property name="resultSetColumn">cust_caller_des</property>
+                        </data>
+                    </cell>
+                    <cell id="1223">
+                        <data id="1224">
+                            <property name="resultSetColumn">cust_caller_phone</property>
+                        </data>
+                    </cell>
+                    <cell id="1225">
+                        <data id="1226">
+                            <property name="resultSetColumn">cust_caller_email</property>
+                        </data>
+                    </cell>
+                    <cell id="1227">
+                        <data id="1228">
+                            <property name="resultSetColumn">cust_location</property>
+                        </data>
+                    </cell>
+                    <cell id="1229">
+                        <data id="1230">
+                            <property name="resultSetColumn">calldatetime</property>
+                        </data>
+                    </cell>
+                    <cell id="1231">
+                        <data id="1232">
+                            <property name="resultSetColumn">createdby</property>
+                        </data>
+                    </cell>
+                    <cell id="1233">
+                        <data id="1234">
+                            <property name="resultSetColumn">priority</property>
+                        </data>
+                    </cell>
+                    <cell id="1235">
+                        <data id="1236">
+                            <property name="resultSetColumn">assign_to</property>
+                        </data>
+                    </cell>
+                    <cell id="1237">
+                        <data id="1238">
+                            <property name="resultSetColumn">tstatus</property>
+                        </data>
+                    </cell>
+                    <cell id="1239">
+                        <data id="1240">
+                            <property name="resultSetColumn">asset_tag</property>
+                        </data>
+                    </cell>
+                    <cell id="1241">
+                        <data id="1242">
+                            <property name="resultSetColumn">serial_no</property>
+                        </data>
+                    </cell>
+                    <cell id="1243">
+                        <data id="1244">
+                            <property name="resultSetColumn">product_name</property>
+                        </data>
+                    </cell>
+                    <cell id="1245">
+                        <data id="1246">
+                            <property name="resultSetColumn">problem</property>
+                        </data>
+                    </cell>
+                    <cell id="1247">
+                        <data id="1248">
+                            <property name="resultSetColumn">action</property>
+                        </data>
+                    </cell>
+                    <cell id="1249">
+                        <data id="1250">
+                            <property name="resultSetColumn">resolution</property>
+                        </data>
+                    </cell>
+                    <cell id="1251">
+                        <data id="1252">
+                            <property name="resultSetColumn">resolved_by</property>
+                        </data>
+                    </cell>
+                    <cell id="1253">
+                        <data id="1254">
+                            <property name="resultSetColumn">resolved_on</property>
+                        </data>
+                    </cell>
+                    <cell id="1255">
+                        <data id="1256">
+                            <property name="resultSetColumn">resolve_type</property>
+                        </data>
+                    </cell>
+                    <cell id="1257">
+                        <data id="1258">
+                            <property name="resultSetColumn">os_id</property>
+                        </data>
+                    </cell>
+                    <cell id="1259">
+                        <data id="1260">
+                            <property name="resultSetColumn">os_pickup</property>
+                        </data>
+                    </cell>
+                    <cell id="1261">
+                        <data id="1262">
+                            <property name="resultSetColumn">os_resolvedate</property>
+                        </data>
+                    </cell>
+                    <cell id="1263">
+                        <data id="1264">
+                            <property name="resultSetColumn">os_resolution</property>
+                        </data>
+                    </cell>
+                    <cell id="1265">
+                        <data id="1266">
+                            <property name="resultSetColumn">os_user</property>
+                        </data>
+                    </cell>
+                    <cell id="1267">
+                        <data id="1268">
+                            <property name="resultSetColumn">os_do_items</property>
+                        </data>
+                    </cell>
+                    <cell id="1269">
+                        <data id="1270">
+                            <property name="resultSetColumn">os_do_codes</property>
+                        </data>
+                    </cell>
+                    <cell id="1271">
+                        <data id="1272">
+                            <property name="resultSetColumn">os_do_qty</property>
+                        </data>
+                    </cell>
+                    <cell id="1273">
+                        <data id="1274">
+                            <property name="resultSetColumn">os_do_stat</property>
+                        </data>
+                    </cell>
+                    <cell id="1275">
+                        <data id="1276">
+                            <property name="resultSetColumn">rma_id</property>
+                        </data>
+                    </cell>
+                    <cell id="1277">
+                        <data id="1278">
+                            <property name="resultSetColumn">chargeable</property>
+                        </data>
+                    </cell>
+                    <cell id="1279">
+                        <data id="1280">
+                            <property name="resultSetColumn">charge_items</property>
+                        </data>
+                    </cell>
+                    <cell id="1281">
+                        <data id="1282">
+                            <property name="resultSetColumn">charge_unitprice</property>
+                        </data>
+                    </cell>
+                    <cell id="1283">
+                        <data id="1284">
+                            <property name="resultSetColumn">charge_qty</property>
+                        </data>
+                    </cell>
+                    <cell id="1285">
+                        <data id="1286">
+                            <property name="resultSetColumn">customer_rate</property>
+                        </data>
+                    </cell>
+                    <cell id="1287">
+                        <data id="1288">
+                            <property name="resultSetColumn">customer_rate_notes</property>
+                        </data>
+                    </cell>
+                    <cell id="1289">
+                        <data id="1290">
+                            <property name="resultSetColumn">customer_rate2</property>
+                        </data>
+                    </cell>
+                    <cell id="1291">
+                        <data id="1292">
+                            <property name="resultSetColumn">customer_rate3</property>
+                        </data>
+                    </cell>
+                    <cell id="1293">
+                        <data id="1294">
+                            <property name="resultSetColumn">gco_id</property>
+                        </data>
+                    </cell>
+                    <cell id="1295">
+                        <data id="1296">
+                            <property name="resultSetColumn">ticketclass</property>
+                        </data>
+                    </cell>
+                </row>
+            </detail>
+            <footer>
+                <row id="1297">
+                    <cell id="1298"/>
+                    <cell id="1299"/>
+                    <cell id="1300"/>
+                    <cell id="1301"/>
+                    <cell id="1302"/>
+                    <cell id="1303"/>
+                    <cell id="1304"/>
+                    <cell id="1305"/>
+                    <cell id="1306"/>
+                    <cell id="1307"/>
+                    <cell id="1308"/>
+                    <cell id="1309"/>
+                    <cell id="1310"/>
+                    <cell id="1311"/>
+                    <cell id="1312"/>
+                    <cell id="1313"/>
+                    <cell id="1314"/>
+                    <cell id="1315"/>
+                    <cell id="1316"/>
+                    <cell id="1317"/>
+                    <cell id="1318"/>
+                    <cell id="1319"/>
+                    <cell id="1320"/>
+                    <cell id="1321"/>
+                    <cell id="1322"/>
+                    <cell id="1323"/>
+                    <cell id="1324"/>
+                    <cell id="1325"/>
+                    <cell id="1326"/>
+                    <cell id="1327"/>
+                    <cell id="1328"/>
+                    <cell id="1329"/>
+                    <cell id="1330"/>
+                    <cell id="1331"/>
+                    <cell id="1332"/>
+                    <cell id="1333"/>
+                    <cell id="1334"/>
+                    <cell id="1335"/>
+                    <cell id="1336"/>
+                    <cell id="1337"/>
+                    <cell id="1338"/>
+                    <cell id="1339"/>
+                </row>
+            </footer>
+        </table>
+    </body>
+    <list-property name="images">
+        <structure>
+            <property name="name">rentwise_logo_shrunk.jpg</property>
+            <property name="data">
+                /9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsN
+                DhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQU
+                FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wgARCAAuAJYDAREAAhEBAxEB/8QA
+                GwABAAIDAQEAAAAAAAAAAAAAAAUGAQQHAwj/xAAbAQEAAgMBAQAAAAAAAAAAAAAABAUBAgMGB//aAAwD
+                AQACEAMQAAAB+qQCB4TdvPOT7RgAAAAAAMEJyl87r/T2BXXu189wo60WAAhiZBQS/AAwVCuuNuXEmesS
+                H4TJmRB+JC+kEXU8iuk8bpUzbJo1j6dNLTfh1H9B6Tb+Sn+1dTId90Cd5vjJVSwE2ZK0RJuk8aZFFzOt
+                gxhqadYzhK5BT+1796P52AAAAAAADDGfPG3ptqAAAAAAP//EACYQAAICAgECBQUAAAAAAAAAAAQFAwYB
+                AgcAEBESExQwFSAxNED/2gAIAQEAAQUC7snQirALCBjB8/46PZxghB1iRlKsX7JWMsnpR68wrdoUbwSx
+                L+69wG137WqwmIc/bGb9VNmg98wIg9eIcj38Bf6lWtptfqMJm9A433uEtflMYPGfIiKV3u840TnmdKLq
+                bFR6laWC4fd+8Erj6wmE3C1WglZmq2uQa1dFR7TDgsyKwYDZlEukLQMrJxOFlmI1zvBSKcQBUQaC1Mpo
+                MVrkIXV40fkdbXjRuR6yif1R+949PMt3IFJaOXFyqBTAa3CWV1tNx0cvBr2r8hh2zjx62j8vUzTUTV8V
+                M9O/ixprr8//xAAvEQABAwICBgkFAAAAAAAAAAABAgMEABEFMRITITJAQRQiMFFhcaHR4RBCgbHB/9oA
+                CAEDAQE/AfrFhSJhOpTsHPlT8dyMvQdFjwMeMp91LIzPp507i6YiejQEjRTzPPx+amShPY1hFlJ4BbHQ
+                2Q4vePpSHNQ0SN5ez8fP8pCtE0tvUKtmlQ2eXv39u2oIWlShexqTGZxZkGO4NIZX/RqRhc1o9Zs28NtK
+                ZcRvJtUdoy8PWPuaNx5HMel+BC+80iKp49RQrD2WsOjrLqs8/bgyonPt/wD/xAAnEQABAwEHAwUAAAAA
+                AAAAAAABAAIDEgQRISIxQEEQFDATMlFhof/aAAgBAgEBPwHrJMyIZio5Gyi9uxdIA2rhdr6pqlOJUMZs
+                8tPB2DZO4fSPaP1XVH6COKOYX8g+d4qaQoTJZX5hgmTRkaoOB0TnUSgcO2JHwnzhmoKlmdaJRSNncPP/
+                AP/EAD0QAAECBQEEBQcKBwAAAAAAAAECAwAEBRESIRMxQVEiMnGBkQYQFCAjQqEVM0BhcoKiscHRJDBD
+                UpKy4f/aAAgBAQAGPwLzp9IcxUrqpGpMbVhWSfoLs0v5tsf5HgBBnKs6tMw9qGke6OX/ACNllky8NDCl
+                nUJF4L3ydUSyDYuBtNh+KEzkkvNo6aixSeR9R9MpMImNicVlvUA9vnkfRKW5Utu5grZ+58OP6espps/w
+                7eqiPehsKHsJXp25ucPAfmOUY5YK4K5GEqIxfZcxcR/aob+7jD32DE+y1SFzUs46q84SdmgqSkWOnZx4
+                w07JTKJmZn38kPJHRRcb9eQRx4mJabY8qFVzJy0zKLaUBjxKb7oqVHkakZSWDSVZY5bNOCDdI53Pxis+
+                S7tZcU400l1qeUjJaOkg8+IVziprYqzkqhDqkLbS384opPSvwiuqnXlGqSKyzkesCrRPgcvCK6xWni9N
+                yTImk577FF7f6+MeT007UHi9PTaiq9upoAP174nKfO1x7yflGT7DZtnp8rkc9+ukUekN1lLYeZ2r9Wwy
+                yTrYi3Yd31axLUtNaNdkJlJs66gpW0vU8d+74+Z1CTipSSAeUL9Nl3EtK6Kjb8jxjozzKeJ2isNe+LMz
+                bDp5IcBiWXuZn0bJf2x1T8bQ4kb1JIioUmqISgzLq+qQrQoSL/CHqNP4MPMP7eTdzyTxuNOGp8YZYmaP
+                S2m0qAdm9DkniQAd/dFUq62wJF+XDaFZa3s3w+6YqtXWgCSflw2hWWpNm+H3TEzLtS7EzSJp/aKmcukl
+                PZff3Q48wE/I80829MjIDd1tPHxj0ql4hMxLhiZusJ3Kv+3hFBl6c2lTUgsXyVayRb9omqeikSEzJLNm
+                Zpahk2Oep39kUV+nusP1OnJUlaHh7N0ElWP4iO/hCXKjSafTZVA/pWLij9Vr6ep0UpV2x7Rh1PYNIYDK
+                CMdG08b8/oeiQP5//8QAJxABAAICAQMDBAMBAAAAAAAAAREhADFBUWFxEIGRIECh0TDh8PH/2gAIAQEA
+                AT8h9YGdFfCOO+bkeGoR6J9gsJdZIpcreryGD3y34+h0po6P+mcitMj1KXfcv5wCigw7YaJ0CbcTSbMU
+                StZEuy4T6FxBuSBrg+3qaSVKeiNK5MTVvpWM63uG/Ht+sM4XOg5+15bE0HsMvif65wRcsFyIh3DB5Ez/
+                AFemMmBqnXmOlpMMmiSUteAi0KdQgjILzSNBUcWiIuKSTEytGbwoWgmam5XSMYEUya7KjjIM3tMALrCz
+                p1lScw7W8/Cybdf3do8vuy7E5gb63VOMFdqYKpRGJMlDthp1iKWAZ75EzqvIZ/yhAJtoNx2Red9uak3h
+                KLmk7OrbrziucXrRbxw51zf+HL0aRqX5a+7tlzZDzGL5c0pkJyKfYzU1oJEk7El86sRjreBVJJiIncL0
+                YLSNhRCORiQe5lD5BjPDIjtRELRJt2wW2XMVeR28khugAEzO9a5oOJ2KJvdYuJnmZFZQ9R7OLdiFR5PR
+                vRJKUYw5bFG1JA+D59QEJj27cI/ONKnk35Ti1xxrkS3weI+yjHJQ6h/P/9oADAMBAAIAAwAAABCSPSSS
+                SSSSSP4CSQSCSSTwgSSQQSCIcaASASSCQMYiSQQSCSSFaSSSSSST/8QAJBEBAAECBAYDAAAAAAAAAAAA
+                AQARITFAQXEwUWGRwfAQgbH/2gAIAQMBAT8Q+TStkg9T1ZF3YXh9rE1sA/gJyGyxhVnovdbZc5cm8Zz+
+                gXHY25ETj0+AJp6CVK9DSXZuh4Vg1V3CQRZAEAphFcc+5TSt2kELb2ZFSFsIFRLx/wD/xAAeEQACAgIC
+                AwAAAAAAAAAAAAAAARExIUAwQVBhwf/aAAgBAgEBPxDw5pGIWEyX94HigkB9CgSIjwpS+aPg0nY1UPj4
+                6NNJqbErKXP/AP/EACQQAQEAAgMAAgEEAwAAAAAAAAERACExQVEQgWEgMHGxQJHw/9oACAEBAAE/EPlj
+                slY5ylmFCoVC1wkd4le8AR4fyIlP8A0QAVVgYVDSe0Yfa4PF8bKG0jCNkSmgU2roSFaDQwD+B+T6nNRD
+                FBULq67xO8j/AEEtSEi2I940x5EBb7R6IiKIvy0vdL4ki0G0zhjr5LRKywan0kgbP0gN4OpDoEgL7bDs
+                T3o3w+ZoFPG14jNjGLlrSPZnDENtCiIpis7E0QE7QtKvCzP+F7yHABVqOCQOlaopmqFV4mioDNyih6Gt
+                gDQI5OmwN2ZA+dCE62g0QwV2XYRBhAWp3C13cEgQ5qQnIcM+326HEjwU4bd44y8iMVhoBD1yydWgWYTY
+                ab9dAakOQSplUgKesWjoxd/E3xoUAtrz3CBJpJsLTCnwIq5/ahp5b9YbMg8gq7JC0DW0SZWvo1K/mIvV
+                mjHILekPYmG1hNRAN/0fVPDDUAesFIP7yMdGY7YQLOxbxxewYmeW51BLF5I+P8lxogZCv4LQIKyZFhdy
+                dHphwaeUKJYXcnR6Y5XJuzmRwRGmybdyl2wQVsUMJfww98M40eQP+tO9lKWLafKKroxAotuqLucasJg3
+                ipBTxEAXiCYtECjtiqsqihouw5MVAR6cssOZ39A/s+8QDuX0JIwmikNxMON16F3lwP1z9pCRBPMXuvIx
+                f3//2Q==
+            </property>
+        </structure>
+    </list-property>
+</report>

@@ -163,6 +163,7 @@ void listAudits(int itype)
 		mrc = focsql.firstRow(slq);
 		kx = (mrc == null) ? "" : mrc.get("voucherno");
 		if(!kx.equals("")) ki.setStyle("font-weight:bold;background:#0CC2F5");
+		//kx = "";
 
 		lbhand.setListcellItemLabel(ki, mrnposi, kx); // inject MRN-no if any
 		kabom.clear();

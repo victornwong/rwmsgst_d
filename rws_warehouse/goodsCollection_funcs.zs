@@ -182,7 +182,9 @@ void showGCOMeta(String iwhat)
 			}
 		}
 	}
-	workarea.setVisible(true);
+	
+	try { Path.getComponent("/workarea").setVisible(true); } catch (Exception e) {}
+	try { Path.getComponent("/collections_holder").setVisible(false); } catch (Exception e) {}
 }
 
 Object[] gdcols_headers =
@@ -368,6 +370,8 @@ void showGoodsCollection(int itype)
 		lbhand.setListcellItemLabel(ki,mrn_posi,mns);
 		kabom.clear();
 	}
+
+	try { Path.getComponent("/collections_holder").setVisible(true); } catch (Exception e) {}
 }
 
 // 25/06/2014: added rw_goodscollection.items_fromlc (to keep track of imported from which LC)

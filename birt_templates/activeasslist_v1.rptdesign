@@ -1,0 +1,879 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report xmlns="http://www.eclipse.org/birt/2005/design" version="3.2.20" id="1">
+    <property name="createdBy">Eclipse BIRT Designer Version 2.5.0.v20090603 Build &lt;2.5.0.v20090617-0630></property>
+    <property name="units">in</property>
+    <property name="iconFile">/templates/blank_report.gif</property>
+    <property name="bidiLayoutOrientation">ltr</property>
+    <parameters>
+        <scalar-parameter name="startdate1" id="272">
+            <property name="hidden">true</property>
+            <text-property name="promptText">Start date (yyyy-mm-dd)</text-property>
+            <property name="valueType">static</property>
+            <property name="isRequired">false</property>
+            <property name="dataType">string</property>
+            <simple-property-list name="defaultValue">
+                <value type="constant">2014-10-01</value>
+            </simple-property-list>
+            <property name="paramType">simple</property>
+            <property name="controlType">text-box</property>
+            <property name="distinct">true</property>
+            <structure name="format">
+                <property name="category">Unformatted</property>
+            </structure>
+        </scalar-parameter>
+        <scalar-parameter name="enddate1" id="273">
+            <property name="hidden">true</property>
+            <text-property name="promptText">End date (yyyy-mm-dd)</text-property>
+            <property name="valueType">static</property>
+            <property name="isRequired">false</property>
+            <property name="dataType">string</property>
+            <simple-property-list name="defaultValue">
+                <value type="constant">2014-10-02</value>
+            </simple-property-list>
+            <property name="paramType">simple</property>
+            <property name="controlType">text-box</property>
+            <property name="distinct">true</property>
+            <structure name="format">
+                <property name="category">Unformatted</property>
+            </structure>
+        </scalar-parameter>
+        <scalar-parameter name="custname" id="530">
+            <text-property name="promptText">Customer name</text-property>
+            <property name="valueType">static</property>
+            <property name="isRequired">true</property>
+            <property name="dataType">string</property>
+            <property name="paramType">simple</property>
+            <property name="controlType">text-box</property>
+            <property name="distinct">true</property>
+            <structure name="format">
+                <property name="category">Unformatted</property>
+            </structure>
+        </scalar-parameter>
+    </parameters>
+    <data-sources>
+        <oda-data-source extensionID="org.eclipse.birt.report.data.oda.jdbc" name="rwsdb2" id="7">
+            <property name="odaDriverClass">net.sourceforge.jtds.jdbc.Driver</property>
+            <property name="odaURL">jdbc:jtds:sqlserver://192.168.100.201:1433/rwsdb2</property>
+            <property name="odaUser">testme</property>
+            <encrypted-property name="odaPassword" encryptionID="base64">OTA5MA==</encrypted-property>
+        </oda-data-source>
+    </data-sources>
+    <data-sets>
+        <oda-data-set extensionID="org.eclipse.birt.report.data.oda.jdbc.JdbcSelectDataSet" name="asslist_1" id="423">
+            <list-property name="columnHints">
+                <structure>
+                    <property name="columnName">lc_id</property>
+                    <property name="displayName">lc_id</property>
+                </structure>
+                <structure>
+                    <property name="columnName">customer_name</property>
+                    <property name="displayName">customer_name</property>
+                </structure>
+                <structure>
+                    <property name="columnName">asset_tag</property>
+                    <property name="displayName">asset_tag</property>
+                </structure>
+                <structure>
+                    <property name="columnName">serial_no</property>
+                    <property name="displayName">serial_no</property>
+                </structure>
+                <structure>
+                    <property name="columnName">brand</property>
+                    <property name="displayName">brand</property>
+                </structure>
+                <structure>
+                    <property name="columnName">model</property>
+                    <property name="displayName">model</property>
+                </structure>
+                <structure>
+                    <property name="columnName">type</property>
+                    <property name="displayName">type</property>
+                </structure>
+                <structure>
+                    <property name="columnName">capacity</property>
+                    <property name="displayName">capacity</property>
+                </structure>
+                <structure>
+                    <property name="columnName">coa1</property>
+                    <property name="displayName">coa1</property>
+                </structure>
+                <structure>
+                    <property name="columnName">ram</property>
+                    <property name="displayName">ram</property>
+                </structure>
+                <structure>
+                    <property name="columnName">hdd</property>
+                    <property name="displayName">hdd</property>
+                </structure>
+                <structure>
+                    <property name="columnName">others</property>
+                    <property name="displayName">others</property>
+                </structure>
+                <structure>
+                    <property name="columnName">asset_location</property>
+                    <property name="displayName">asset_location</property>
+                </structure>
+                <structure>
+                    <property name="columnName">lstartdate</property>
+                    <property name="displayName">lstartdate</property>
+                </structure>
+                <structure>
+                    <property name="columnName">lenddate</property>
+                    <property name="displayName">lenddate</property>
+                </structure>
+                <structure>
+                    <property name="columnName">gcn_id</property>
+                    <property name="displayName">gcn_id</property>
+                </structure>
+                <structure>
+                    <property name="columnName">hotswap</property>
+                    <property name="displayName">hotswap</property>
+                </structure>
+            </list-property>
+            <list-property name="parameters">
+                <structure>
+                    <property name="name">param_1</property>
+                    <property name="paramName">custname</property>
+                    <property name="nativeName"></property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">1</property>
+                    <property name="position">1</property>
+                    <property name="isInput">true</property>
+                    <property name="isOutput">false</property>
+                </structure>
+            </list-property>
+            <structure name="cachedMetaData">
+                <list-property name="resultSet">
+                    <structure>
+                        <property name="position">1</property>
+                        <property name="name">lc_id</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">2</property>
+                        <property name="name">customer_name</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">3</property>
+                        <property name="name">asset_tag</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">4</property>
+                        <property name="name">serial_no</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">5</property>
+                        <property name="name">brand</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">6</property>
+                        <property name="name">model</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">7</property>
+                        <property name="name">type</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">8</property>
+                        <property name="name">capacity</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">9</property>
+                        <property name="name">coa1</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">10</property>
+                        <property name="name">ram</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">11</property>
+                        <property name="name">hdd</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">12</property>
+                        <property name="name">others</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">13</property>
+                        <property name="name">asset_location</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                    <structure>
+                        <property name="position">14</property>
+                        <property name="name">lstartdate</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">15</property>
+                        <property name="name">lenddate</property>
+                        <property name="dataType">date-time</property>
+                    </structure>
+                    <structure>
+                        <property name="position">16</property>
+                        <property name="name">gcn_id</property>
+                        <property name="dataType">integer</property>
+                    </structure>
+                    <structure>
+                        <property name="position">17</property>
+                        <property name="name">hotswap</property>
+                        <property name="dataType">string</property>
+                    </structure>
+                </list-property>
+            </structure>
+            <property name="dataSource">rwsdb2</property>
+            <list-property name="resultSet">
+                <structure>
+                    <property name="position">1</property>
+                    <property name="name">lc_id</property>
+                    <property name="nativeName">lc_id</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">2</property>
+                    <property name="name">customer_name</property>
+                    <property name="nativeName">customer_name</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">3</property>
+                    <property name="name">asset_tag</property>
+                    <property name="nativeName">asset_tag</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">4</property>
+                    <property name="name">serial_no</property>
+                    <property name="nativeName">serial_no</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">5</property>
+                    <property name="name">brand</property>
+                    <property name="nativeName">brand</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">6</property>
+                    <property name="name">model</property>
+                    <property name="nativeName">model</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">7</property>
+                    <property name="name">type</property>
+                    <property name="nativeName">type</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">8</property>
+                    <property name="name">capacity</property>
+                    <property name="nativeName">capacity</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">9</property>
+                    <property name="name">coa1</property>
+                    <property name="nativeName">coa1</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">10</property>
+                    <property name="name">ram</property>
+                    <property name="nativeName">ram</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">11</property>
+                    <property name="name">hdd</property>
+                    <property name="nativeName">hdd</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">12</property>
+                    <property name="name">others</property>
+                    <property name="nativeName">others</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">13</property>
+                    <property name="name">asset_location</property>
+                    <property name="nativeName">asset_location</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+                <structure>
+                    <property name="position">14</property>
+                    <property name="name">lstartdate</property>
+                    <property name="nativeName">lstartdate</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">15</property>
+                    <property name="name">lenddate</property>
+                    <property name="nativeName">lenddate</property>
+                    <property name="dataType">date-time</property>
+                    <property name="nativeDataType">93</property>
+                </structure>
+                <structure>
+                    <property name="position">16</property>
+                    <property name="name">gcn_id</property>
+                    <property name="nativeName">gcn_id</property>
+                    <property name="dataType">integer</property>
+                    <property name="nativeDataType">4</property>
+                </structure>
+                <structure>
+                    <property name="position">17</property>
+                    <property name="name">hotswap</property>
+                    <property name="nativeName">hotswap</property>
+                    <property name="dataType">string</property>
+                    <property name="nativeDataType">12</property>
+                </structure>
+            </list-property>
+            <xml-property name="queryText"><![CDATA[select
+lcr.lc_id, lcr.customer_name, lce.asset_tag, lce.serial_no, lce.brand, lce.model, lce.type,
+lce.capacity, lce.coa1, lce.ram, lce.hdd, lce.others, 
+case when
+ lce.cust_location like '%above%' then
+  (select top 1 u.address1yh from focus50J1.dbo.mr000 m left join focus50J1.dbo.u0000 u on u.extraid=m.masterid where m.name = lcr.customer_name) + ',' +
+  (select top 1 u.address2yh from focus50J1.dbo.mr000 m left join focus50J1.dbo.u0000 u on u.extraid=m.masterid where m.name = lcr.customer_name) + ',' +
+  (select top 1 u.address3yh from focus50J1.dbo.mr000 m left join focus50J1.dbo.u0000 u on u.extraid=m.masterid where m.name = lcr.customer_name)
+ else lce.cust_location
+end as asset_location,
+
+lcr.lstartdate, lcr.lenddate, lce.gcn_id,
+
+case when
+ lce.hotswap = 1 then 'YES'
+ else 'NO'
+end as hotswap
+
+from rw_lc_equips lce
+left join rw_lc_records lcr on lce.lc_parent = lcr.origid
+where lc_parent in (select origid from rw_lc_records rlc1 where rlc1.lstatus='active')
+and lcr.customer_name = ?
+order by lcr.lc_id, lce.asset_tag;
+]]></xml-property>
+            <xml-property name="designerValues"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<model:DesignValues xmlns:design="http://www.eclipse.org/datatools/connectivity/oda/design" xmlns:model="http://www.eclipse.org/birt/report/model/adapter/odaModel">
+  <Version>1.0</Version>
+  <design:DataSetParameters>
+    <design:parameterDefinitions>
+      <design:inOutMode>In</design:inOutMode>
+      <design:attributes>
+        <design:name></design:name>
+        <design:position>1</design:position>
+        <design:nativeDataTypeCode>1</design:nativeDataTypeCode>
+        <design:precision>38</design:precision>
+        <design:scale>0</design:scale>
+        <design:nullability>Unknown</design:nullability>
+      </design:attributes>
+    </design:parameterDefinitions>
+  </design:DataSetParameters>
+</model:DesignValues>]]></xml-property>
+        </oda-data-set>
+    </data-sets>
+    <styles>
+        <style name="report" id="4">
+            <property name="fontFamily">"Verdana"</property>
+            <property name="fontSize">10pt</property>
+        </style>
+        <style name="crosstab-cell" id="5">
+            <property name="borderBottomColor">#CCCCCC</property>
+            <property name="borderBottomStyle">solid</property>
+            <property name="borderBottomWidth">1pt</property>
+            <property name="borderLeftColor">#CCCCCC</property>
+            <property name="borderLeftStyle">solid</property>
+            <property name="borderLeftWidth">1pt</property>
+            <property name="borderRightColor">#CCCCCC</property>
+            <property name="borderRightStyle">solid</property>
+            <property name="borderRightWidth">1pt</property>
+            <property name="borderTopColor">#CCCCCC</property>
+            <property name="borderTopStyle">solid</property>
+            <property name="borderTopWidth">1pt</property>
+        </style>
+        <style name="crosstab" id="6">
+            <property name="borderBottomColor">#CCCCCC</property>
+            <property name="borderBottomStyle">solid</property>
+            <property name="borderBottomWidth">1pt</property>
+            <property name="borderLeftColor">#CCCCCC</property>
+            <property name="borderLeftStyle">solid</property>
+            <property name="borderLeftWidth">1pt</property>
+            <property name="borderRightColor">#CCCCCC</property>
+            <property name="borderRightStyle">solid</property>
+            <property name="borderRightWidth">1pt</property>
+            <property name="borderTopColor">#CCCCCC</property>
+            <property name="borderTopStyle">solid</property>
+            <property name="borderTopWidth">1pt</property>
+        </style>
+    </styles>
+    <page-setup>
+        <simple-master-page name="Simple MasterPage" id="2">
+            <property name="type">a4</property>
+            <property name="orientation">landscape</property>
+            <property name="headerHeight">0.2in</property>
+            <property name="footerHeight">0.2in</property>
+            <page-header>
+                <grid id="146">
+                    <column id="147"/>
+                    <column id="148"/>
+                    <column id="149"/>
+                    <row id="150">
+                        <cell id="151"/>
+                        <cell id="152"/>
+                        <cell id="153">
+                            <image id="154">
+                                <property name="marginLeft">60pt</property>
+                                <property name="height">35px</property>
+                                <property name="width">136px</property>
+                                <property name="source">embed</property>
+                                <property name="imageName">rentwise_logo.png</property>
+                            </image>
+                        </cell>
+                    </row>
+                </grid>
+            </page-header>
+            <page-footer>
+                <text id="3">
+                    <property name="fontSize">7pt</property>
+                    <property name="textAlign">center</property>
+                    <property name="contentType">html</property>
+                    <text-property name="content"><![CDATA[<strong>Rentwise Sdn Bhd (458707-X)</strong><br>
+Lot 9-Unit A1, Natco Industrial Park, Kawasan Perindustrian Bukit Raja Selatan, Seksyen 7, 40000 Shah Alam, Selangor<br>
+Tel: (603) 3341 6552 Fax: (603) 3341 7416 Website: <strong>www.rentwise.com</strong>]]></text-property>
+                </text>
+            </page-footer>
+        </simple-master-page>
+    </page-setup>
+    <body>
+        <table id="424">
+            <property name="dataSet">asslist_1</property>
+            <list-property name="boundDataColumns">
+                <structure>
+                    <property name="name">lc_id</property>
+                    <property name="displayName">lc_id</property>
+                    <expression name="expression">dataSetRow["lc_id"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">customer_name</property>
+                    <property name="displayName">customer_name</property>
+                    <expression name="expression">dataSetRow["customer_name"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">asset_tag</property>
+                    <property name="displayName">asset_tag</property>
+                    <expression name="expression">dataSetRow["asset_tag"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">serial_no</property>
+                    <property name="displayName">serial_no</property>
+                    <expression name="expression">dataSetRow["serial_no"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">brand</property>
+                    <property name="displayName">brand</property>
+                    <expression name="expression">dataSetRow["brand"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">model</property>
+                    <property name="displayName">model</property>
+                    <expression name="expression">dataSetRow["model"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">type</property>
+                    <property name="displayName">type</property>
+                    <expression name="expression">dataSetRow["type"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">capacity</property>
+                    <property name="displayName">capacity</property>
+                    <expression name="expression">dataSetRow["capacity"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">coa1</property>
+                    <property name="displayName">coa1</property>
+                    <expression name="expression">dataSetRow["coa1"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">ram</property>
+                    <property name="displayName">ram</property>
+                    <expression name="expression">dataSetRow["ram"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">hdd</property>
+                    <property name="displayName">hdd</property>
+                    <expression name="expression">dataSetRow["hdd"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">others</property>
+                    <property name="displayName">others</property>
+                    <expression name="expression">dataSetRow["others"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">asset_location</property>
+                    <property name="displayName">asset_location</property>
+                    <expression name="expression">dataSetRow["asset_location"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+                <structure>
+                    <property name="name">lstartdate</property>
+                    <property name="displayName">lstartdate</property>
+                    <expression name="expression">dataSetRow["lstartdate"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">lenddate</property>
+                    <property name="displayName">lenddate</property>
+                    <expression name="expression">dataSetRow["lenddate"]</expression>
+                    <property name="dataType">date-time</property>
+                </structure>
+                <structure>
+                    <property name="name">gcn_id</property>
+                    <property name="displayName">gcn_id</property>
+                    <expression name="expression">dataSetRow["gcn_id"]</expression>
+                    <property name="dataType">integer</property>
+                </structure>
+                <structure>
+                    <property name="name">hotswap</property>
+                    <property name="displayName">hotswap</property>
+                    <expression name="expression">dataSetRow["hotswap"]</expression>
+                    <property name="dataType">string</property>
+                </structure>
+            </list-property>
+            <column id="513"/>
+            <column id="514"/>
+            <column id="515"/>
+            <column id="516"/>
+            <column id="517"/>
+            <column id="518"/>
+            <column id="519"/>
+            <column id="520"/>
+            <column id="521"/>
+            <column id="522"/>
+            <column id="523"/>
+            <column id="524"/>
+            <column id="525"/>
+            <column id="526"/>
+            <column id="527"/>
+            <column id="528"/>
+            <column id="529"/>
+            <header>
+                <row id="425">
+                    <property name="fontFamily">"Times New Roman"</property>
+                    <property name="fontSize">7pt</property>
+                    <property name="textAlign">center</property>
+                    <cell id="426">
+                        <label id="427">
+                            <text-property name="text">lc_id</text-property>
+                        </label>
+                    </cell>
+                    <cell id="428">
+                        <label id="429">
+                            <text-property name="text">customer_name</text-property>
+                        </label>
+                    </cell>
+                    <cell id="430">
+                        <label id="431">
+                            <text-property name="text">asset_tag</text-property>
+                        </label>
+                    </cell>
+                    <cell id="432">
+                        <label id="433">
+                            <text-property name="text">serial_no</text-property>
+                        </label>
+                    </cell>
+                    <cell id="434">
+                        <label id="435">
+                            <text-property name="text">brand</text-property>
+                        </label>
+                    </cell>
+                    <cell id="436">
+                        <label id="437">
+                            <text-property name="text">model</text-property>
+                        </label>
+                    </cell>
+                    <cell id="438">
+                        <label id="439">
+                            <text-property name="text">type</text-property>
+                        </label>
+                    </cell>
+                    <cell id="440">
+                        <label id="441">
+                            <text-property name="text">capacity</text-property>
+                        </label>
+                    </cell>
+                    <cell id="442">
+                        <label id="443">
+                            <text-property name="text">coa1</text-property>
+                        </label>
+                    </cell>
+                    <cell id="444">
+                        <label id="445">
+                            <text-property name="text">ram</text-property>
+                        </label>
+                    </cell>
+                    <cell id="446">
+                        <label id="447">
+                            <text-property name="text">hdd</text-property>
+                        </label>
+                    </cell>
+                    <cell id="448">
+                        <label id="449">
+                            <text-property name="text">others</text-property>
+                        </label>
+                    </cell>
+                    <cell id="450">
+                        <label id="451">
+                            <text-property name="text">asset_location</text-property>
+                        </label>
+                    </cell>
+                    <cell id="452">
+                        <label id="453">
+                            <text-property name="text">lstartdate</text-property>
+                        </label>
+                    </cell>
+                    <cell id="454">
+                        <label id="455">
+                            <text-property name="text">lenddate</text-property>
+                        </label>
+                    </cell>
+                    <cell id="456">
+                        <label id="457">
+                            <text-property name="text">gco</text-property>
+                        </label>
+                    </cell>
+                    <cell id="458">
+                        <label id="459">
+                            <text-property name="text">hotswap</text-property>
+                        </label>
+                    </cell>
+                </row>
+            </header>
+            <detail>
+                <row id="460">
+                    <property name="fontFamily">"Times New Roman"</property>
+                    <property name="fontSize">7pt</property>
+                    <property name="textAlign">center</property>
+                    <cell id="461">
+                        <data id="462">
+                            <property name="resultSetColumn">lc_id</property>
+                        </data>
+                    </cell>
+                    <cell id="463">
+                        <data id="464">
+                            <property name="resultSetColumn">customer_name</property>
+                        </data>
+                    </cell>
+                    <cell id="465">
+                        <data id="466">
+                            <property name="resultSetColumn">asset_tag</property>
+                        </data>
+                    </cell>
+                    <cell id="467">
+                        <data id="468">
+                            <property name="resultSetColumn">serial_no</property>
+                        </data>
+                    </cell>
+                    <cell id="469">
+                        <data id="470">
+                            <property name="resultSetColumn">brand</property>
+                        </data>
+                    </cell>
+                    <cell id="471">
+                        <data id="472">
+                            <property name="resultSetColumn">model</property>
+                        </data>
+                    </cell>
+                    <cell id="473">
+                        <data id="474">
+                            <property name="resultSetColumn">type</property>
+                        </data>
+                    </cell>
+                    <cell id="475">
+                        <data id="476">
+                            <property name="resultSetColumn">capacity</property>
+                        </data>
+                    </cell>
+                    <cell id="477">
+                        <data id="478">
+                            <property name="resultSetColumn">coa1</property>
+                        </data>
+                    </cell>
+                    <cell id="479">
+                        <data id="480">
+                            <property name="resultSetColumn">ram</property>
+                        </data>
+                    </cell>
+                    <cell id="481">
+                        <data id="482">
+                            <property name="resultSetColumn">hdd</property>
+                        </data>
+                    </cell>
+                    <cell id="483">
+                        <data id="484">
+                            <property name="resultSetColumn">others</property>
+                        </data>
+                    </cell>
+                    <cell id="485">
+                        <data id="486">
+                            <property name="resultSetColumn">asset_location</property>
+                        </data>
+                    </cell>
+                    <cell id="487">
+                        <data id="488">
+                            <structure name="dateTimeFormat">
+                                <property name="category">Custom</property>
+                                <property name="pattern">yyyy-MM-dd</property>
+                            </structure>
+                            <property name="resultSetColumn">lstartdate</property>
+                        </data>
+                    </cell>
+                    <cell id="489">
+                        <data id="490">
+                            <structure name="dateTimeFormat">
+                                <property name="category">Custom</property>
+                                <property name="pattern">yyyy-MM-dd</property>
+                            </structure>
+                            <property name="resultSetColumn">lenddate</property>
+                        </data>
+                    </cell>
+                    <cell id="491">
+                        <data id="492">
+                            <property name="resultSetColumn">gcn_id</property>
+                        </data>
+                    </cell>
+                    <cell id="493">
+                        <data id="494">
+                            <property name="resultSetColumn">hotswap</property>
+                        </data>
+                    </cell>
+                </row>
+            </detail>
+            <footer>
+                <row id="495">
+                    <cell id="496"/>
+                    <cell id="497"/>
+                    <cell id="498"/>
+                    <cell id="499"/>
+                    <cell id="500"/>
+                    <cell id="501"/>
+                    <cell id="502"/>
+                    <cell id="503"/>
+                    <cell id="504"/>
+                    <cell id="505"/>
+                    <cell id="506"/>
+                    <cell id="507"/>
+                    <cell id="508"/>
+                    <cell id="509"/>
+                    <cell id="510"/>
+                    <cell id="511"/>
+                    <cell id="512"/>
+                </row>
+            </footer>
+        </table>
+    </body>
+    <list-property name="images">
+        <structure>
+            <property name="name">rentwise_logo.png</property>
+            <property name="type">image/png</property>
+            <property name="data">
+                iVBORw0KGgoAAAANSUhEUgAAAIgAAAAjCAYAAABPYUJ/AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAA
+                CxMBAJqcGAAAAAd0SU1FB94BHAMMMEtl15EAAA3dSURBVHja7Vt7dFXllf9933ndc85Nbl48wkMSIKJA
+                RKJQRCICbW0RW8YXUh8UlRaZYa2ps6bIlIo8xKlWqy5EaeuAdllLwRkFkUlFEIgMQuQVIhBCEvKAvMnz
+                JrmPs+cPzklPTu69XGgQkHxrnZW7vsf+vrP379v7t/e9YbhEjYh46bvvbK/Y8skdRrAJ3v4JSE2/+V9S
+                n/j3N9DTrprGLoXQxp07/3jyhRVPeCqLSUoQmKoqcKmJ+JoxDPn5/OzEyfdk9qj+6mi8uwWeXrPyz0dm
+                3je7d1kBRJ0YdxOY4IPRUoebknTK37BmQo/ar0EP8vmY8RBl0dNYerD+Zl2DFBcPb6wCxoNweWIQVGTE
+                yBwBTyIV9BpUeeuC3yb3qP8a8SCnfrMId+7bjeCZyvpMqQ+IuwE1EXKrBs48aBHcYHICGFQIrT6W5G/r
+                26P6a8yD7Jn+Peqbd8pIcLnZ6URPS6kYyBoyfpzYJ6Uvjh07LkjEM5Jaz/ZLcks4y0Xi37+vqNed9wzp
+                McG3vG3qPwpVH38847BHD+5LH05777+vmIjUxi2fdJl7cvXzVPLsLKN2+RNU/voz1KO9f7iduO6661Zc
+                USdqP1Hc8bn6r+8DALLih1LpqLHtFbm5C8OmvRX5595o3e+oYuUvqOzVfyNqrr83ym1VURQzAWQKgpCp
+                aVomAOu54xoFxx7OuQEgKAjCvZf1JOWHznkD74mT8xy1DnX/k09R8cCxRETPntm8OaKctuoiEPlT81b/
+                imrXLKHTG97aHVUcZCwNAAEgl8tFnHOSZZk45wTAkGWZABiX22KiKH6T220TRZEURSEAt122l/aerQEA
+                lOzb1CkkHH9sPopffGnGJ/FJdOAnj7x7ITLbCvbXlL79nFH4p1d2R7mkAyCMsXZFUQ5KknQQwEHOOamq
+                SsnJyYYoipctbFVXVw8EMJQx9k2e4TUAN13WW7F3wRSlOmdbXqixg5Pvp63pN/kvyiutX3m24qO3vjia
+                tSYqgJiKp4SEhMKOuKOqHXi1vMtlVFWDKIoGALrxxhuTrokgV/1/H/5n5cbXKNDa/Jy9/9Dq1Tj1y6Wz
+                t42cTNTQ+MrFyD79ydrbyza+GZVBRVFMEwSBAFD//v2PhpjSxwo3mqYFnYMul+ubUFeteYZO78R550qC
+                DdQX3WbOnHlRoU3TtC59sbGxF3eI0o0rV5R89DqV7tq0yF9X0WX8f382j8r+deEab9a2yFo7cybsWM1f
+                34r2xqcJgkCSJFF6evrNzkFJkvowxkiSpHDyks1YTQBIFEUSBCFp/fr1neoxixcvhhnG7HL6MsbIegAM
+                3rx5M7PtHbDWmCHOEATBPh+c87pIHs7tdheZZydFUX4YZs4+xhhNmTKFACAmJmaXKIoUJqy6rDOoqkqy
+                LJPJ07oqNi1NM8fI7XZbOnJHtMbJNcuX177/rHHqz0t/W/DfKzuNNX91ABQI/mjLg49G7c7rTp/pF6q/
+                Nf9wVDI452mmIoiIhlv9n376qfVxuMnou8hTVTWFMWaNVWuaVm16IwOAzz736aefhgWimTNnUkZGBqmq
+                2mFsSZIsOQMdoYXi4uIs5Ro2T0ImiA6GAJ79Fh/lnFMoD2SbQ5xzQ1GUSWZXFue8C0BkWd6qaZp1hiq3
+                210timJVqL2t/UxwVjHGqsyLaIii+HJIY5z6/ZIlNX/8lVH89n+ENd6RF14hOlv/hlFfFT3Z3Xc439lX
+                uGP9uIrsjXuizWJMZeQCiDEffe3ataTrekhwPP744wNMIBAACIKAjIwMAICu614AhqqqHetiYmI6ACII
+                Amma1uxQfoMNXJ1umaIoNXZQOMMbY8zKOFIZ61KfJACk67p10zNCVQrMva2WZa0jot5Wp67r1rzpzhAk
+                y7LdI71rgvZxm56tec69zHDwh4WLm1/8qVH96nw6+vbzK1pO7O8yp+VA7pzs6Y+9cXb3l1GD45XBo/GX
+                W8Zlkrd+l5H/d75bVrh37Kmcj/dEE2Ks9FaSJJIkiTjnlhEpQvYS9kbm5ORIznFd12F5KjM7EkLwIZIk
+                iSZPnuwkorWRvIQkSUURxik1NbUtJSWlxTzPeMcF+dIOdLOvAyBz5879gdn9gRVKFUV50Ml/7E0QhNAg
+                OAfqJabspQCA3GWzzhls2SMUWHo/Fb8wL6Lr//Ch2RfMaajROyzr9ild5JYe3J5/vrWSJNnrIIbL5fID
+                8Ju3P6TSs7Oz45xKDQcgImJOD+LxeMIZ2tqPQpFUM9SFagUWwO2EVRTFPLOeMdICoPN9JEn6wgTuxDAA
+                uRsA1q9fv95WDqAIpP9NAGT3nvY2cODA562L0tF5+NczqGn5Y+Rd/gQVvHRpyuAbbskgKizc3skjVZed
+                FyC6rndkMampqYW2of42Y1U4bkGczUN0PBYhsz9utzsAAAkJCbC8RzhgWVwhhNeqNblKpPexDDfEwQMq
+                bO+620znb3UCOTc3NyJALDVburI8rSiKjzpC5ZsWibVkWO/MOSdN0zrCLN+9bC62zp+0IFVsh7eyAbUN
+                gOzpdUnywGEZIx7anJ5JOXfNOAeOmnLovQZcf751wWAQwWAQnHMUFRUNtpdTFEUB5xyMsT7ONZZyOeeQ
+                JAkAEAgEOqWFsbGxePnllwWLowCAYRhQFCXkWQzDAOcchtHVURARiMLfLUVRik23X+AY+h4AbN26Fa2t
+                rVkAUFdXBwBYt27dTs45ZFlGenr6jijUfH8wGJQURdng9/tBRGQYxrt2z+X3+8EYg73PMAwIggDOObxe
+                LwRBOKdDKjmwcO/8H1DVP08imn03Vc55kL7+/Ypu9yDBvM9A27dM/qxf2gXLtkiqSfS+duT1ybabWeK0
+                Wbj0LkymAId3icRrungQM332E5EQauGOHTvKrDTY7DoAgBITE0c4+YElX5bl3ebn7zp0Es6DdGlmmmsA
+                eEwQBOi6/qaVAp83g6zbskN2NRL8XgON/naQtxn1x4+CiKZ1J0CEEVPAJv1w282zp2Nv8k2fb+o97GJF
+                dVS9vF4vAJwRRRFEBE3TFIcS4fP5MHbs2PKoeBJd/L2Ij49HIBBAMBgUc3Nz40PNmThx4gCXy8WCwSAe
+                fvjhBkmS0gVBQG1tbZ7TSwHAvHnzGnw+3xgT/P5/RP+BQIDJsvxOMBhES0vLU5xztLW1nb/E4G9oh7/R
+                oHYfUB9sheytx4DiMhxe9LPRlyLM6N+dsFHxt04MxiofZj85q1tkBgKBEYIgwOfz9XakbB5BEOjIkSOR
+                fr1WbV/DGEMk9h+hStnPDGM0derU1nDz2traTgLAe++9F8sYE2yh0M5zclRVxapVq2IlSRJNEr0j2rMU
+                FhY65YGIyOfz/dwKtYqivE/nbgSZJQGEqCGd+7B/+jSqmDaBTv7TaCr70XCq/f4I48i0sdT6P6sXAQD5
+                67rFkNRYBCKSc0eOopxBQ6O+ro4QU+gc93g8MOskhiAINQ888ICdrA4DYJhVzDJBEMoBlMuyXC4IQtDM
+                iDrJiZQF2IldqMKxVTFVFKUcQEMYD2gnzV1c6apVq44CMKyUVRCE6SHOYYUYY+7cudPsBTXGWBmAcgDl
+                kiS1Agj5RaZJYA1d1wlAmSiK5aIolgNo7pQCH531yG/yx4ymkkmjjIO396GKu4dR1fjrjaPjMqhi+a9b
+                qa5kUXd6kaKnHqWy5IHGRzcM3e2tqoiK31pxWdO06nDZRQTDplgpsS2+E2OMNE0bZE2Ki4uDrUQeloNw
+                zmnOnDmhxgcyxnxut9vKcmjQoEF9wxjGyhxGRHofM8u6I8R4tjXn0KFD6WY6LHPOrZJ+xxlUVV0AQHXw
+                EutvvC21tmc1ifbYK1Vu3JC1I304FY0bRYW3DKHTQwdQcPhoqkvLMHLG30lHXn2tsbsAcuCR+6bW3zCU
+                dqYO7BYy7AwJzkqlruvdcm7nl13PPPNM2LkrVqwYGoYwnncft9t9Ueezv/fgwYP7X+j6zMzMLukrAwDj
+                xBHwtJE489KLo735hU+ezPlyntFQhxhwxENCgqDA39JGflVjbHBK4Pip0qJArObtNe4WJN02BoHWJvQe
+                kQ4QICYmZcUMu2FBuEMYp4ux98nZE1LOlO+qaWpG7fDb3pm48YOfoqddkY2FYfNJlevWpu59fw2MglK0
+                5xW1TF72yzzD0weQNHBBXnZs4XObmn0BeP1tqONAvSxDS0xEwpgMIe2eqQW3PvyTmnCb5j107wT5+IFd
+                Mhjyq1i2N8Vzx4+/2N/zG9WrtTX9bkm3yqt+56XC4u8MJ+/I6+nL0df3AOMKblHlczG/WNytmxbt25/K
+                3S7UxYgQZbHHCldwuyjreOvPQouLv3DPsfNvKNqelSEeyCFZF1k9DKg+panHDFe5B+nC5k1wFO3duY+I
+                vlOQvTXiP2A1fvZf59Doid2oB/xfpcTKTBLa4dEk6KDmHjNcZSQ1ujCRjdQxE1CZn/dRW2lJu9oWaBJE
+                eU/iXXf9wTm34ljOX85uXTdDPJBPyQKxYFsVyNuEYL0fzX7VO2jHIb3HFN8ygHQJO1/vCtSdOiEEW5rg
+                CvrBmxvBmhohtPvQ6mskgLHeNe1ob6hFC5oQbPLC8KlUIsez2z74G+sxxbeIg3RJi5urwdy9RABoOLYv
+                ufarbQ/FSq5RXKdZPFBnuLnCjYAPTboIQ4xDoAlo1jU6268fG/f6eyN8dTWQE3v1WOPb7EHCtZLPP3ye
+                vtrVolaWUVPasJGyoLp5zt7djaKs3Pj6uqUtNVXQk3r3WOIKbf8PGRYIBapBKRUAAAAASUVORK5CYII=
+            </property>
+        </structure>
+    </list-property>
+</report>

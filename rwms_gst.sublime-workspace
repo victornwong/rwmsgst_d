@@ -1,0 +1,1323 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"guidlinh",
+				"guidelinesheader"
+			],
+			[
+				"COA_",
+				"COA_25_TESTS"
+			],
+			[
+				"font",
+				"fontsize"
+			],
+			[
+				"pageb",
+				"pagebreakcount"
+			],
+			[
+				"logs",
+				"logstring"
+			],
+			[
+				"pJ",
+				"pJn"
+			],
+			[
+				"sql",
+				"sqlhand"
+			],
+			[
+				"get",
+				"getComponent"
+			],
+			[
+				"reas",
+				"reasonentry_tb"
+			],
+			[
+				"TRY_B",
+				"TRY_BUTTON_1"
+			],
+			[
+				"branc",
+				"branch_param"
+			],
+			[
+				"USERDE",
+				"USERDEF_STRING"
+			],
+			[
+				"repla",
+				"replaceSingleQuotes	(testplansManagement_v1.zul)"
+			],
+			[
+				"SPECLAB_PREIFX_J",
+				"SPECLAB_PREIFX_JB"
+			],
+			[
+				"color",
+				"color:#dddddd	(runBatching_v1.zul)"
+			],
+			[
+				"pRe",
+				"pRepId"
+			],
+			[
+				"rang",
+				"rangeheader"
+			],
+			[
+				"range",
+				"rangeheader2"
+			],
+			[
+				"guidli",
+				"guideline2_name_tb"
+			],
+			[
+				"guid",
+				"guideline1_name_tb"
+			],
+			[
+				"exec",
+				"execute"
+			],
+			[
+				"pJf",
+				"pJfn"
+			],
+			[
+				"BLAN",
+				"BLANK_STRING	(vglobaldefs.zs)"
+			],
+			[
+				"pStr",
+				"pStr1"
+			],
+			[
+				"pstr",
+				"pStr1"
+			],
+			[
+				"last",
+				"lastprefix"
+			],
+			[
+				"sign",
+				"signatorcol"
+			],
+			[
+				"signa",
+				"signatorrow"
+			],
+			[
+				"footnote",
+				"footnotesrow"
+			],
+			[
+				"footno",
+				"footnotesrow"
+			],
+			[
+				"result",
+				"resultrow"
+			],
+			[
+				"samp",
+				"samplecount"
+			],
+			[
+				"first",
+				"firstRow	(SqlFuncs.java)"
+			],
+			[
+				"rew",
+				"resultrow"
+			],
+			[
+				"exeIn",
+				"excelInsertString"
+			],
+			[
+				"short",
+				"shortcode"
+			],
+			[
+				"vdb",
+				"vdbf"
+			],
+			[
+				"gui",
+				"guideline2_name_tb"
+			],
+			[
+				"guii",
+				"guideline1_name_tb"
+			],
+			[
+				"sam",
+				"samplingtime"
+			],
+			[
+				"row",
+				"rowcount"
+			],
+			[
+				"chec",
+				"checkNullString"
+			],
+			[
+				"pJn",
+				"pJfn"
+			],
+			[
+				"exc",
+				"excelInsertString"
+			],
+			[
+				"down",
+				"downloadFile	(LabWorksheet.java)"
+			],
+			[
+				"GETWORK",
+				"GETWORKSHEET_POS_COLUMN	(vglobaldefs.zs)"
+			],
+			[
+				"vd",
+				"vdbf	(reporting_virtlab_v1.zul)"
+			],
+			[
+				"exce",
+				"excelWB"
+			],
+			[
+				"EXCE",
+				"EXCELCOA_SIXSAMPLES"
+			],
+			[
+				"sm_sam",
+				"sm_sample_time"
+			],
+			[
+				"sm_sample",
+				"sm_sample_time	(vSampleReg_v1.zul)"
+			],
+			[
+				"sampling",
+				"sampling_date	(jobfolder_func.zs)"
+			],
+			[
+				"mea",
+				"measure_range_2	(stocklister.zs)"
+			],
+			[
+				"templ",
+				"templb"
+			],
+			[
+				"getIte",
+				"getItemCount"
+			],
+			[
+				"test",
+				"testing"
+			],
+			[
+				"stkite",
+				"stkitems_holder"
+			],
+			[
+				"BL",
+				"BLANK_STRING	(vglobaldefs.zs)"
+			],
+			[
+				"thepre",
+				"theprefix"
+			],
+			[
+				"old",
+				"oldgrid"
+			],
+			[
+				"jobno",
+				"jobnotes_box"
+			],
+			[
+				"margin",
+				"margin-top"
+			],
+			[
+				"measure_",
+				"measure_range_2	(tests_MasterMan_v1.zul)"
+			],
+			[
+				"v_",
+				"v_Sql	(bugger.zul)"
+			],
+			[
+				"testm",
+				"testmysql2"
+			],
+			[
+				"Listbo",
+				"ListboxJingle	(bugger.zul)"
+			],
+			[
+				"repl",
+				"replaceSingleQuotes	(NGfuncs.java)"
+			],
+			[
+				"run_res",
+				"run_result_prefix"
+			],
+			[
+				"pref",
+				"prefixbox"
+			],
+			[
+				"RESGR",
+				"RESGRID_PREFIX	(resultentry_func.zs)"
+			],
+			[
+				"jobtest",
+				"jobtestparameter_id=jtp"
+			],
+			[
+				"TPI_MEA",
+				"TPI_MEASURE_RANGE"
+			],
+			[
+				"VL_ITM_MEA",
+				"VL_ITM_MEASURE_RANGE_2	(tests_MasterMan_v1.zul)"
+			],
+			[
+				"Comp",
+				"Component"
+			],
+			[
+				"mpf_mea",
+				"mpf_tpie_measure_range_2"
+			],
+			[
+				"tpie_me",
+				"tpie_measure_range_2"
+			],
+			[
+				"BLANK",
+				"BLANK_STRING	(runBatching_v1.zul)"
+			],
+			[
+				"mear",
+				"measure_range_2"
+			],
+			[
+				"n_mea",
+				"n_mesaure_range_2_tb"
+			],
+			[
+				"e_mea",
+				"e_mesaure_range_2_tb"
+			],
+			[
+				"measu",
+				"measure_range_2"
+			],
+			[
+				"div",
+				"divdropp"
+			],
+			[
+				"Listb",
+				"ListboxJingle"
+			],
+			[
+				"local",
+				"local_eventhandler"
+			],
+			[
+				"drag",
+				"dragdrop_id"
+			],
+			[
+				"sep",
+				"separator"
+			],
+			[
+				"jf_sampl",
+				"jf_sampling_technician"
+			],
+			[
+				"CFN_",
+				"CFN_LB_METHOD"
+			],
+			[
+				"foot",
+				"footnote"
+			],
+			[
+				"ORG",
+				"ORANGE_BACKGROUND	(vglobaldefs.zs)"
+			],
+			[
+				"acce",
+				"accesslevel	(vglobaldefs.zs)"
+			],
+			[
+				"usera",
+				"useraccessobj"
+			],
+			[
+				"getSec",
+				"getSelectedItems"
+			],
+			[
+				"getList",
+				"getListcellItemLabel"
+			],
+			[
+				"getSelec",
+				"getSelectedItems	(ListboxHandler.java)"
+			],
+			[
+				"cfn_n",
+				"cfn_n_matrix"
+			],
+			[
+				"OR",
+				"ORANGE_BACKGROUND_1	(vglobaldefs.zs)"
+			],
+			[
+				"se",
+				"separator"
+			],
+			[
+				"DARK",
+				"DARK_LESS_BACKGROUND	(vglobaldefs.zs)"
+			],
+			[
+				"setM",
+				"setMultiple	(jobfolder_func.zs)"
+			],
+			[
+				"marg",
+				"margin-top"
+			],
+			[
+				"coa",
+				"coafootnotes_area"
+			],
+			[
+				"pS",
+				"pSql"
+			],
+			[
+				"Sql",
+				"SqlFuncs"
+			],
+			[
+				"SQL",
+				"SQLException	(NGfuncs.java)"
+			],
+			[
+				"Arra",
+				"ArrayList	(jobfolder_func.zs)"
+			],
+			[
+				"listbo",
+				"listboxHeaderWidthObj"
+			],
+			[
+				"listbox",
+				"listbox_id"
+			],
+			[
+				"pLb",
+				"pLbid"
+			],
+			[
+				"glob_sel_re",
+				"glob_sel_pricebook_rec"
+			],
+			[
+				"i_mtsm_pack",
+				"i_mtsm_package_name"
+			],
+			[
+				"i_mtsm_",
+				"i_mtsm_package_description"
+			],
+			[
+				"i_m",
+				"i_mtsm_dealer"
+			],
+			[
+				"mtpb_inb",
+				"mtpb_insertboxes"
+			],
+			[
+				"mtpb_fi",
+				"mtpb_field_types"
+			],
+			[
+				"getStr",
+				"getString_fromUI"
+			],
+			[
+				"gp",
+				"gpWMS_FirstRow	(SqlFuncs.java)"
+			],
+			[
+				"last_",
+				"last_insert_id	(wo_partsreq.zs)"
+			],
+			[
+				"MTINSP",
+				"MTPB_INS_RSP"
+			],
+			[
+				"MTP",
+				"MTPB_INS_DURATION"
+			],
+			[
+				"MTPB_INS_PAK",
+				"MTPB_INS_PACK_NAME"
+			],
+			[
+				"pD",
+				"pDt"
+			],
+			[
+				"MTPB",
+				"MTPB_INS_DEALER"
+			],
+			[
+				"MTPB_",
+				"MTPB_INS_RSP"
+			],
+			[
+				"i_mt",
+				"i_mtsm_sub_duration"
+			],
+			[
+				"Gri",
+				"GridLayoutNoBorder	(real-world.css)"
+			],
+			[
+				"list_m",
+				"list_mtsm_pricebook"
+			],
+			[
+				"tele",
+				"telephone2"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "rws_customer/customerSupport_v1.zul",
+			"settings":
+			{
+				"buffer_size": 38247,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "rws_customer/customerSupport_funcs.zs",
+			"settings":
+			{
+				"buffer_size": 10858,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rws_account/rwpurchaseReq_v2.zul",
+			"settings":
+			{
+				"buffer_size": 26146,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "rws_account/rwpurchaseReq_funcs.zs",
+			"settings":
+			{
+				"buffer_size": 13098,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"command_palette":
+	{
+		"height": 390.0,
+		"selected_items":
+		[
+			[
+				"Package Control: ",
+				"Package Control: Install Package"
+			],
+			[
+				"YES",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"yes",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"listbox",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"list",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"listbo",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"dialog",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"listb",
+				"Snippet: ZUL listbox thinggs"
+			],
+			[
+				"dialo",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"double",
+				"Snippet: LB doubleclicker codes"
+			],
+			[
+				"panel",
+				"Snippet: ZUL panel module def codes"
+			],
+			[
+				"doubl",
+				"Snippet: LB doubleclicker codes"
+			],
+			[
+				"snippet mak",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"snippet m",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"snippet ma",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"blank",
+				"Trimmer: Remove blank spaces."
+			],
+			[
+				"zul",
+				"Snippet: ZUL dialog to get yes or no"
+			],
+			[
+				"snippet man",
+				"SnippetMaker: Make Snippet"
+			],
+			[
+				"git log",
+				"Git: Log All"
+			],
+			[
+				"git co",
+				"Git: Quick Commit"
+			],
+			[
+				"git s",
+				"Git: Status"
+			],
+			[
+				"git add",
+				"Git: Add..."
+			],
+			[
+				"git status",
+				"Git: Status"
+			],
+			[
+				"git ad",
+				"Git: Add..."
+			],
+			[
+				"git",
+				"Git: Status"
+			],
+			[
+				"snip",
+				"Snippet: ZURB Ink Block Grid"
+			],
+			[
+				"pack",
+				"Package Control: Install Package"
+			],
+			[
+				"snipp",
+				"Snippet: ZURB Ink Boilerplate"
+			],
+			[
+				"doc",
+				"Snippet: <?php foreach (…) … <?php endforeach ?>"
+			],
+			[
+				"dock",
+				"DocBlockr: Decorate line comment"
+			],
+			[
+				"pac",
+				"Package Control: Install Package"
+			],
+			[
+				"sni",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"dbl",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"snippe",
+				"Snippet: dig database and create listbox"
+			],
+			[
+				"tr",
+				"Trimmer: Delete empty lines."
+			],
+			[
+				"tri",
+				"Trimmer: Collapse empty lines."
+			],
+			[
+				"t",
+				"Trimmer: Trim trailing whitespace."
+			],
+			[
+				"trim",
+				"Trimmer: Trim leading whitespace."
+			],
+			[
+				"termin",
+				"Preferences: Terminal Settings – Default"
+			],
+			[
+				"package ",
+				"Package Control: Install Package"
+			],
+			[
+				"color",
+				"Color Picker"
+			],
+			[
+				"packa",
+				"Package Control: Install Package"
+			],
+			[
+				"package",
+				"Package Control: Install Package"
+			],
+			[
+				"conso",
+				"Color Picker: Insert Color"
+			],
+			[
+				"log",
+				"Git: Log All"
+			],
+			[
+				"status",
+				"Git: Status"
+			],
+			[
+				"add",
+				"Git: Add..."
+			],
+			[
+				"package con",
+				"Package Control: Install Package"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 449.0
+	},
+	"console":
+	{
+		"height": 139.0
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/home/victor/tomcat/webapps/vld/vlab/reporting/reporting_virtlab_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/static/testplansManagement_v1.zul",
+		"/home/victor/tomcat/webapps/vld/adminmodules/bugger.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/reporting/excel_coa.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vSampleReg_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/reporting/coa_footnotes.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/jobfolder_func.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/samplereg_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/resultentry_func.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/reasonbugger.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/jobnotes_v2.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/vDBFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/ListboxHandler.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/POIHelper.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/LabWorksheet.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/ListboxJingle.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/Generals.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/SqlFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/GlobalDefs.java",
+		"/home/victor/tomcat/webapps/vld/vlab/utils/labWorksheetMan_v1.zul",
+		"/home/victor/dumps/labworksheets_ofis_Dump20170804.sql",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/SamplesHandling.java",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/jobnotes_v2.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/reporting/chemistdropdown.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/samplereg/jobfolders_metadefs.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/uploadedWorksheet_v1.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/testResultEntry_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/batchResultEntry_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/legpricebook_v1.zul",
+		"/home/victor/tomcat/webapps/vld/javasrc/VLIMS.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/JobFolders.java",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/testmanfuncs.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/projectsitefuncs.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/NGfuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/TestHandling.java",
+		"/home/victor/tomcat/webapps/vld/rlm/stockManf/stocklister.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/labworksheet.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/GridHandler.java",
+		"/home/victor/tomcat/webapps/vld/vlab/projectSiteMan_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/static/tests_MasterMan_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/runlist_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/GuiFuncs.java",
+		"/home/victor/tomcat/webapps/vld/rlm/stockManf/stockmanfunc.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/runBatching_v1.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/static/movetestitem_oldcodes.txt",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/wo_partsreq.zs",
+		"/home/victor/tomcat/webapps/vld/alsglobal/testpackage_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/alsglobal/testselect_panel.zs",
+		"/home/victor/tomcat/webapps/vld/alsglobal/testpackage_funcs_unmod.zs",
+		"/home/victor/tomcat/webapps/vld/alsglobal/testpackage_popup.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/dblb_HeaderObj.java",
+		"/home/victor/tomcat/webapps/ewms_d/ews/global/rglobal.zs",
+		"/home/victor/tomcat/webapps/vld/javasrc/sampleman/ImpResultsLabWorksheet.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/listboxHeaderWidthObj.java",
+		"/home/victor/tomcat/webapps/mtsm_d/mtsm/staticmod/customerMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/workOrderMan_v2.zul",
+		"/home/victor/Developments/ewmsa/components/userprofile.js",
+		"/home/victor/Developments/ewmsa/components/subscribe_ew_1.js",
+		"/home/victor/Developments/ewmsa/components/landingpage.js",
+		"/home/victor/Developments/mtsa/components/activityspinner.js",
+		"/home/victor/Developments/ewmsa/index.android.js",
+		"/home/victor/Developments/mtsa/android/app/src/main/AndroidManifest.xml",
+		"/home/victor/Developments/mtsa/app.json",
+		"/home/victor/tomcat/webapps/ewms_d/dbchanges.txt",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/servicecenters_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/priceBookEW_v2.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/global/uploadedWorksheet_v1.zs",
+		"/home/victor/tomcat/webapps/ewms_d/javasrc/SqlFuncs.java",
+		"/home/victor/tomcat/webapps/ewms_d/javasrc/ListboxHandler.java",
+		"/home/victor/tomcat/webapps/ewms_d/rlm/inventoryMan_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/rlm/stockMasterMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockMasterMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/priceBookMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/office/fixedAssets_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/adminmodules/staticlookupman.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/announcements_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/staticmod/customerManEW_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/ews/global/customerew_funcs.zs",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/utility.js",
+		"/home/victor/Developments/ewmsa/components/subscribe_ew_3.js",
+		"/home/victor/Developments/ewmsa/components/subscribe_ew_2.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/subscribew.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/ewb.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/userhandler.js",
+		"/home/victor/tomcat/webapps/ewms_d/ews/ewbackend/tmol.php",
+		"/var/www/html/tmol.php",
+		"/home/victor/tomcat/webapps/ewms_d/ews/util/lookupJuggler_v1.zul",
+		"/home/victor/tomcat/webapps/ewms_d/adminmodules/lookupFieldsEditor_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/inboundStock_v2.zul",
+		"/home/victor/Developments/ewmsa/components/splashscreen.js",
+		"/home/victor/Developments/ewmsa/components/loginsystem.js",
+		"/home/victor/Developments/ewmsa/components/registeruser_ew.js",
+		"/home/victor/Developments/ewapp/ewapp/globals.js",
+		"/home/victor/Developments/ewapp/ewapp/appstyles.js",
+		"/home/victor/Developments/ewapp/ewapp/index.android.js",
+		"/home/victor/tomcat/webapps/vld/adminmodules/menueditor_v1.zul",
+		"/home/victor/tomcat/webapps/vld/javasrc/JavaScriptEngine.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/SampleReg.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/DirectoryTree.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/rlmSqlFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/VLIMS_Constants.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/RWMS_sql.java",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/lws_generator_class.zs",
+		"/home/victor/tomcat/webapps/vld/dbchanges.txt",
+		"/home/victor/tomcat/webapps/vld/javasrc/SecurityFuncs.java",
+		"/home/victor/tomcat/webapps/vld/javasrc/FormXMLSplicer.java.notfit",
+		"/home/victor/tomcat/webapps/vld/vlab/utils/lookupJuggler_v1.zul",
+		"/home/victor/tomcat/webapps/vld/index.zul",
+		"/home/victor/tomcat/webapps/vld/adminmodules/usercontroller.zul",
+		"/home/victor/tomcat/webapps/vld/vplay.zul",
+		"/home/victor/tomcat/webapps/vld/javasrc/DMSFuncs.java",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/systemAudit.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/uploadDocu_v1_rlm.zs",
+		"/home/victor/tomcat/webapps/vld/adminmodules/staticlookupman.zul",
+		"/home/victor/tomcat/webapps/melportal_d/mel_mods/MEL_specUpdate_funcs.zs",
+		"/home/victor/tomcat/webapps/vld/documents/viewfile.zul",
+		"/home/victor/tomcat/webapps/melportal_d/mel_mods/MEL_specUpdate_v2.zul",
+		"/home/victor/tomcat/webapps/vld/rlm/rglobal/customerlist.zs",
+		"/home/victor/tomcat/webapps/vld/vlab/static/customerMan_v2.zul",
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/customerSelector.zs",
+		"/home/victor/tomcat/webapps/vld/rlm/rglobal/joblinkbp.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/javasrc/ListboxHandler.java",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/rglobal.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/real-world.css",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/wofuncs.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/workOrderMan_v1.zul",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/stocklister.zs",
+		"/home/victor/tomcat/webapps/rlm_d3/rlm/stockManf/pricebookfunc.zs"
+	],
+	"find":
+	{
+		"height": 38.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"generate_labworksheet",
+			"coafootnote_edit_pop",
+			"showJobNotes",
+			"last_minute_jobfolder_meta_update",
+			"void jobFoldersFunc",
+			"format_JobFolder_str",
+			"folder_prefix_by_branch",
+			"exportflag",
+			"generate_labworksheet",
+			"coafootnotes_area",
+			"show_coafootnotes_mod",
+			"setVisible",
+			"footnotes_holder",
+			"coafootnotes_onselect",
+			"showJob_Samples",
+			"addJobFolder_sample",
+			"samplesFuncDo",
+			"addsample_b",
+			"addsample_pop",
+			"addsamppop_b",
+			"lastpref",
+			"jobno",
+			"format_JobFolder_str",
+			"savefoldermeta_b",
+			"jobfolder_customername_lbl",
+			"get_JobFolders",
+			"get_tests_bysample_distinct",
+			"approveresults_b",
+			"resultrow",
+			"POI_GetCellContentString",
+			"result",
+			"get_tests_bysample_distinct",
+			"get_tests_bysample",
+			"get_samplesrecord_byfolder",
+			"_poi",
+			"pStr1",
+			"STD",
+			"sm.Description",
+			"showJob_Samples",
+			"showJobFolder_Metadata",
+			"addJobFolder_sample",
+			"saveFolderMetadata",
+			"insertTestPlan_tests",
+			"injectTests_byTestPlan_SampleListbox",
+			"jobmetafields",
+			"saveFolderMetadata",
+			"savefoldermeta_b",
+			"populate_chemist_dropdown",
+			"jf_customer_shortcode",
+			"testplan_det",
+			"insertTestPlan_tests",
+			"JST_LOR",
+			"memorize_testPlan",
+			"memorize_testplan_pop",
+			"stockmasterOnselect_callback",
+			"stockmasterDoubleclick_callback",
+			"removetpitems_b",
+			"importStockItems_testplan",
+			"testing",
+			"insertListItems",
+			"listTestParameters_table",
+			"testplan_title",
+			"showTestPlan_meta",
+			"testplan_LB_callback",
+			"list_TestPlans",
+			"importStockItems_testplan",
+			"testitem_Doubleclick_callback",
+			"gridMakeRow",
+			"jobfolders_callBack",
+			"joblb_dcliker",
+			"sampleslb_onselect",
+			"sampleslb_dcliker",
+			"showMessageBox",
+			"saveProject_Samples",
+			"saveprojsample_b",
+			"projsamples_Dclick_callBack",
+			"lab_worksheet_listbox_callback",
+			"FOLDER_ZEROPADDING",
+			"\"projects_lb\"",
+			"loadBacklogSamples_ng",
+			"SAMPLE_ZEROPADDING",
+			"showRunListItems_result_grid",
+			"stockCodeExist",
+			"insertitem_b",
+			"NEWTEST_STOCKCODE",
+			"insertitem_b",
+			"RESGRID_RESULT",
+			"testitems_lbpos",
+			"tests_hds",
+			"testplanmodueld",
+			"testplan_select_lb",
+			"TPI_MEASURE_RANGE",
+			"saveTestPlan_items",
+			"testplanman_refresh_stuff",
+			"fillListbox_uniqField",
+			"populateDropdowns",
+			"smfl",
+			"testitem_Doubleclick_callback",
+			"projselection_Dclick_callBack",
+			"jobmetaboxes",
+			"projectref",
+			"insertListItems",
+			"list_backlog_samples",
+			"sm_sub_matrix",
+			"sm_localindex",
+			"sm_samplemarking",
+			"sm_extranotes",
+			"sm_samplemarking",
+			"samplesFuncDo",
+			"tests_hds",
+			"testplan_hds",
+			"list_TestPlans",
+			"testplanman_refresh_stuff",
+			"listvlab_Project",
+			"saveFolderMetadata",
+			"savefoldermeta_b",
+			"jf_priority",
+			"testplanman_refresh_stuff",
+			"refresh_jobfolder_stuff",
+			"show_jobfolders_coa_footnotes",
+			"show_coafootnotes_mod",
+			"clrcoafootnotes_ticks_btn",
+			"insertListItems",
+			"assign_coa_footnotes_job",
+			"asgncoafootnote_folder_btn",
+			"report_processor_virtlab",
+			"YES",
+			"coafootnote_Func"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"",
+			"true",
+			"",
+			"appstyles.a",
+			"ANN_LB_ORIGID",
+			"",
+			"rlfun",
+			"DEBUG_MODE",
+			"",
+			"guihand._kiboo.",
+			"pR",
+			"",
+			"rws_Sql",
+			"\"",
+			"",
+			"style=\"opacity:0.8\">",
+			"sclass=\"wbo\"",
+			"sclass=\"k9\"",
+			"Focus50J1",
+			"glob_stkin_post",
+			"glob_stkin_user",
+			"glob_stkin_ref",
+			"glob_stkin_description",
+			"glob_stkin_id",
+			"glob_stkin_stkid",
+			"gpWMS_FirstRow",
+			"wms_Sql",
+			"\\n;",
+			"global_selected_build",
+			"ASS_PREFIX",
+			"CONFIG_SECTION",
+			"glob_selected_lc",
+			"RESEND_EMAILMSG",
+			"",
+			"sclass=\"k9\"",
+			",",
+			"DO_VOUCHERTYPE",
+			"DO_EXTRAOFF",
+			"DO_EXTRAHEADEROFF",
+			"glob_sel_csgn",
+			"MEL_CSGN_PREFIX",
+			"sclass=\"k9\"",
+			"toggButts_specupdate",
+			"sclass=\"k9\"",
+			"",
+			"sclass=\"k9\"",
+			"glob_sel_outsouce",
+			"ADTPREFIX",
+			"String sqlstm =",
+			"public final GroovyRowResult ",
+			"sclass=\"k9\"",
+			"extra1",
+			"APPROVE_STR",
+			"${WINBACKGROUND}",
+			"sclass=\"k9\"",
+			"sclass=\"k9b\"",
+			"sclass=\"k9\"",
+			"sclass=\"k9mo\"",
+			"sclass=\"k9\"",
+			"sclass=\"k9b\"",
+			"sclass=\"k9\"",
+			"subhead1"
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 3,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "rws_customer/customerSupport_v1.zul",
+					"settings":
+					{
+						"buffer_size": 38247,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "rws_customer/customerSupport_funcs.zs",
+					"settings":
+					{
+						"buffer_size": 10858,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2887,
+								2887
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 1117.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "rws_account/rwpurchaseReq_v2.zul",
+					"settings":
+					{
+						"buffer_size": 26146,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "rws_account/rwpurchaseReq_funcs.zs",
+					"settings":
+					{
+						"buffer_size": 13098,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 2040.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		},
+		{
+			"sheets":
+			[
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 34.0
+	},
+	"input":
+	{
+		"height": 33.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				0,
+				1,
+				1,
+				2
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			0.85,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 112.0
+	},
+	"output.git":
+	{
+		"height": 152.0
+	},
+	"replace":
+	{
+		"height": 64.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"selected_items":
+		[
+			[
+				"",
+				"/home/victor/tomcat/webapps/vld/virtlab.sublime-project"
+			]
+		],
+		"width": 380.0
+	},
+	"show_minimap": false,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": false,
+	"side_bar_width": 88.0,
+	"status_bar_visible": true
+}

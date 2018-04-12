@@ -9,6 +9,8 @@ import org.apache.poi.hssf.usermodel.*;
 
 import org.zkoss.zul.*;
 
+GETWORKSHEET_POS_ROW = 1; GETWORKSHEET_POS_COLUMN = 2;
+
 public class uploadedWorksheet
 {
 	Object thefiledata;
@@ -261,3 +263,16 @@ void exportExcelFromListbox(Object iwhat, Object iwhere, Object ilbhds, String i
 	downloadFile(iwhere,ioutfn,outfn);
 }
 
+int get_Worksheet_pos(String pStr, int pType)
+{
+	int retval = -1;
+	try
+	{
+		String str = pStr.trim().toUpperCase();
+		String[] part = str.split("(?<=\\D)(?=\\d)");
+		
+		if(pType == GETWORKSHEET_POS_COLUMN) retval = ((int)part[0].charAt(0)) - ((int)'A');
+		if(pType == GETWORKSHEET_POS_ROW) retval = Integer.parseInt(part[1]) - 1;
+	} catch (Exception e) {}
+	return retval;
+}

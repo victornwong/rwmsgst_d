@@ -138,19 +138,24 @@ void showInvGotInsurance(int itype)
 	edate = kiboo.getDateFromDatebox(enddate);
 	Listbox newlb = lbhand.makeVWListbox_Width(rwinsurholder, rwilb_hds, "rwinsurance_lb", 5);
 
-	sqlstm = "select convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, d.voucherno, a.name as customer_name, " +
-	"dbo.grossByItemType(d.voucherno,'NB') as nb_gross, " +
-	"dbo.grossByItemType(d.voucherno,'DT') as dt_gross, " +
-	"dbo.grossByItemType(d.voucherno,'SVR') as svr_gross " +
+	sqlstm = "select distinct d.voucherno, convert(datetime, dbo.ConvertFocusDate(d.date_), 112) as vdate, a.name as customer_name, " +
+	//"dbo.grossByItemType(d.voucherno,'NB') as nb_gross, " +
+	//"dbo.grossByItemType(d.voucherno,'DT') as dt_gross, " +
+	//"dbo.grossByItemType(d.voucherno,'SVR') as svr_gross " +
+	"1 as nb_gross, 1 as dt_gross, 1 as svr_gross " +
 	"from data d left join mr008 ro on ro.masterid = d.tags6 " +
 	"left join mr000 a on a.masterid = d.bookno " +
 	"left join u001b ri on ri.extraid=d.extraheaderoff " +
 	"where d.vouchertype=3329 " +
-	"and ro.name like '%insurance%' and (ri.remarksyh not like '%partial%' or ri.remarksyh not like 'Partial%') " +
-	"and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' " +
-	"order by d.voucherno,d.bodyid;";
-
+	"and ri.remarksyh like '%insurance%' " + //and (ri.remarksyh not like '%partial%' or ri.remarksyh not like 'Partial%') " +
+	"and ri.projectpicyh like '1st%' " +
+	"and convert(datetime, dbo.ConvertFocusDate(d.date_), 112) between '" + sdate + "' and '" + edate + "' ";
+	//"group by d.voucherno,d.date_,a.name,d.bodyid " +
+	//"order by d.voucherno,d.bodyid,d.date_,a.name,nb_gross,dt_gross,svr_gross";
+	
 	recs = sqlhand.rws_gpSqlGetRows(sqlstm);
+	//debugbox.setValue(recs.toString()); return;
+
 	if(recs.size() == 0) return;
 	newlb.setRows(21); newlb.setMold("paging");
 	//newlb.setMultiple(true);
@@ -437,6 +442,7 @@ void exportAllRiskSched()
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#e9b96e">
+<label id="debugbox" multiline="true" />
 <div sclass="shadowbox" style="background:#06333a">
 <hbox>
 	<label value="Start date" sclass="k9b" />

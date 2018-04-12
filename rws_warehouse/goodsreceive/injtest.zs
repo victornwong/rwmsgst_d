@@ -26,8 +26,8 @@ Sql FC5030_Sql()
 {
 	try
 	{
-		String dbstring = "jdbc:jtds:sqlserver://192.168.100.201:1433/Focus50J0";
-		return(Sql.newInstance(dbstring, "testme", "9090", "net.sourceforge.jtds.jdbc.Driver"));
+		String dbstring = "jdbc:jtds:sqlserver://192.168.100.88:1433;DatabaseName=Focus5020";
+		return(Sql.newInstance(dbstring, "sa", "focus@123", "net.sourceforge.jtds.jdbc.Driver"));
 	}
 	catch (SQLException e)
 	{
@@ -68,8 +68,8 @@ Sql FC50J0_Sql()
 {
 	try
 	{
-		String dbstring = "jdbc:jtds:sqlserver://192.168.100.201:1433/Focus50J0";
-		return(Sql.newInstance(dbstring, "testme", "9090", "net.sourceforge.jtds.jdbc.Driver"));
+		String dbstring = "jdbc:jtds:sqlserver://192.168.100.88:1433;DatabaseName=Focus5020";
+		return(Sql.newInstance(dbstring, "sa", "focus@123", "net.sourceforge.jtds.jdbc.Driver"));
 	}
 	catch (SQLException e)
 	{

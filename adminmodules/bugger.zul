@@ -522,6 +522,14 @@ void loadIframe(int itype)
 	}
 }
 
+void check_dms()
+{
+	//thesql = sqlhand.DMS_Sql();
+	String dbstring = "jdbc:jtds:sqlserver://192.168.100.88:1433;DatabaseName=rwsDocuments";
+	thesql = Sql.newInstance(dbstring, "sa", "focus@123", "net.sourceforge.jtds.jdbc.Driver");
+	alert(thesql);
+}
+
 ]]>
 </zscript>
 
@@ -540,6 +548,8 @@ void loadIframe(int itype)
 <div width="1400px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="none" collapsible="true" closable="true" >
 <panelchildren style="background:#094D7F">
+
+<button label="check dms" onClick="check_dms()" />
 
 <hbox>
 	<button label="loc_Kp" onClick="loadIframe(5)" />

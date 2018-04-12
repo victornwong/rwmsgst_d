@@ -19,7 +19,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Goods Collection Note / Order";
-MYVERSION = "v0.2.7";
+MYVERSION = "v0.2.8";
 MYPANEL = "goodscolpa";
 /*
 @Title Goods/assets collection management
@@ -39,6 +39,7 @@ Collection-list status : complete, partial, pending
 10/12/2014: req huiping, CANCEL status, check gco not COMPLETE/PARTIAL, then ask for reason and audit-log
 17/03/2015: req by Nurul, generate GCO items list
 08/12/2015: req by shopa and umanthini, add "items-received-back" button to record date
+07/02/2018: req Nurul, 2 buttons to export GDEX excel worksheet - SA and SARAWAK
 */
 import java.util.*;
 import java.text.*;
@@ -386,6 +387,104 @@ void exportGCOList()
 
 BOXWIDTH = "800px";
 
+String[][] gdex_account_dets = {
+	{ "1251569", "RENTWISE SDN BHD",
+		"LOT 9-UNIT A1,NATCO INDUSTRIAL", "PARK LORONG KELULI 1B,SEKSYEN",
+		"7, SHAH ALAM, SELANGOR", "333416552", "SATISH" },
+	{ "5013258", "East Coast Freight Forwarders /  Jiwa Saga Sdn Bhd",
+		"Lot 2551, Block 8 Muara Tebas Land District,", "Jalan Bako, 93050  Kuching, Sarawak, Malaysia.",
+		"", "0111- 2390172", "Laga" },
+};
+
+String[] gdex_account_pos = { "D31", "D32", "D33", "D34", "D35", "D38", "D39" };
+
+String[] gdex_customer_pos = { "D19", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D27" };
+GDXCUST_COMPANY = 0; GDXCUST_TELNO = 6; GDXCUST_CONTACT = 7; GDXCUST_REMARKS = 8;
+String[] gdex_output_fn = { "GdexCollectionformSA.xls", "GdexCollectionformSarawak.xls" };
+
+SHAHALAM_GDEX = 0; SARAWAK_GDEX = 1;
+void gdex_template_export(int pRegion)
+{
+	if(glob_sel_gco.equals(""))
+	{
+		guihand.showMessageBox("Apa pun tarak pilih, tak boleh generate le"); return;
+	}
+
+	String[] custaddr = null; String debugstr = ""; int i;
+
+	try { // get customer address and split into lines
+		loca = Path.getComponent("/location").getValue().trim();
+		custaddr = loca.split("\n");
+	} catch (Exception e) {}
+
+	boolean foundsarawak = false;
+	String chkmessage = "";
+
+	for(i=0; i<custaddr.length; i++)
+	{
+		tstr = custaddr[i].toUpperCase();
+		if(tstr.indexOf("SARAWAK") != -1) { foundsarawak = true; break; }
+	}
+
+	if(pRegion == SHAHALAM_GDEX && foundsarawak)
+	{
+		chkmessage = "Pilih SHAH ALAM tapi customer is in Sarawak";
+	}
+
+	if(pRegion == SARAWAK_GDEX && !foundsarawak)
+	{
+		chkmessage = "Pilih SARAWAK tapi customer not in Sarawak";
+	}
+
+	if(!chkmessage.equals(""))
+	{
+		guihand.showMessageBox(chkmessage);
+		return;
+	}
+
+	tcustomername = ""; try { tcustomername = Path.getComponent("/customername").getValue(); } catch (Exception e) {}
+	tcontactperson = ""; try { tcontactperson = Path.getComponent("/contact_person").getValue().trim(); } catch (Exception e ) {}
+	tcontacttel = ""; try { tcontacttel = Path.getComponent("/contact_tel").getValue().trim(); } catch (Exception e ) {}
+	tlc_id = ""; try { tlc_id = Path.getComponent("/lc_id").getValue().trim(); } catch (Exception e ) {}
+
+	//for(int i=0; i<custaddr.length; i++)
+	//{ debugstr += String.valueOf(i) + ":" + custaddr[i] + "\n"; } debugbox.setValue(debugstr);
+
+	templatefn = "img/Gdex_CORCSCSF03.xls";
+	inpfn = session.getWebApp().getRealPath(templatefn);
+	InputStream inp = new FileInputStream(inpfn);
+	HSSFWorkbook excelWB = new HSSFWorkbook(inp);
+	evaluator = excelWB.getCreationHelper().createFormulaEvaluator();
+	HSSFSheet sheet = excelWB.getSheetAt(0); //HSSFSheet sheet = excelWB.createSheet("THINGS");
+	Font wfont = excelWB.createFont(); wfont.setFontHeightInPoints((short)8); wfont.setFontName("Arial");
+
+	// Customer details
+	excelInsertString(sheet, get_Worksheet_pos(gdex_customer_pos[GDXCUST_COMPANY],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_customer_pos[GDXCUST_COMPANY],GETWORKSHEET_POS_COLUMN),tcustomername);
+	excelInsertString(sheet, get_Worksheet_pos(gdex_customer_pos[GDXCUST_TELNO],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_customer_pos[GDXCUST_TELNO],GETWORKSHEET_POS_COLUMN),tcontacttel);
+	excelInsertString(sheet, get_Worksheet_pos(gdex_customer_pos[GDXCUST_CONTACT],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_customer_pos[GDXCUST_CONTACT],GETWORKSHEET_POS_COLUMN),tcontactperson);
+
+	tremarks = "Appreciate to contact client for the actual arrival time on the collection date. (LC/RMA:" + tlc_id + ")";
+	excelInsertString(sheet, get_Worksheet_pos(gdex_customer_pos[GDXCUST_REMARKS],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_customer_pos[GDXCUST_REMARKS],GETWORKSHEET_POS_COLUMN),tremarks);
+
+	for(i=1; i<5; i++) // insert customer address
+	{
+		try {
+			excelInsertString(sheet, get_Worksheet_pos(gdex_customer_pos[i],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_customer_pos[i],GETWORKSHEET_POS_COLUMN),custaddr[i-1]);
+		} catch (Exception e) {}
+	}
+	
+	for(i=0; i<gdex_account_pos.length; i++) // Reverse-charge account details
+	{
+		excelInsertString(sheet, get_Worksheet_pos(gdex_account_pos[i],GETWORKSHEET_POS_ROW), get_Worksheet_pos(gdex_account_pos[i],GETWORKSHEET_POS_COLUMN),gdex_account_dets[pRegion][i]);
+	}
+
+	tfname = glob_sel_gco + "_" + gdex_output_fn[pRegion];
+	outfn = session.getWebApp().getRealPath("sharedocs/" + tfname );
+	FileOutputStream fileOut = new FileOutputStream(outfn);
+	excelWB.write(fileOut); fileOut.close();
+	downloadFile(kasiexport,tfname,outfn);
+}
+
 ]]>
 </zscript>
 
@@ -588,6 +687,15 @@ BOXWIDTH = "800px";
 	</div>
 </popup>
 
+<popup id="gdex_templates_popup">
+	<div sclass="shadowbox" style="background:#50CCA6;">
+		<vbox>
+			<button label="SHAH ALAM" onClick="gdex_template_export(SHAHALAM_GDEX)" />
+			<button label="SARAWAK" onClick="gdex_template_export(SARAWAK_GDEX)" />
+		</vbox>
+	</div>
+</popup>
+
 <style src="/real-world.css" />
 <style>
 	.GridLayoutNoBorder tr.z-row td.z-row-inner, tr.z-row .z-cell, div.z-grid
@@ -600,28 +708,23 @@ BOXWIDTH = "800px";
 <div width="1200px">
 <panel id="${MYPANEL}" title="${MYTITLE} ${MYVERSION}" border="normal" collapsible="true" closable="true" >
 <panelchildren style="background:#619BC2">
-
-	<div sclass="shadowbox" style="background:#2e3436;" >
-	<hbox>
-		<label value="Start" sclass="k9b" />
-		<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
-		<label value="End" sclass="k9b" />
-		<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
-		<textbox id="searhtxt_tb" sclass="k9" />
-		<button label="Load/Search" sclass="k9mo" onClick="showGoodsCollection(1)" />
-		<textbox id="asstga_tb" sclass="k9" width="70px" />
-		<button sclass="k9mo" label="by asset-tag" onClick="showGoodsCollection(4)" />
-		<textbox id="searchgco_tb" sclass="k9" width="40px" />
-		<button label="by GCO" sclass="k9mo" onClick="showGoodsCollection(2)" />
-
-		<button label="Filters" sclass="k9mo" onClick="filterspop.open(self)" />
-		<button id="admin_b" label="Admin" visible="false" sclass="k9mo" style="color:#cc0000" onClick="adminpopup.open(self)" />
-	</hbox>
-	</div>
-	<separator height="3px" />
-
+	<label id="debugbox" multiline="true" />
 	<div sclass="shadowbox" style="background:#2e3436;" >
 		<hbox>
+			<label value="Start" sclass="k9b" />
+			<datebox id="startdate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<label value="End" sclass="k9b" />
+			<datebox id="enddate" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self);" />
+			<textbox id="searhtxt_tb" sclass="k9" />
+			<button label="Load/Search" sclass="k9mo" onClick="showGoodsCollection(1)" />
+			<textbox id="asstga_tb" sclass="k9" width="70px" />
+			<button sclass="k9mo" label="by asset-tag" onClick="showGoodsCollection(4)" />
+			<textbox id="searchgco_tb" sclass="k9" width="40px" />
+			<button label="by GCO" sclass="k9mo" onClick="showGoodsCollection(2)" />
+			<button label="Filters" sclass="k9mo" onClick="filterspop.open(self)" />
+			<button id="admin_b" label="Admin" visible="false" sclass="k9mo" style="color:#cc0000" onClick="adminpopup.open(self)" />
+		</hbox>
+		<hbox style="margin-top:3px">
 			<button id="newcollection_b" sclass="k9mo" label="New collection" onClick="doFunc(self)" />
 			<button id="submit_b" sclass="k9mo" label="Submit" onClick="doFunc(self)" />
 			<button id="ackjob_b" sclass="k9mo" label="Acknowledge" onClick="doFunc(self)" />
@@ -637,11 +740,10 @@ BOXWIDTH = "800px";
 			<button id="opadt_b" sclass="k9mo" label="View ADT/QC" onClick="loadADT_things(); viewadt_pop.open(glob_sel_gcoli);" />
 			<button id="vwtgrn_b" sclass="k9mo" label="View T.GRN" onClick="doFunc(self)" />
 			<button id="vwmrns_b" sclass="k9mo" label="View MRN" onClick="doFunc(self)" />
+			<button label="GDEX" sclass="k9mo" onClick="gdex_templates_popup.open(self)"  />
 		</hbox>
-		<separator height="3px" />
-		<div id="collections_holder" />
+		<div id="collections_holder" style="margin-top:3px" />
 	</div>
-
 	<tabbox id="workarea" visible="false">
 		<tabs>
 			<tab label="Customer and transporter" />
@@ -671,7 +773,6 @@ BOXWIDTH = "800px";
 				<separator height="3px" />
 				<div id="collectionform_holder" />
 				<separator height="3px" />
-
 				<grid>
 					<rows>
 						<row spans="6" style="background:#eb0904">
@@ -706,7 +807,6 @@ BOXWIDTH = "800px";
 				</grid>
 				</div>
 			</tabpanel>
-
 			<tabpanel> <!-- collect items -->
 				<div sclass="shadowbox" style="background:#555753" width="${BOXWIDTH}">
 				<hbox>
@@ -732,7 +832,6 @@ BOXWIDTH = "800px";
 				<div id="pitems_holder" />
 				</div>
 			</tabpanel>
-
 			<tabpanel> <!-- attachments -->
 				<div sclass="shadowbox" style="background:#555753" id="docholder" width="${BOXWIDTH}">
 					<label sclass="subhead1">ATTACHMENT / DOCUMENTS</label>
@@ -749,10 +848,7 @@ BOXWIDTH = "800px";
 			</tabpanel>
 		</tabpanels>
 	</tabbox> <!-- ENDOF main workarea -->
-
-<div id="kasiexport" visible="false" />
-<div id="winsholder" />
-
+<div id="kasiexport" visible="false" /><div id="winsholder" />
 <zscript>
 <![CDATA[
 

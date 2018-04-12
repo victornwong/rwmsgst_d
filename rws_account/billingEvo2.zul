@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "BillingEvo2 (Macam rental buku)";
-MYVERSION = "v0.2";
+MYVERSION = "v0.2.1";
 MYPANEL = "billnevo2";
 /**
  * @title Billing Evolution 2 - rental book management
@@ -28,6 +28,7 @@ MYPANEL = "billnevo2";
  * A new design to keep track of each rental installment - rental book thing
  *
  * 22/10/2015: add codes to update u001b.financepicyh and u001b.projectpicyh, to use in invoice template for "charge from" and "remarks at the bottom"
+ * 12/04/2018: module revival -- uses next-billing-date for due-date, invoice-date for focus invoice-date
  *
  * HARD-CODED invoice item to use for extension and inertia billing in Focus6 on both 0J0 and 0J1
  * 91484 EXTENSION RENTAL CHARGES DT
@@ -294,6 +295,7 @@ void uploadInvoice(Object ibutt)
 		if(!rentalinvoice.equals("ERROR")) // really inserted a rental-invoice
 		{
 			updRentalInvoice_duedate(rentalinvoice,nbdate); // set data.duedate to next-billing-date as requested by Shopa 13/10/2015
+			//updRentalInvoice_invoicedate(rentalinvoice,);
 
 			cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, rentalinvoice);
 			cx[G_INV_DATE].setValue(today);
@@ -316,6 +318,8 @@ void uploadInvoice(Object ibutt)
 void updRentalInvoice_duedate(String irwi, String irwiduedate)
 {
 	focusdate = calcFocusDate(irwiduedate);
+	//debugbox.setValue(debugbox.getValue() + "\n updRentalInvoice_duedate() focusdate: " + String.valueOf(focusdate) );
+
 	sqlstm = "update data set duedate=" + focusdate.toString() + " where vouchertype=" + VOUCHERTYPE + " and voucherno='" + irwi + "';";
 
 	if(TESTING_MODE) { f30_gpSqlExecuter(sqlstm); debugbox.setValue(debugbox.getValue() + "\n" + sqlstm); }
@@ -352,6 +356,9 @@ void updRentalInvoice_insFinancePIC(String iexthdoff, String ithestring, String 
 	else sqlhand.rws_gpSqlExecuter(sqlstm);	
 }
 
+/**
+ * Mass upload invoice to Focus. Duplicate from last invoice details. Inject due-date and invoice-date as entered.
+ */
 void updRentalInvoice_fillslots()
 {
 	if(Messagebox.show("This will mass-upload rental-invoices, for recurring billing", "Are you sure?",
@@ -378,8 +385,11 @@ void updRentalInvoice_fillslots()
 
 	while(true)
 	{
-		nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot billing-date
+		nbdate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_NEXT_BILL); // get next empty invoice slot due-billing-date
+		n_invoicedate = getSlotValue_byEmptySlot(slot_rows,G_INV_NO,G_INV_DATE); // get next empty invoice slot invoice-date
+		
 		if(nbdate.equals("")) break; // if next-billing-date is empty, break out loop
+		if(n_invoicedate.equals("")) break;
 
 		rentalinvoice = inject_RentalInvoice(lastinv,headvals);
 		if(!rentalinvoice.equals("ERROR")) // invoice uploaded ok
@@ -387,16 +397,17 @@ void updRentalInvoice_fillslots()
 			injectedcount++;
 			//updRentalInvoice_invoicedate(rentalinvoice,today); // set invoice creation date to next-billing-date
 			updRentalInvoice_duedate(rentalinvoice,nbdate); // set data.duedate to next-billing-date as requested by Shopa 13/10/2015
+			updRentalInvoice_invoicedate(rentalinvoice,n_invoicedate);
 
 			cx = insertIntoNextEmptySlot(slot_rows, G_INV_NO, rentalinvoice);
-			cx[G_INV_DATE].setValue(today);
+			//cx[G_INV_DATE].setValue(today);
 			theremarks = cx[G_REMARKS].getValue();
 			realfocusremarks = cx[G_REALREMARKS].getValue();
 			updRentalInvoice_insFinancePIC(headvals[INVINJ_EXTRAHEADEROFF_POS],theremarks,realfocusremarks);
 
 			lastinv = getLastRentalInvoice_inslot();
 		}
-		debugbox.setValue(debugbox.getValue() + "\nnbdate: " + nbdate + " inv: " + rentalinvoice);
+		//debugbox.setValue(debugbox.getValue() + "\nnbdate: " + nbdate + " inv: " + rentalinvoice);
 		breakcount++;
 		if(breakcount > 36) { guihand.showMessageBox("Limit 36 months reached.."); return; }
 	}
@@ -577,7 +588,7 @@ Asgn = assigned/non-assigned asset
 						<separator width="10px" />
 						<button label="Save slots" sclass="k9mo" onClick='saveSlots(); guihand.showMessageBox("Rental slots saved..");' />
 						<button id="viewpdfinv_b" label="View PDF invoice" sclass="k9mo" onClick="slotsFunc(self.getId())" visible="false" />
-						<button id="uplbilling_b" label="Upload 1 rental-invoice" sclass="k9mo" style="color:#8454B7" onClick="uploadInvoice(self)" />
+						<button id="uplbilling_b" label="Upload 1 rental-invoice" sclass="k9mo" style="color:#8454B7" onClick="uploadInvoice(self)" visible="false" />
 						<button id="uplfillall_b" label="Upload all rental-invoices" sclass="k9mo" style="color:#FC1993" onClick="updRentalInvoice_fillslots()" />
 					</hbox>
 					<separator height="5px" />

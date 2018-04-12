@@ -587,6 +587,13 @@ void doFunc(Object iwhat)
 	if(!fnm.equals("")) activateModule(mainPlayground,twin,fnm,kiboo.makeRandomId("wpi"),pms,useraccessobj);
 }
 
+void testsql()
+{
+	rwsql = sqlhand.als_mysoftsql();
+	fsql = sqlhand.rws_Sql();
+	alert("rwsql: " + rwsql + " fsql: " + fsql);
+}
+
 ]]>
 </zscript>
 
@@ -715,6 +722,8 @@ void doFunc(Object iwhat)
 									<div id="msg_noti" style="background:#f57900;padding:2px" visible="false">
 									<label style="color:#eeeeee;text-decoration:blink;font-weight:bold">YOU HAVE MESSAGE</label>
 									</div>
+
+									<button label="testsql" onClick="testsql()" />
 
 									<button id="admin_b" label="ADMIN" sclass="k9mo" style="color:#ff0000" visible="false" onClick="adminpop.open(self)" />
 								</hbox>

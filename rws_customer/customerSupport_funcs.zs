@@ -89,7 +89,7 @@ void showTicketMetadata(String iwhat)
 {
 	tkr = getHelpTicket_rec(iwhat);
 	if(tkr == null) { guihand.showMessageBox("ERR: Cannot access database.."); return; }
-	alert(tkr);
+	//alert(tkr);
 	t_origid.setValue(TICKETSV_PREFIX + iwhat);
 	global_selected_customerid = kiboo.checkNullString(tkr.get("fc6_custid"));
 	global_selected_customername = kiboo.checkNullString(tkr.get("cust_name"));
