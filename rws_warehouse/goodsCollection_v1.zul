@@ -19,7 +19,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "Goods Collection Note / Order";
-MYVERSION = "v0.2.8";
+MYVERSION = "v0.2.9";
 MYPANEL = "goodscolpa";
 /*
 @Title Goods/assets collection management
@@ -40,6 +40,7 @@ Collection-list status : complete, partial, pending
 17/03/2015: req by Nurul, generate GCO items list
 08/12/2015: req by shopa and umanthini, add "items-received-back" button to record date
 07/02/2018: req Nurul, 2 buttons to export GDEX excel worksheet - SA and SARAWAK
+18/04/2018: req Nurul, add GCO status in GCO items list Excel file
 */
 import java.util.*;
 import java.text.*;

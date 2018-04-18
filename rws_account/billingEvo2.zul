@@ -18,7 +18,7 @@
 <zscript>
 <![CDATA[
 MYTITLE = "BillingEvo2 (Macam rental buku)";
-MYVERSION = "v0.2.1";
+MYVERSION = "v0.2.2";
 MYPANEL = "billnevo2";
 /**
  * @title Billing Evolution 2 - rental book management
@@ -29,7 +29,8 @@ MYPANEL = "billnevo2";
  *
  * 22/10/2015: add codes to update u001b.financepicyh and u001b.projectpicyh, to use in invoice template for "charge from" and "remarks at the bottom"
  * 12/04/2018: module revival -- uses next-billing-date for due-date, invoice-date for focus invoice-date
- *
+ * 13/04/2018: MPF for slots grid-row detail update
+ * 
  * HARD-CODED invoice item to use for extension and inertia billing in Focus6 on both 0J0 and 0J1
  * 91484 EXTENSION RENTAL CHARGES DT
  * 91485 EXTENSION RENTAL CHARGES MT
@@ -418,6 +419,50 @@ void updRentalInvoice_fillslots()
 ]]>
 </zscript>
 
+<popup id="mpf_slotsedit_pop">
+	<div sclass="shadowbox" style="${POPUPSTYLE1}" width="400px" >
+		<grid sclass="GridLayoutNoBorder">
+			<rows>
+				<row style="${NORMAL_BACKGROUND}" spans="4">
+					<label style="color:#ffffff;font-weight:bold" value="MPF - will affect ticked slots" />
+				</row>
+				<row style="${POPUPSTYLE1}" spans="1,1,2">
+					<label value="Next billing reminder" sclass="k9" />
+					<datebox id="m_notif_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<button id="m_updnextbill_b" label="Update next billing" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+				</row>
+				<row style="${POPUPSTYLE1}" spans="1,1,2" visible="false">
+					<label value="Inv No" sclass="k9" />
+					<textbox id="m_fc_invoice_tb" sclass="k9" width="90%" />
+					<button id="m_updinvno_b" label="Update invoice no." sclass="k9mo" onClick="slotsFunc(self.getId())" />
+				</row>
+				<row style="${POPUPSTYLE1}">
+					<label value="Inv Date" sclass="k9" />
+					<datebox id="m_invoice_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
+					<button id="m_updinvdate_b" label="Update invoice date" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+					<button id="m_clrinvdate_b" label="Clear invoice date" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+				</row>
+				<row style="${POPUPSTYLE1}" spans="1,2,1">
+					<label value="FinancePIC" sclass="k9" />
+					<textbox id="m_remarks_tb" sclass="k9" width="90%" />
+					<button id="m_updinvrem_b" label="Update financeYH" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+				</row>
+				<row style="${POPUPSTYLE1}" spans="1,2,1">
+					<label value="ProjectPIC" sclass="k9" />
+					<textbox id="m_realremarks_tb" sclass="k9" width="90%" />
+					<button id="m_updinvrealrem_b" label="Update remarks" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+				</row>
+			</rows>
+		</grid>
+		<separator height="3px" />
+		<hbox>
+			<button id="m_updateall_grid_details_b" label="Update all" sclass="k9mo" onClick="slotsFunc(self.getId())" />
+			<button label="Clear" sclass="k9mo" onClick="m_remarks_tb.setValue(BLANK_STRING); m_realremarks_tb.setValue(BLANK_STRING); kiboo.setTodayDatebox(m_notif_date_dt); kiboo.setTodayDatebox(m_invoice_date_dt);" />
+			<button label="Close" sclass="k9mo" onClick="mpf_slotsedit_pop.close()" />
+		</hbox>
+	</div>
+</popup>
+
 <popup id="slotsedit_pop">
 	<div sclass="shadowbox" style="${POPUPSTYLE1}" width="400px" >
 		<grid sclass="GridLayoutNoBorder">
@@ -425,36 +470,36 @@ void updRentalInvoice_fillslots()
 				<row style="${POPUPSTYLE1}" spans="1,1,2">
 					<label value="Next billing reminder" sclass="k9" />
 					<datebox id="i_notif_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-					<button id="updnextbill_b" label="Update next billing" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(2)" />
+					<button id="updnextbill_b" label="Update next billing" sclass="k9mo" onClick="updSlotDetails(2)" />
 				</row>
 				<row style="${POPUPSTYLE1}" spans="1,1,2">
 					<label value="Inv No" sclass="k9" />
 					<textbox id="i_fc_invoice_tb" sclass="k9" width="90%" />
-					<button id="updinvno_b" label="Update invoice no." sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(4)" />
+					<button id="updinvno_b" label="Update invoice no." sclass="k9mo" onClick="updSlotDetails(4)" />
 				</row>
 				<row style="${POPUPSTYLE1}" >
 					<label value="Inv Date" sclass="k9" />
 					<datebox id="i_invoice_date_dt" format="yyyy-MM-dd" style="font-size:9px" onCreate="kiboo.setTodayDatebox(self)" />
-					<button id="updinvdate_b" label="Update invoice date" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(8)" />
-					<button id="clrinvdate_b" label="Clear invoice date" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(3)" />
+					<button id="updinvdate_b" label="Update invoice date" sclass="k9mo" onClick="updSlotDetails(8)" />
+					<button id="clrinvdate_b" label="Clear invoice date" sclass="k9mo" onClick="updSlotDetails(3)" />
 				</row>
 				<row style="${POPUPSTYLE1}" spans="1,2,1">
 					<label value="FinancePIC" sclass="k9" />
 					<textbox id="i_remarks_tb" sclass="k9" width="90%" />
-					<button id="updinvrem_b" label="Update financeYH" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(5)" />
+					<button id="updinvrem_b" label="Update financeYH" sclass="k9mo" onClick="updSlotDetails(5)" />
 				</row>
 				<row style="${POPUPSTYLE1}" spans="1,2,1">
-					<label value="Remarks" sclass="k9" />
+					<label value="ProjectPIC" sclass="k9" />
 					<textbox id="i_realremarks_tb" sclass="k9" width="90%" />
-					<button id="updinvrealrem_b" label="Update remarks" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(7)" />
+					<button id="updinvrealrem_b" label="Update remarks" sclass="k9mo" onClick="updSlotDetails(7)" />
 				</row>
 			</rows>
 		</grid>
 		<separator height="3px" />
 		<hbox>
-			<button label="Update all" sclass="k9mo" onClick="slotsedit_pop.close(); updSlotDetails(1)" visible="false" />
+			<button label="Update all" sclass="k9mo" onClick="updSlotDetails(1)" visible="false" />
 			<button label="Clear" sclass="k9mo" onClick='i_remarks_tb.setValue(""); kiboo.setTodayDatebox(i_notif_date_dt);' />
-			<button label="Cancel" sclass="k9mo" onClick="slotsedit_pop.close()" />
+			<button label="Close" sclass="k9mo" onClick="slotsedit_pop.close()" />
 		</hbox>
 	</div>
 </popup>
@@ -583,6 +628,7 @@ Asgn = assigned/non-assigned asset
 					<hbox>
 						<button id="untick_b" label="Ticker" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<button label="Slots" sclass="k9mo" onClick="slotsfunc_pop.open(self)" />
+						<button label="MPF" sclass="k9mo" onClick="mpf_slotsedit_pop.open(self)" />
 						<button id="clearslot_b" label="Clear" sclass="k9mo" onClick="updSlotDetails(6)" />
 						<button id="remslot_b" label="Remove" sclass="k9mo" onClick="slotsFunc(self.getId())" />
 						<separator width="10px" />

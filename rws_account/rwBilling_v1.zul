@@ -28,7 +28,7 @@ Revisions:
 11/06/2014: search by customer in expiring-LCs popup
 12/06/2014: add assignment-drawdown funcs
 08/07/2015: manual enter GST invoice no. in 0J1 to produce rental-schedule manual invoice
-
+18/04/2018: Add NOA template with "Clause 12" - old one "Clause 10"
 */
 import java.util.*;
 import java.text.*;
@@ -318,7 +318,8 @@ ASGN = assign/unassign
 <popup id="noagenpop">
 	<div sclass="shadowbox" style="background:#909d2a" width="180px" >
 		<vbox>
-			<button label="Jenis MRA" sclass="k9mo" onClick="genNOA(0)" />
+			<button label="Jenis MRA - Clause 10" sclass="k9mo" onClick="genNOA(0)" />
+			<button label="Jenis MRA - Clause 12" sclass="k9mo" onClick="genNOA(4)" />
 			<button label="Jenis MA" sclass="k9mo" onClick="genNOA(1)" />
 			<button label="Jenis AR Type MA" sclass="k9mo" onClick="genNOA(2)" />
 			<button label="Jenis AR Type MRA" sclass="k9mo" onClick="genNOA(3)" />

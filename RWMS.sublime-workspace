@@ -4,6 +4,26 @@
 		"selected_items":
 		[
 			[
+				"ins",
+				"instanceof"
+			],
+			[
+				"G_IN",
+				"G_INV_DATE"
+			],
+			[
+				"deta",
+				"detail_update"
+			],
+			[
+				"replace",
+				"replaceSingleQuotes"
+			],
+			[
+				"rent",
+				"rentalinvoice"
+			],
+			[
 				"setV",
 				"setVisible"
 			],
@@ -432,10 +452,6 @@
 				"script_input_tb"
 			],
 			[
-				"replace",
-				"replaceAll"
-			],
-			[
 				"formu",
 				"formula_final_result"
 			],
@@ -498,40 +514,64 @@
 			[
 				"pDiv",
 				"pDivholder"
-			],
-			[
-				"global",
-				"globalActivateWindow"
-			],
-			[
-				"BLANK",
-				"BLANK_STRING	(vglobaldefs.zs)"
-			],
-			[
-				"audi",
-				"auditstr"
-			],
-			[
-				"prepa",
-				"prepareStatement"
 			]
 		]
 	},
 	"buffers":
 	[
 		{
-			"file": "rws_warehouse/goodsCollection_v1.zul",
+			"file": "rws_account/billingEvo2.zul",
 			"settings":
 			{
-				"buffer_size": 33192,
+				"buffer_size": 28691,
 				"line_ending": "Windows"
 			}
 		},
 		{
-			"file": "adminmodules/bugger.zul",
+			"file": "rws_account/rwBilling_v1.zul",
 			"settings":
 			{
-				"buffer_size": 19770,
+				"buffer_size": 18566,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "rws_account/billass/injectInvoice.zs",
+			"settings":
+			{
+				"buffer_size": 12364,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rws_account/rentalSlots_func.zs",
+			"settings":
+			{
+				"buffer_size": 12366,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rws_account/billass/rwassignment_funcs.zs",
+			"settings":
+			{
+				"buffer_size": 14301,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rwglobal/rwsqlfuncs.zs",
+			"settings":
+			{
+				"buffer_size": 26499,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "rwglobal/rwglobaldefs.zs",
+			"settings":
+			{
+				"buffer_size": 4561,
 				"line_ending": "Windows"
 			}
 		},
@@ -540,22 +580,6 @@
 			"settings":
 			{
 				"buffer_size": 17485,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "rwglobal/uploadedWorksheet_v1.zs",
-			"settings":
-			{
-				"buffer_size": 7758,
-				"line_ending": "Windows"
-			}
-		},
-		{
-			"file": "rws_warehouse/goodsCollection_funcs.zs",
-			"settings":
-			{
-				"buffer_size": 21734,
 				"line_ending": "Unix"
 			}
 		}
@@ -780,6 +804,15 @@
 	},
 	"file_history":
 	[
+		"/home/victor/tomcat/webapps/vld/vlab/vglobal/vglobaldefs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/index.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwglobaldefs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_account/rwBilling_v1.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwsqlfuncs.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/goodsCollection_v1.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/adminmodules/bugger.zul",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/uploadedWorksheet_v1.zs",
+		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/goodsCollection_funcs.zs",
 		"/home/victor/tomcat/webapps/vld/vlab/vglobal/uploadedWorksheet_v1.zs",
 		"/home/victor/tomcat/webapps/vld/javasrc/GlobalDefs.java",
 		"/home/victor/tomcat/webapps/vld/javasrc/POIHelper.java",
@@ -790,8 +823,6 @@
 		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/auditQC_v1.zul",
 		"/home/victor/tomcat/webapps/rwmsgst_d/rws_account/insuranceMan_v1.zul",
 		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/f0j0.zs",
-		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwglobaldefs.zs",
-		"/home/victor/tomcat/webapps/rwmsgst_d/rwglobal/rwsqlfuncs.zs",
 		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/auditQC_funcs.zs",
 		"/home/victor/tomcat/webapps/rwmsgst_d/rws_warehouse/checkParts_v2.zul",
 		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/callrecorder_funcs.zs",
@@ -900,14 +931,7 @@
 		"/home/victor/tomcat/webapps/rlm_d3/rlm/warehouse/stockInbound_byPO_v1.zul",
 		"/home/victor/tomcat/webapps/rwssimple/index_23052017.zul",
 		"/home/victor/tomcat/webapps/rwssimple/rws_reporting/birtReportViewer_v2.zul",
-		"/home/victor/tomcat/webapps/ewms_d/dbchanges.txt",
-		"/home/victor/tomcat/webapps/vld/real-world.css",
-		"/home/victor/tomcat/webapps/vld/vlab/vglobal/vglobaldefs.zs",
-		"/home/victor/tomcat/webapps/vld/vlab/vglobal/testmanfuncs.zs",
-		"/home/victor/tomcat/webapps/rlm_d3/rlm/rglobal/poitemsfunc.zs",
-		"/home/victor/tomcat/webapps/vld/vlab/reporting/reporting_virtlab_v1.zul",
-		"/home/victor/tomcat/webapps/ewms_d/real-world.css",
-		"/home/victor/tomcat/webapps/ewms_d/ews/global/rlmsql.zs"
+		"/home/victor/tomcat/webapps/ewms_d/dbchanges.txt"
 	],
 	"find":
 	{
@@ -925,6 +949,30 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"genNOA",
+			"BLANK",
+			"slot_rows",
+			"updSlotDetails",
+			"glob_sel_slot_obj",
+			"updSlotDetails",
+			"getSlotValue_byEmptySlot",
+			"G_NEXT_BILL",
+			"getSlotValue_byEmptySlot",
+			"updRentalInvoice_duedate",
+			"nbdate",
+			"calcFocusDate",
+			"getSlotValue_byEmptySlot",
+			"getLastRentalInvoice_inslot",
+			"shopa",
+			"nurul",
+			"shopa",
+			"nurul",
+			"updRentalInvoice_duedate",
+			"updRentalInvoice_invoicedate",
+			"f30_gpSqlFirstRow",
+			"inject_RentalInvoice",
+			"getLastRentalInvoice_inslot",
+			"uploadInvoice",
 			"newcollection_b",
 			"genGCO_template",
 			"print_b",
@@ -1028,31 +1076,7 @@
 			"refresh_runlist_things",
 			"batching_refresh_combobox",
 			"addSamples_RunList",
-			"addsampbatch_b",
-			"loadBacklogSamples",
-			"GETWORKSHEET_POS_COLUMN",
-			"uniq",
-			"glob_labworksheet_obj",
-			"JST_STKID",
-			"BOM_DO",
-			"save_labworksheet_details",
-			"get_labworksheet_rec",
-			"LabWorksheetGenerator",
-			"glob_labworksheet_obj",
-			"LabWorksheetGenerator",
-			"gridMakeRows",
-			"LabWorksheetGenerator",
-			"get_Worksheet_pos",
-			"downloadFile",
-			"get_Worksheet_pos",
-			"kiboo",
-			"price",
-			"loginwin",
-			"sechand",
-			"activateModule",
-			"globalActivateWindow",
-			"mainPlayground",
-			"setUserAccessObj"
+			"addsampbatch_b"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -1132,15 +1156,15 @@
 	"groups":
 	[
 		{
-			"selected": 0,
+			"selected": 1,
 			"sheets":
 			[
 				{
 					"buffer": 0,
-					"file": "rws_warehouse/goodsCollection_v1.zul",
+					"file": "rws_account/billingEvo2.zul",
 					"settings":
 					{
-						"buffer_size": 33192,
+						"buffer_size": 28691,
 						"regions":
 						{
 							"bookmarks":
@@ -1150,12 +1174,20 @@
 								"regions":
 								[
 									[
-										13363,
-										13363
+										9547,
+										9547
 									],
 									[
-										27596,
-										27596
+										10630,
+										10630
+									],
+									[
+										14676,
+										14676
+									],
+									[
+										15545,
+										15545
 									]
 								],
 								"scope": "bookmarks"
@@ -1164,8 +1196,8 @@
 						"selection":
 						[
 							[
-								10538,
-								10557
+								496,
+								496
 							]
 						],
 						"settings":
@@ -1174,25 +1206,38 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 4955.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
 				},
 				{
 					"buffer": 1,
-					"file": "adminmodules/bugger.zul",
+					"file": "rws_account/rwBilling_v1.zul",
 					"settings":
 					{
-						"buffer_size": 19770,
+						"buffer_size": 18566,
 						"regions":
 						{
+							"bookmarks":
+							{
+								"flags": 144,
+								"icon": "bookmark",
+								"regions":
+								[
+									[
+										11891,
+										11891
+									]
+								],
+								"scope": "bookmarks"
+							}
 						},
 						"selection":
 						[
 							[
-								14946,
-								14946
+								1161,
+								1161
 							]
 						],
 						"settings":
@@ -1201,7 +1246,7 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 7293.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
@@ -1214,6 +1259,187 @@
 			[
 				{
 					"buffer": 2,
+					"file": "rws_account/billass/injectInvoice.zs",
+					"settings":
+					{
+						"buffer_size": 12364,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								11803,
+								11803
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 2340.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "rws_account/rentalSlots_func.zs",
+					"settings":
+					{
+						"buffer_size": 12366,
+						"regions":
+						{
+							"bookmarks":
+							{
+								"flags": 144,
+								"icon": "bookmark",
+								"regions":
+								[
+									[
+										334,
+										334
+									],
+									[
+										6290,
+										6290
+									],
+									[
+										11502,
+										11502
+									]
+								],
+								"scope": "bookmarks"
+							}
+						},
+						"selection":
+						[
+							[
+								8300,
+								8300
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 4099.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "rws_account/billass/rwassignment_funcs.zs",
+					"settings":
+					{
+						"buffer_size": 14301,
+						"regions":
+						{
+							"bookmarks":
+							{
+								"flags": 144,
+								"icon": "bookmark",
+								"regions":
+								[
+									[
+										10873,
+										10873
+									]
+								],
+								"scope": "bookmarks"
+							}
+						},
+						"selection":
+						[
+							[
+								11358,
+								11358
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 4587.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 1,
+			"sheets":
+			[
+				{
+					"buffer": 5,
+					"file": "rwglobal/rwsqlfuncs.zs",
+					"settings":
+					{
+						"buffer_size": 26499,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								936,
+								936
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "rwglobal/rwglobaldefs.zs",
+					"settings":
+					{
+						"buffer_size": 4561,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1180,
+								1180
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Java/Java.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 620.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 7,
 					"file": "javasrc/SqlFuncs.java",
 					"settings":
 					{
@@ -1235,73 +1461,6 @@
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				},
-				{
-					"buffer": 3,
-					"file": "rwglobal/uploadedWorksheet_v1.zs",
-					"settings":
-					{
-						"buffer_size": 7758,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								285,
-								285
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Java/Java.tmLanguage",
-							"translate_tabs_to_spaces": false
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				},
-				{
-					"buffer": 4,
-					"file": "rws_warehouse/goodsCollection_funcs.zs",
-					"settings":
-					{
-						"buffer_size": 21734,
-						"regions":
-						{
-							"bookmarks":
-							{
-								"flags": 144,
-								"icon": "bookmark",
-								"regions":
-								[
-									[
-										4694,
-										4694
-									]
-								],
-								"scope": "bookmarks"
-							}
-						},
-						"selection":
-						[
-							[
-								11703,
-								11703
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Java/Java.tmLanguage",
-							"translate_tabs_to_spaces": false
-						},
-						"translation.x": 0.0,
-						"translation.y": 3960.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
@@ -1332,17 +1491,30 @@
 				0,
 				2,
 				1
+			],
+			[
+				0,
+				1,
+				1,
+				2
+			],
+			[
+				1,
+				1,
+				2,
+				2
 			]
 		],
 		"cols":
 		[
 			0.0,
-			0.665279817258,
+			0.437369519833,
 			1.0
 		],
 		"rows":
 		[
 			0.0,
+			0.794434470377,
 			1.0
 		]
 	},

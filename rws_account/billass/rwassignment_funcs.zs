@@ -322,7 +322,7 @@ void showAssignmentJuggler()
 	lbhand.setDoubleClick_ListItems(newlb, asgnboudbleciker);
 }
 
-// itype: 0=MRA, 1=MA, 2=AR type 1, 3=AR type 2
+// itype: 0=MRA Clause 10, 1=MA, 2=AR type 1, 3=AR type 2, 4=MRA Clause 12
 // AR types can have multi LC, use groupi to determine when selected
 void genNOA(int itype)
 {
@@ -333,7 +333,7 @@ void genNOA(int itype)
 	lcid = lbhand.getListcellItemLabel(assignment_lb_selitem,LCID_IDX);
 	updateAssignment_customerDetails(aix,cnm); // update rw_assignment
 
-	String[] noafn = { "NOA_MRA_v1.rptdesign", "NOA_MA_v1.rptdesign", "NOA_AR_T1_v1.rptdesign", "NOA_AR_T2_v1.rptdesign" };
+	String[] noafn = { "NOA_MRA_v1.rptdesign", "NOA_MA_v1.rptdesign", "NOA_AR_T1_v1.rptdesign", "NOA_AR_T2_v1.rptdesign", "NOA_MRA_v1_clause12.rptdesign" };
 	tfn = noafn[itype] + "&assignment_no_1=" + glob_sel_asgnlc;
 	gpi = ux = "";
 

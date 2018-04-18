@@ -608,7 +608,7 @@ void genGCOItems_list()
 	sdate = kiboo.getDateFromDatebox(gco_startdate);
 	edate = kiboo.getDateFromDatebox(gco_enddate);
 
-	sqlstm = "select origid as gcono,datecreated,customer_name,username,items_code,items_desc,items_coll from rw_goodscollection " +
+	sqlstm = "select origid as gcono,datecreated,customer_name,username,items_code,items_desc,items_coll,status from rw_goodscollection " +
 	"where datecreated between '" + sdate + "' and '" + edate + "' order by origid;";
 
 	r = sqlhand.gpSqlGetRows(sqlstm);
@@ -624,7 +624,7 @@ void genGCOItems_list()
 	wfont.setFontHeightInPoints((short)8);
 	wfont.setFontName("Arial");
 	rowcount = 1;
-	String[] hds = { "GCO", "Date", "Customer", "User", "AssetTag", "Desc", "Collect" };
+	String[] hds = { "GCO", "Date", "Customer", "User", "AssetTag", "Desc", "Collect", "GCO_STATUS" };
 
 	for(i=0;i<hds.length;i++)
 	{
@@ -660,6 +660,8 @@ void genGCOItems_list()
 			ks = "0";
 			try { ks = icol[i]; } catch (Exception e) {}
 			excelInsertString(sheet,rowcount,6, ((ks.equals("0")) ? "N" : "Y") );
+
+			excelInsertString(sheet,rowcount,7, kiboo.checkNullString(d.get("status"))); // 18/04/2018: gco status, req by nurul
 
 			rowcount++;
 		}

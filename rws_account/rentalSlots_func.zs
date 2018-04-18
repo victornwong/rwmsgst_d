@@ -17,8 +17,9 @@ G_TICKER = 0; G_SLOT_NO = 1; G_NEXT_BILL = 2; G_INV_NO = 3; G_INV_DATE = 4; G_RE
 void slotsFunc(String itype)
 {
 	todaydate =  kiboo.todayISODateTimeString();
-	sqlstm = msgtext = "";
-	refresh = false;
+	String sqlstm = msgtext = kstr = "";
+	boolean refresh = detail_update = false;
+	int kcolumn,i;
 
 	if(itype.indexOf("insslot") != -1) // insert slots buttons activated
 	{
@@ -30,23 +31,75 @@ void slotsFunc(String itype)
 
 	if(itype.equals("remslot_b")) // remove ticked slots
 	{
-		iterateSlots(slot_rows,1);
+		iterateSlots(slot_rows,SLT_REMOVE_SLOTS,0,BLANK_STRING);
 		refresh = true;
 	}
 
 	if(itype.equals("untick_b")) // untick checkboxes
 	{
-		iterateSlots(slot_rows,2);
+		iterateSlots(slot_rows,SLT_CHECK_TOGGLE,0,BLANK_STRING);
 	}
 
 	if(itype.equals("viewpdfinv_b"))
 	{
-		iterateSlots(slot_rows,3);
+		iterateSlots(slot_rows,SLT_VIEW_FILE,0,BLANK_STRING);
 	}
 
 	if(itype.equals("clearslot_b")) // clear slot details ONLY
 	{
-		iterateSlots(slot_rows,4);
+		iterateSlots(slot_rows,SLT_CLEAR_SLOTS,0,BLANK_STRING);
+	}
+
+	if(itype.equals("m_updnextbill_b")) // update next-billing / due-date
+	{
+		kstr = kiboo.dtf2.format(Path.getComponent("/m_notif_date_dt").getValue());
+		kcolumn = G_NEXT_BILL; detail_update = true;
+	}
+
+	if(itype.equals("m_updinvrem_b")) // update invoice remarks aka finance-PIC(Focus)
+	{
+		kstr = kiboo.replaceSingleQuotes(Path.getComponent("/m_remarks_tb").getValue());
+		kcolumn = G_REMARKS; detail_update = true;
+	}
+
+	if(itype.equals("m_updinvrealrem_b")) // update real-remarks in invoice
+	{
+		kstr = kiboo.replaceSingleQuotes(Path.getComponent("/m_realremarks_tb").getValue());
+		kcolumn = G_REALREMARKS; detail_update = true;
+	}
+
+	if(itype.equals("m_updinvdate_b")) // update invoice date
+	{
+		kstr = kiboo.dtf2.format(Path.getComponent("/m_invoice_date_dt").getValue());
+		kcolumn = G_INV_DATE; detail_update = true;
+	}
+
+	if(itype.equals("m_clrinvdate_b")) // clear invoice date
+	{
+		kstr = BLANK_STRING; kcolumn = G_INV_DATE; detail_update = true;
+	}
+
+	if(itype.equals("m_updateall_grid_details_b"))
+	{
+		String[] kuiobj = { "/m_notif_date_dt", "/m_remarks_tb", "/m_realremarks_tb", "/m_invoice_date_dt" };
+		int[] kuicolumn = { G_NEXT_BILL, G_REMARKS, G_REALREMARKS, G_INV_DATE };
+
+		for(i=0; i<kuiobj.length; i++)
+		{
+			try {
+				kobj = Path.getComponent(kuiobj[i]);
+				if(kobj instanceof org.zkoss.zul.Datebox) kstr = kiboo.dtf2.format(kobj.getValue());
+				if(kobj instanceof org.zkoss.zul.Textbox) kstr = kiboo.replaceSingleQuotes(kobj.getValue());
+				kcolumn = kuicolumn[i];
+
+				iterateSlots(slot_rows,SLT_UPDATE_ROW_DETAIL,kcolumn,kstr);
+			} catch (Exception e) {}
+		}
+	}
+
+	if(detail_update)
+	{
+		iterateSlots(slot_rows,SLT_UPDATE_ROW_DETAIL,kcolumn,kstr);
 	}
 
 	if(refresh)
@@ -55,12 +108,17 @@ void slotsFunc(String itype)
 	}
 }
 
+SLT_REMOVE_SLOTS = 1; SLT_CHECK_TOGGLE = 2; SLT_VIEW_FILE = 3; SLT_CLEAR_SLOTS = 4;
+SLT_UPDATE_ROW_DETAIL = 5;
+
 /**
  * Abit hardcoded to iterate over grid-rows and perform some func
  * @param irows the grid ROWS id
  * @param itype what func
+ * @param icolumn : row column to process
+ * @param pString : what to put in row column
  */
-void iterateSlots(Object irows, int itype)
+void iterateSlots(Object irows, int itype, int icolumn, String pString)
 {
 	cds = irows.getChildren().toArray();
 	ks = "";
@@ -68,7 +126,7 @@ void iterateSlots(Object irows, int itype)
 	{
 		cx = cds[i].getChildren().toArray();
 
-		if(itype == 2) // checkboxes toggler
+		if(itype == SLT_CHECK_TOGGLE) // checkboxes toggler
 		{
 			cx[G_TICKER].setChecked( (cx[G_TICKER].isChecked()) ? false : true);
 		}
@@ -78,14 +136,14 @@ void iterateSlots(Object irows, int itype)
 			{
 				switch(itype)
 				{
-					case 1: // remove ticked slots
+					case SLT_REMOVE_SLOTS: // remove ticked slots
 						inv = cx[G_INV_NO].getValue().trim();
 						// check if there's already invoice, not allow to remove
 						if(inv.equals("")) cds[i].setParent(null);
 						else ks += "Slot: " + cx[G_SLOT_NO].getValue() + " has InvoiceNo: " + inv + ", cannot remove\n";
 						break;
 
-					case 3: // view PDF invoice if any
+					case SLT_VIEW_FILE: // view PDF invoice if any
 						fncm = cx[G_PDFFILENAME].getValue(); // tax-invoice pdf filename
 						if(!fncm.equals(""))
 						{
@@ -96,17 +154,34 @@ void iterateSlots(Object irows, int itype)
 						}
 						break;
 
-					case 4: // clear slot details ONLY starting from invoice-no. onwards
+					case SLT_CLEAR_SLOTS: // clear slot details ONLY starting from invoice-no. onwards
 						for(k=G_INV_NO; k<G_REALREMARKS+1; k++)
 						{
 							try { cx[k].setValue(""); } catch (Exception e) {}
 						}
+						break;
+
+					case SLT_UPDATE_ROW_DETAIL: // update grid-row
+						updSlotDetails_core(cds[i],icolumn,pString);
 						break;
 				}
 			}
 		}
 	}
 	if(!ks.equals("")) guihand.showMessageBox(ks);
+}
+
+/**
+ * Update grid-row column text
+ * @param pGridrow : the grid-row
+ * @param pColumn : which column to update
+ * @param pString : string to update
+ */
+void updSlotDetails_core(Object pGridrow, int pColumn, String pString)
+{
+	if(pGridrow == null) return;
+	hx = pGridrow.getChildren().toArray();
+	hx[pColumn].setValue(pString);
 }
 
 /**
@@ -235,7 +310,7 @@ void invoiceSlot_dclick_callback(Object isel)
 	i_remarks_tb.setValue(cx[G_REMARKS].getValue().trim());
 	i_realremarks_tb.setValue(cx[G_REALREMARKS].getValue().trim());
 
-	slotsedit_pop.open(glob_sel_slot_obj);
+	try { Path.getComponent("/slotsedit_pop").open(glob_sel_slot_obj); } catch (Exception e) {}
 }
 
 /** 

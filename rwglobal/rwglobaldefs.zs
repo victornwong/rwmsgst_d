@@ -65,6 +65,7 @@ MAINLOGIN_PAGE = "index.zul";
 VERSION = "0.04.15d-vw";
 SMTP_SERVER = "";
 ELABMAN_EMAIL = "";
+BLANK_STRING = "";
 
 MAINPROCPATH = ".";
 
@@ -176,6 +177,12 @@ int gpCalcDateDiff(Date date1, Date date2)
 		diffDay = gpcountDiffDay(c2, c1);
 	}
 	return diffDay;
+}
+
+void push_debugbox(String pStr)
+{
+	try { Path.getComponent("/debugbox").setValue(pStr + "\n" + 
+		Path.getComponent("/debugbox").getValue()); } catch (Exception e) {}
 }
 
 /*
